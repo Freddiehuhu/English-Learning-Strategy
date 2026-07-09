@@ -242,7 +242,7 @@ function bankCards(b){
 var quiz=null;
 function buildSession(kind){
  var unit=st.unit;var items=scope().slice();
- var types=quizTypes();var count=+(document.getElementById('qCount')?document.getElementById('qCount').value:10);
+ var types=quizTypes();var count=quizCount();
  var cards=[];
  // exam / bank cards
  if(types.indexOf('exam')>=0){var bk=bankInScope(unit);shuffle(bk);bk.forEach(function(b){cards=cards.concat(bankCards(b));});}
@@ -263,7 +263,9 @@ function buildSession(kind){
  if(kind==='diag'){localStorage.setItem(DK,todayStr());}
  renderQuiz();
 }
-function quizTypes(){var t=[];['meaning','word','cloze','spell','exam'].forEach(function(k){var el=document.getElementById('qt_'+k);if(el&&el.checked)t.push(k);});return t;}
+function quizTypes(){var t=[],found=false;['meaning','word','cloze','spell','exam'].forEach(function(k){var el=document.getElementById('qt_'+k);if(el){found=true;if(el.checked)t.push(k);}});
+ if(found){st.qtypes=t;return t;} return (st.qtypes&&st.qtypes.length)?st.qtypes:['meaning','word','cloze','spell','exam'];}
+function quizCount(){var el=document.getElementById('qCount');if(el){st.qcount=+el.value;return st.qcount;}return st.qcount||12;}
 function todayStr(){var d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();}
 
 function renderQuiz(){
