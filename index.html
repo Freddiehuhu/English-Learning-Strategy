@@ -322,7 +322,7 @@ function renderQuiz(){
  h+='<div class="qstem">'+c.stem+'</div>';
  if(c.audio)h+='<div style="margin-top:10px"><button class="pbtn" onclick="play(\''+c.audio+'\')">🔊 播放</button></div>';
  if(c.kind==='mcq'){h+='<div class="opts" id="opts">';c.opts.forEach(function(o,i){h+='<button class="opt" id="opt_'+i+'" onclick="answerMCQ('+i+')">'+esc(o)+'</button>';});h+='</div>';}
- else{h+='<input class="qin" id="qin" placeholder="输入答案后回车…" autocomplete="off" autocapitalize="off" onkeydown="if(event.key===\'Enter\')answerFill()"><button class="big" style="margin-top:10px" onclick="answerFill()">提交</button>';}
+ else{h+='<input class="qin" id="qin" placeholder="输入答案后回车；不会就直接提交看答案" autocomplete="off" autocapitalize="off" onkeydown="if(event.key===\'Enter\')answerFill()"><button class="big" style="margin-top:10px" onclick="answerFill()">提交 / 不会</button>';}
  h+='<div class="fb" id="fb"></div>';
  h+='<div class="rowbtns"><button class="big ghost" id="nextBtn" style="display:none" onclick="nextQ()">下一题 ▸</button><button class="mini" onclick="quitQuiz()">退出</button></div>';
  h+='</div>';
@@ -336,10 +336,10 @@ function answerMCQ(i){if(quiz.answered)return;quiz.answered=true;var c=quiz.card
  document.getElementById('opt_'+i).classList.remove('dim');if(!ok)document.getElementById('opt_'+i).classList.add('wrong');
  finishCard(c,ok);}
 function answerFill(){if(quiz.answered)return;var c=quiz.cards[quiz.idx];var v=(document.getElementById('qin').value||'').trim().toLowerCase();
- if(!v)return;quiz.answered=true;var ok=c.accept.indexOf(v)>=0;document.getElementById('qin').disabled=true;finishCard(c,ok);}
-function finishCard(c,ok){markWords(c,ok);if(ok)quiz.right++;else quiz.wrong.push(c);
+ quiz.answered=true;var blank=(v==='');var ok=!blank&&c.accept.indexOf(v)>=0;document.getElementById('qin').disabled=true;finishCard(c,ok,blank);}
+function finishCard(c,ok,blank){markWords(c,ok);if(ok)quiz.right++;else quiz.wrong.push(c);
  var fb=document.getElementById('fb');fb.className='fb show '+(ok?'ok':'no');
- fb.innerHTML=(ok?'✅ 正确！':'❌ 不对。')+(c.explain?'　'+c.explain:'');
+ fb.innerHTML=(ok?'✅ 正确！':(blank?'⭕ 未作答（跳过）。':'❌ 不对。'))+(c.explain?'　'+c.explain:'');
  document.getElementById('nextBtn').style.display='';document.getElementById('nextBtn').focus();}
 function nextQ(){quiz.idx++;renderQuiz();}
 function quitQuiz(){quiz=null;renderHub();}
