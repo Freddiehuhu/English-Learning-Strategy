@@ -114,6 +114,69 @@ window.RELATIONS = { version:1, items:[
  explain:"soldier（士兵）与战争有关。"},
 {id:"cls-12",type:"classify",lvl:2,unit:0,words:["balloon"],
  stem:"选出与其他<b>不同类</b>的一个：",options:["faithful","servant","queen","balloon"],answer:3,
- explain:"faithful/servant/queen 出自「动物与责任/宫廷」话题，balloon 属于交通。"}
+ explain:"faithful/servant/queen 出自「动物与责任/宫廷」话题，balloon 属于交通。"},
 
-]};
+/* ---- expansion ---- */
+{id:"syn-16",type:"syn",ask:"反义词",lvl:2,unit:6,words:["hide"],
+ stem:"与 <b>hide</b>（躲藏）意思<b>相反</b>的是：",options:["show","cover","keep","fill"],answer:0,explain:"hide 藏 ↔ show 展示。"},
+{id:"syn-17",type:"syn",ask:"反义词",lvl:3,unit:6,words:["fill"],
+ stem:"与 <b>fill</b>（装满）意思<b>相反</b>的是：",options:["empty","open","close","pull"],answer:0,explain:"fill 装满 ↔ empty 倒空。"},
+{id:"syn-18",type:"syn",ask:"反义词",lvl:2,unit:2,words:["go up"],
+ stem:"与 <b>go up</b>（上升）意思<b>相反</b>的是：",options:["go down","write down","take place","come out"],answer:0,explain:"go up ↔ go down 下降。"},
+{id:"syn-19",type:"syn",ask:"反义词",lvl:2,unit:2,words:["agree"],
+ stem:"与 <b>agree</b>（同意）意思<b>相反</b>的是：",options:["disagree","reply","wonder","count"],answer:0,explain:"agree ↔ disagree 不同意。"},
+{id:"syn-20",type:"syn",ask:"同义词",lvl:2,unit:7,words:["relax"],
+ stem:"与 <b>relax</b>（放松）意思<b>最接近</b>的是：",options:["rest","work","study","hurry"],answer:0,explain:"relax ≈ rest 休息。"},
+{id:"syn-21",type:"syn",ask:"同义词",lvl:3,unit:7,words:["stressed"],
+ stem:"与 <b>stressed</b> 意思<b>最接近</b>的是：",options:["worried","calm","proud","glad"],answer:0,explain:"stressed ≈ worried 焦虑的。"},
+{id:"syn-22",type:"syn",ask:"同义词",lvl:3,unit:7,words:["normal"],
+ stem:"与 <b>normal</b> 意思<b>最接近</b>的是：",options:["usual","strange","special","rare"],answer:0,explain:"normal ≈ usual 平常的。"},
+{id:"syn-23",type:"syn",ask:"同义词",lvl:2,unit:4,words:["notice"],
+ stem:"与 <b>notice</b>（注意到）意思<b>最接近</b>的是：",options:["see","hide","press","pull"],answer:0,explain:"notice ≈ see 看到、注意到。"},
+{id:"ana-09",type:"analogy",lvl:3,unit:1,words:["editor"],
+ stem:"类比：<b>teacher : teach</b> :: <b>editor : ?</b>",options:["edit","write","read","print"],answer:0,explain:"职业 : 该做的事。teacher→teach，editor→edit。"},
+{id:"ana-10",type:"analogy",lvl:3,unit:6,words:["captain"],
+ stem:"类比：<b>captain : soldiers</b> :: <b>teacher : ?</b>",options:["students","books","school","lessons"],answer:0,explain:"领导 : 被带领者。captain→soldiers，teacher→students。"},
+{id:"ana-11",type:"analogy",lvl:3,unit:6,words:["empty"],
+ stem:"类比：<b>full : empty</b> :: <b>happy : ?</b>",options:["sad","glad","calm","proud"],answer:0,explain:"反义关系。full↔empty，happy↔sad。"},
+{id:"ana-12",type:"analogy",lvl:3,unit:4,words:["heat"],
+ stem:"类比：<b>heat : hot</b> :: <b>cool : ?</b>",options:["cold","warm","wet","dry"],answer:0,explain:"动作 : 结果状态。heat→hot，cool→cold。"},
+{id:"cls-13",type:"classify",lvl:2,unit:0,words:["summary"],
+ stem:"选出<b>不表示感受</b>的一个：",options:["lonely","grateful","nervous","summary"],answer:3,explain:"lonely/grateful/nervous 是感受，summary（总结）不是。"},
+{id:"cls-14",type:"classify",lvl:1,unit:0,words:["repeat"],
+ stem:"下面哪个词与<b>学习 / 记忆</b>有关？",options:["repeat","soldier","balloon","onion"],answer:0,explain:"repeat（重复）与学习记忆有关。"},
+{id:"cls-15",type:"classify",lvl:1,unit:0,words:["artist"],
+ stem:"下面哪个词与<b>艺术</b>有关？",options:["artist","soldier","petrol","budget"],answer:0,explain:"artist（艺术家）与艺术有关。"},
+{id:"cls-16",type:"classify",lvl:2,unit:0,words:["chopstick"],
+ stem:"选出与其他<b>不同类</b>的一个：",options:["balloon","wheel","petrol","chopstick"],answer:3,explain:"balloon/wheel/petrol 与交通有关，chopstick（筷子）不是。"},
+{id:"cls-17",type:"classify",lvl:2,unit:0,words:["onion"],
+ stem:"选出与其他<b>不同类</b>的一个：",options:["laptop","screen","software","onion"],answer:3,explain:"laptop/screen/software 与科技有关，onion 是食物。"},
+{id:"cls-18",type:"classify",lvl:2,unit:0,words:["laptop"],
+ stem:"选出与其他<b>不同类</b>的一个：",options:["soldier","enemy","captain","laptop"],answer:3,explain:"soldier/enemy/captain 与战争有关，laptop 不是。"},
+{id:"cls-19",type:"classify",lvl:1,unit:0,words:["budget"],
+ stem:"下面哪个词与<b>数字 / 数据</b>有关？",options:["budget","dinosaur","onion","balloon"],answer:0,explain:"budget（预算）与数字数据有关。"},
+{id:"cls-20",type:"classify",lvl:2,unit:0,words:["petrol"],
+ stem:"选出与其他<b>不同类</b>的一个：",options:["tiger","ant","dinosaur","petrol"],answer:3,explain:"tiger/ant/dinosaur 是动物，petrol（汽油）不是。"}
+
+],
+
+/* ====== 词语联想 Word Associates (pick the related words) ======
+   target + 4 correct associates + 4 distractors. lvl = difficulty. */
+wat:[
+ {id:"wat-01",lvl:3,unit:7,target:"diet",correct:["food","healthy","eat","balanced"],distractors:["pencil","river","engine","silver"],explain:"diet 与 食物/健康/吃/均衡 相关。"},
+ {id:"wat-02",lvl:3,unit:6,target:"victory",correct:["win","celebrate","army","battle"],distractors:["onion","laptop","garden","pencil"],explain:"victory 与 赢/庆祝/军队/战斗 相关。"},
+ {id:"wat-03",lvl:3,unit:1,target:"artist",correct:["paint","picture","museum","draw"],distractors:["petrol","wheel","budget","ant"],explain:"artist 与 画/图画/博物馆/绘画 相关。"},
+ {id:"wat-04",lvl:3,unit:3,target:"traffic",correct:["car","road","jam","busy"],distractors:["apple","moon","song","king"],explain:"traffic 与 汽车/道路/堵塞/繁忙 相关。"},
+ {id:"wat-05",lvl:3,unit:5,target:"nervous",correct:["afraid","worried","exam","shaking"],distractors:["happy","apple","wheel","river"],explain:"nervous 与 害怕/担心/考试/发抖 相关。"},
+ {id:"wat-06",lvl:3,unit:3,target:"download",correct:["app","Internet","file","phone"],distractors:["onion","garden","king","wheel"],explain:"download 与 应用/网络/文件/手机 相关。"},
+ {id:"wat-07",lvl:3,unit:6,target:"soldier",correct:["army","fight","war","gun"],distractors:["flower","cake","piano","budget"],explain:"soldier 与 军队/战斗/战争/枪 相关。"},
+ {id:"wat-08",lvl:3,unit:8,target:"faithful",correct:["loyal","dog","friend","trust"],distractors:["tiny","purple","engine","onion"],explain:"faithful 与 忠诚/狗/朋友/信任 相关。"},
+ {id:"wat-09",lvl:3,unit:7,target:"summary",correct:["short","main","points","text"],distractors:["river","tiger","wheel","apple"],explain:"summary 与 简短/要点/主要/文章 相关。"},
+ {id:"wat-10",lvl:3,unit:4,target:"balloon",correct:["air","fly","float","party"],distractors:["pencil","army","budget","onion"],explain:"balloon 与 空气/飞/漂浮/聚会 相关。"},
+ {id:"wat-11",lvl:3,unit:2,target:"budget",correct:["money","plan","spend","limit"],distractors:["tiger","cloud","paint","wing"],explain:"budget 与 钱/计划/花费/限额 相关。"},
+ {id:"wat-12",lvl:3,unit:5,target:"exchange",correct:["swap","student","culture","visit"],distractors:["onion","wheel","silver","ant"],explain:"exchange 与 交换/学生/文化/访问 相关。"}
+],
+
+/* ====== 是非快筛 Yes/No — real words come from the vocab; these are fakes ====== */
+pseudo:["florp","snurd","blint","quomp","gwisp","threll","skabe","vondle","dworl","flen","snotch","plimf","gruve","chask","drilp","frentle","snorp","twemp","klint","spragg","thurm","veeb","morpe","blorn","crelt","dwomp","frisby","glunt","prisk","snive"]
+};
