@@ -75,8 +75,8 @@ window.RELATIONS = { version:1, items:[
  stem:"类比：<b>big : huge</b> :: <b>small : ?</b>",options:["tiny","wide","short","heavy"],answer:0,
  explain:"程度递进。big→huge（更大），small→tiny（更小）。"},
 {id:"ana-08",type:"analogy",lvl:4,unit:4,words:["petrol"],
- stem:"类比：<b>petrol : car</b> :: <b>food : ?</b>",options:["body","wheel","engine","road"],answer:0,
- explain:"能量来源 : 使用者。汽油驱动汽车，食物滋养身体。"},
+ stem:"类比：<b>petrol : car</b> :: <b>food : ?</b>",options:["body","wheel","road","sky"],answer:0,
+ explain:"能量来源 : 使用者。汽油驱动汽车，食物滋养身体(body)。"},
 
 /* ============ 分类 / 找不同 (classification / odd-one-out) ============ */
 {id:"cls-01",type:"classify",lvl:2,unit:0,words:["balloon"],
