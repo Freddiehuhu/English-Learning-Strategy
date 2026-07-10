@@ -274,8 +274,6 @@ function watInScope(unit){if(!window.RELATIONS||!RELATIONS.wat)return [];return 
 function watCard(w){var opts=shuffle(w.correct.concat(w.distractors).slice());
  var ansSet=[];opts.forEach(function(o,i){if(w.correct.indexOf(o)>=0)ansSet.push(i);});
  return {kind:'wat',lvl:w.lvl||3,tag:'词语联想',rel:true,stem:'选出与 <b>'+esc(w.target)+'</b> 有关的词（多选，共 '+w.correct.length+' 个）：',opts:opts,answerSet:ansSet,words:[wordBaseAny(w.target)].filter(Boolean),explain:w.explain||''};}
-function yesnoReal(it){return {kind:'yesno',lvl:1,tag:'真假词',stem:'下面是<b>真词</b>还是<b>假词</b>？',word:it.word,real:true,words:[it.base],explain:'“'+esc(it.word)+'” 是真词：'+esc(it.gloss)};}
-function yesnoFake(pw){return {kind:'yesno',lvl:1,tag:'真假词',stem:'下面是<b>真词</b>还是<b>假词</b>？',word:pw,real:false,words:[],explain:'“'+esc(pw)+'” 是假词（英语里没有这个词）。'};}
 
 var quiz=null;
 function pickAutoCard(it,L,types){
@@ -310,12 +308,6 @@ function buildSession(kind){
    if(autoOn)ordered.forEach(function(it){if(cards.length>=count*3)return;var c=pickAutoExact(it,L,types);if(c)cards.push(c);});
    var pl=pool.filter(function(c){return (c.lvl||3)===L;});shuffle(pl);cards=cards.concat(pl);
  }
- // Yes/No (real vs fake) — a quick L1 screen; add real words + some pseudowords
- if(types.indexOf('yesno')>=0 && (lvlMode==='auto'||lvlMode==='1')){
-   var reals=ordered.slice(0,Math.max(4,Math.ceil(count*0.6))).map(yesnoReal);
-   var fakes=shuffle((window.RELATIONS&&RELATIONS.pseudo||[]).slice()).slice(0,Math.ceil(count*0.4)).map(yesnoFake);
-   cards=cards.concat(shuffle(reals.concat(fakes)));
- }
  shuffle(cards);
  cards=cards.slice(0,kind==='diag'?8:count);
  if(!cards.length){alert('这个范围/难度下暂时没有可出的题。\n可尝试：把难度设为「自动」、多勾几个题型，或切换到「全部」单元。');return;}
@@ -323,7 +315,7 @@ function buildSession(kind){
  if(kind==='diag'){localStorage.setItem(DK,todayStr());}
  renderQuiz();
 }
-var ALLTYPES=['meaning','yesno','word','syn','analogy','classify','wat','cloze','spell','dict','exam'];
+var ALLTYPES=['meaning','word','syn','analogy','classify','wat','cloze','spell','dict','exam'];
 function quizTypes(){var t=[],found=false;ALLTYPES.forEach(function(k){var el=document.getElementById('qt_'+k);if(el){found=true;if(el.checked)t.push(k);}});
  if(found){st.qtypes=t;return t;} return (st.qtypes&&st.qtypes.length)?st.qtypes:ALLTYPES.slice();}
 function quizCount(){var el=document.getElementById('qCount');if(el){st.qcount=+el.value;return st.qcount;}return st.qcount||12;}
@@ -344,7 +336,6 @@ function renderQuiz(){
  if(c.audio)h+='<div style="margin-top:10px"><button class="pbtn" onclick="play(\''+c.audio+'\')">🔊 播放</button></div>';
  if(c.kind==='mcq'){h+='<div class="opts" id="opts">';c.opts.forEach(function(o,i){h+='<button class="opt" id="opt_'+i+'" onclick="answerMCQ('+i+')">'+esc(o)+'</button>';});h+='</div>';}
  else if(c.kind==='wat'){h+='<div class="opts wat" id="opts">';c.opts.forEach(function(o,i){h+='<button class="opt watopt" id="opt_'+i+'" onclick="toggleWat('+i+')">'+esc(o)+'</button>';});h+='</div><button class="big" style="margin-top:12px" onclick="answerWAT()">提交</button>';}
- else if(c.kind==='yesno'){h+='<div class="ynwrap"><div class="ynword">'+esc(c.word)+'</div><div class="ynbtns"><button class="big" onclick="answerYesNo(true)">✅ 真词</button><button class="big alt" onclick="answerYesNo(false)">❌ 假词</button></div></div>';}
  else{h+='<input class="qin" id="qin" placeholder="输入答案后回车；不会就直接提交看答案" autocomplete="off" autocapitalize="off" onkeydown="if(event.key===\'Enter\')answerFill()"><button class="big" style="margin-top:10px" onclick="answerFill()">提交 / 不会</button>';}
  h+='<div class="fb" id="fb"></div>';
  h+='<div class="rowbtns"><button class="big ghost" id="nextBtn" style="display:none" onclick="nextQ()">下一题 ▸</button><button class="mini" onclick="quitQuiz()">退出</button></div>';
@@ -367,7 +358,6 @@ function answerWAT(){if(quiz.answered)return;var c=quiz.cards[quiz.idx];quiz.ans
  for(var k=0;k<c.opts.length;k++){var el=document.getElementById('opt_'+k);el.onclick=null;var isAns=ans.indexOf(k)>=0,isSel=el.classList.contains('sel');el.classList.remove('sel');
    if(isAns)el.classList.add('correct'); if(isSel&&!isAns)el.classList.add('wrong');}
  finishCard(c,ok);}
-function answerYesNo(saidReal){if(quiz.answered)return;var c=quiz.cards[quiz.idx];quiz.answered=true;finishCard(c,saidReal===c.real);}
 function finishCard(c,ok,blank){markWords(c,ok);if(ok)quiz.right++;else quiz.wrong.push(c);
  var fb=document.getElementById('fb');fb.className='fb show '+(ok?'ok':'no');
  fb.innerHTML=(ok?'✅ 正确！':(blank?'⭕ 未作答（跳过）。':'❌ 不对。'))+(c.explain?'　'+c.explain:'');
@@ -415,7 +405,7 @@ function renderHub(){
  // controls
  h+='<div class="panel">';
  h+='<div class="ctrlrow"><span class="grp-label">题型</span>'+
-    typeChk('meaning','词义选择 ·L1',1)+typeChk('yesno','真假词 ·L1',1)+typeChk('word','选词 ·L2',1)+
+    typeChk('meaning','词义选择 ·L1',1)+typeChk('word','选词 ·L2',1)+
     typeChk('syn','同义/反义 ·L2',1)+typeChk('analogy','类比 ·L3',1)+typeChk('classify','分类·找不同 ·L3',1)+typeChk('wat','词语联想 ·L3',1)+
     typeChk('cloze','例句填空 ·L3',1)+typeChk('spell','听音拼写 ·L3',1)+typeChk('dict','强制听写 ·L4',1)+
     typeChk('exam','中考题 ·L3-5',1)+'</div>';
@@ -433,7 +423,6 @@ function genCardAtLevel(L,types){
  var pool=poolCards(st.unit,types).filter(function(c){return (c.lvl||3)===L && (c.words||[]).some(function(b){return !quiz.used[b];});});
  if(pool.length){shuffle(pool);return pool[0];}
  for(var i=0;i<ordered.length;i++){var it=ordered[i];if(quiz.used[it.base])continue;var c=pickAutoExact(it,L,types);if(c)return c;}
- if(L===1){for(var j=0;j<ordered.length;j++){if(!quiz.used[ordered[j].base])return yesnoReal(ordered[j]);}}
  return null;}
 function nextDiagCard(){var L=Math.max(1,Math.min(5,Math.round(quiz.theta)));var types=ALLTYPES.slice();
  var c=genCardAtLevel(L,types);
