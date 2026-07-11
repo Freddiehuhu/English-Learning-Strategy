@@ -58,6 +58,21 @@ main{padding:12px 12px 60px;max-width:1100px;margin:0 auto}
 .empty{color:var(--mut);text-align:center;padding:40px}
 .reset{margin-left:auto}
 audio{display:none}
+.gsetup h2{font-size:20px;margin:0 0 6px}
+.ghud{display:flex;gap:16px;flex-wrap:wrap;align-items:center;padding:8px 4px 10px;font-size:14px}
+.gstat b{font-variant-numeric:tabular-nums;color:var(--blue)}
+.gfield{position:relative;height:min(58vh,460px);background:radial-gradient(120% 90% at 50% 0%,#1a2340,#0b1020);border:1px solid #2a3450;border-radius:14px;overflow:hidden;box-shadow:inset 0 0 40px rgba(0,0,0,.5)}
+.gfield::before{content:"";position:absolute;inset:0;background-image:radial-gradient(1px 1px at 20% 30%,#fff,transparent),radial-gradient(1px 1px at 70% 60%,#cdd,transparent),radial-gradient(1px 1px at 45% 80%,#fff,transparent),radial-gradient(1px 1px at 85% 20%,#bcd,transparent);opacity:.5}
+.gship{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);font-size:30px;filter:drop-shadow(0 0 6px #6af)}
+.enemy{position:absolute;background:rgba(255,255,255,.95);border:2px solid #cfd6e6;border-radius:10px;padding:6px 11px;font-size:14px;color:#1a2233;box-shadow:0 2px 10px rgba(0,0,0,.35);white-space:nowrap;max-width:48%;will-change:top}
+.enemy.esent{white-space:normal;max-width:74%;font-size:13px;line-height:1.35}
+.enemy .ecn{font-weight:600}
+.enemy.locked{border-color:#ffb020;box-shadow:0 0 0 3px rgba(255,176,32,.55),0 2px 12px rgba(0,0,0,.45)}
+.enemy.boom{background:#ffe08a;border-color:#e0a100;color:#7a4b00;font-weight:800;transform:scale(1.08)}
+.enemy.miss{background:#ffb3b3;border-color:#d21b1b;color:#7a1010}
+.ginputwrap{display:flex;gap:8px;align-items:center;margin-top:10px}
+.ginput{flex:1;padding:12px 14px;border:2px solid var(--blue);border-radius:10px;font-size:18px;font-family:Georgia,"Times New Roman",serif}
+.ginput.bad{border-color:#d21b1b;background:#fdeaea}
 /* ---------- QUIZ / PRACTICE ---------- */
 .hub-banner{background:linear-gradient(120deg,#eaf1ff,#f3f7ff);border:1px solid #d5e2ff;border-radius:var(--r);padding:14px 16px;margin:6px 0 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .hub-banner b{font-size:15px}
@@ -116,7 +131,7 @@ audio{display:none}
  <div class="tabs" id="tabs"></div>
  <div class="ctrls">
    <span class="grp-label">模式</span>
-   <span class="seg"><button id="mList" class="on" onclick="setMode('list')">📋 列表</button><button id="mCard" onclick="setMode('card')">🂠 卡片</button><button id="mQuiz" onclick="setMode('quiz')">🎯 测试练习</button></span>
+   <span class="seg"><button id="mList" class="on" onclick="setMode('list')">📋 列表</button><button id="mCard" onclick="setMode('card')">🂠 卡片</button><button id="mQuiz" onclick="setMode('quiz')">🎯 测试练习</button><button id="mGame" onclick="setMode('game')">🎮 打字射击</button></span>
    <span id="browseCtrls" style="display:contents">
      <span class="grp-label">显示</span>
      <label class="chk"><input type="checkbox" id="fwEN" checked onchange="tog('wEN')">单词英</label>
@@ -440,10 +455,10 @@ function startDiag(){
  quiz.cards.push(c);localStorage.setItem(DK,todayStr());renderQuiz();}
 
 /* ===== router / controls ===== */
-function render(){if(st.mode==='quiz'){if(quiz)renderQuiz();else renderHub();}else renderBrowse();}
-function setMode(m){st.mode=m;['List','Card','Quiz'].forEach(function(x){document.getElementById('m'+x).classList.toggle('on','m'+x==='m'+(m.charAt(0).toUpperCase()+m.slice(1)));});
- var q=(m==='quiz');document.getElementById('browseCtrls').style.display=q?'none':'contents';document.getElementById('searchBar').style.display=q?'none':'block';
- if(m!=='quiz')quiz=null;render();}
+function render(){if(st.mode==='game'){renderGame();return;} if(st.mode==='quiz'){if(quiz)renderQuiz();else renderHub();}else renderBrowse();}
+function setMode(m){st.mode=m;['List','Card','Quiz','Game'].forEach(function(x){document.getElementById('m'+x).classList.toggle('on','m'+x==='m'+(m.charAt(0).toUpperCase()+m.slice(1)));});
+ var doc=(m==='list'||m==='card');document.getElementById('browseCtrls').style.display=doc?'contents':'none';document.getElementById('searchBar').style.display=doc?'block':'none';
+ if(m!=='quiz')quiz=null; if(m!=='game')stopGame(); render();}
 function setSort(v){st.sort=v;render()}
 function setQ(v){st.q=v;render()}
 function tog(k){var cb=document.getElementById('f'+k);st.show[k]=cb.checked;cb.parentElement.classList.toggle('off',!cb.checked);render()}
@@ -451,5 +466,78 @@ function setUnit(u){st.unit=u;[].forEach.call(document.querySelectorAll('.tab'),
 function resetAll(){if(confirm('确定清空所有卡片的错误计数吗？（不影响练习掌握度）')){err={};saveErr();render()}}
 (function(){var t=document.getElementById('tabs');var h='<button class="tab" data-u="all" onclick="setUnit(\'all\')">全部</button>';
  for(var u=1;u<=8;u++)h+='<button class="tab'+(u===1?' on':'')+'" data-u="'+u+'" onclick="setUnit(\''+u+'\')">Unit '+u+'</button>';t.innerHTML=h;})();
+/* ===== Typing Shooter · 听写射击 ===== */
+var G=null;
+function normStr(s){return (s||'').toLowerCase().replace(/[^a-z0-9' ]+/g,' ').replace(/\s+/g,' ').trim();}
+function gamePool(mode){var pool=[];scope().forEach(function(it){
+ if(mode==='sentence'){var n=normStr(it.sent); if(n.split(' ').length<=10) pool.push({en:it.sent,target:n,cn:it.sent_cn,audio:dir(it,'UK')+it.base+'_sentence.mp3',base:it.base});}
+ else pool.push({en:it.word,target:normStr(it.word),cn:it.gloss+'  '+it.pos,audio:dir(it,'UK')+it.base+'.mp3',base:it.base});});
+ return pool;}
+function gameSetupHTML(){return '<div class="panel gsetup">'+
+ '<h2>🎮 打字射击 · 听写练习</h2>'+
+ '<p style="color:var(--mut);margin:0 0 12px">敌机从上方飞下：<b>自动播放英文发音</b>并显示中文。听音 / 看义，在键盘上打出<b>英文</b>把它击落！被敌机冲到底部会掉一条命。</p>'+
+ '<div class="ctrlrow"><span class="grp-label">内容</span>'+
+ '<label class="chk"><input type="radio" name="gmode" value="word" checked> 单词 / 短语</label>'+
+ '<label class="chk"><input type="radio" name="gmode" value="sentence"> 句子</label>'+
+ '<span class="grp-label">范围</span><span style="font-size:13px;color:var(--mut)">'+(st.unit==='all'?'全部单元':'Unit '+st.unit)+'（用上方标签切换）</span></div>'+
+ '<div class="rowbtns"><button class="big" onclick="gameStart()">▶ 开始游戏</button></div>'+
+ '<div style="font-size:12px;color:var(--faint);margin-top:8px">提示：按 <b>Tab</b> 或点 🔊 可重听当前锁定的敌机；大小写、标点都不计较，拼对即击落。</div></div>';}
+function renderGame(){if(G){return;} document.getElementById('main').innerHTML=gameSetupHTML();}
+function gameStart(){var mode=(document.querySelector('input[name=gmode]:checked')||{}).value||'word';
+ var pool=gamePool(mode); if(pool.length<4){alert('这个范围内可玩的内容太少，切到「全部」单元再试。');return;}
+ G={mode:mode,pool:pool,enemies:[],score:0,lives:3,combo:0,killed:0,
+    spawnEvery:mode==='sentence'?4600:2700,speed:mode==='sentence'?17:25,
+    sinceSpawn:99999,running:true,last:performance.now(),raf:null,locked:null};
+ document.getElementById('main').innerHTML='<div class="ghud" id="ghud"></div>'+
+  '<div class="gfield" id="gfield"><div class="gship">🚀</div></div>'+
+  '<div class="ginputwrap"><input id="ginput" class="ginput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="听音打字…击落敌机"><button class="pbtn" onclick="gameReplay()">🔊 重听</button><button class="mini" onclick="gameQuit()">退出</button></div>';
+ var inp=document.getElementById('ginput');
+ inp.addEventListener('input',gameOnInput);
+ inp.addEventListener('keydown',function(e){if(e.key==='Tab'){e.preventDefault();gameReplay();}});
+ inp.focus(); updateHud(); G.raf=requestAnimationFrame(gameLoop);}
+function gameLoop(ts){if(!G||!G.running)return; var dt=Math.min(60,ts-G.last);G.last=ts;
+ G.sinceSpawn+=dt; var interval=Math.max(950,G.spawnEvery-G.killed*35);
+ var cap=(G.mode==='sentence'?2:5);
+ if(G.sinceSpawn>=interval && G.enemies.length<cap){spawnEnemy();G.sinceSpawn=0;}
+ var f=document.getElementById('gfield'); if(!f){return;} var ground=f.clientHeight-42; var spd=(G.speed+G.killed*0.5)*dt/1000;
+ for(var i=G.enemies.length-1;i>=0;i--){var e=G.enemies[i];e.y+=spd;e.el.style.top=e.y+'px';
+   if(e.y>=ground){G.enemies.splice(i,1);hitGround(e);}}
+ if(G.locked&&G.enemies.indexOf(G.locked)<0)G.locked=null;
+ G.raf=requestAnimationFrame(gameLoop);}
+function spawnEnemy(){var it=G.pool[Math.floor(Math.random()*G.pool.length)];var f=document.getElementById('gfield');if(!f)return;
+ var el=document.createElement('div');el.className='enemy'+(G.mode==='sentence'?' esent':'');
+ el.innerHTML='<div class="ecn">🔊 '+esc(it.cn)+'</div>';
+ var maxx=Math.max(8,f.clientWidth-(G.mode==='sentence'?280:160));var x=8+Math.random()*maxx;
+ el.style.left=x+'px';el.style.top='-8px';f.appendChild(el);
+ G.enemies.push({item:it,target:it.target,y:-8,el:el}); play(it.audio);}
+function gameOnInput(){if(!G||!G.running)return;var val=normStr(document.getElementById('ginput').value);
+ if(!val){G.locked=null;paintLocks(false);return;}
+ if(!(G.locked&&G.locked.target.indexOf(val)===0)){var cand=G.enemies.filter(function(e){return e.target.indexOf(val)===0;});cand.sort(function(a,b){return b.y-a.y;});G.locked=cand[0]||null;}
+ paintLocks(!G.locked);
+ if(G.locked&&val===G.locked.target){destroyEnemy(G.locked);document.getElementById('ginput').value='';G.locked=null;paintLocks(false);}}
+function paintLocks(bad){G.enemies.forEach(function(e){e.el.classList.toggle('locked',e===G.locked);});
+ var inp=document.getElementById('ginput');if(inp)inp.classList.toggle('bad',!!bad);}
+function destroyEnemy(e){var idx=G.enemies.indexOf(e);if(idx>=0)G.enemies.splice(idx,1);
+ e.el.classList.add('boom');e.el.innerHTML='💥 '+esc(e.item.en);
+ (function(el){setTimeout(function(){if(el&&el.parentNode)el.parentNode.removeChild(el);},380);})(e.el);
+ G.combo++;G.killed++;G.score+=(G.mode==='sentence'?20:10)+Math.min(20,G.combo)*2;updateHud();
+ if(e.item.base)grade(e.item.base,true);}
+function hitGround(e){if(e.el){e.el.classList.add('miss');(function(el){setTimeout(function(){if(el&&el.parentNode)el.parentNode.removeChild(el);},320);})(e.el);}
+ if(G.locked===e)G.locked=null;G.combo=0;G.lives--;updateHud();
+ if(e.item.base){grade(e.item.base,false);setErr(e.item.base,ec(e.item.base)+1);}
+ if(G.lives<=0)gameOver();}
+function updateHud(){var h=document.getElementById('ghud');if(!h)return;
+ h.innerHTML='<span class="gstat">🏆 <b>'+G.score+'</b></span>'+
+  '<span class="gstat">🔥 连击 <b>'+G.combo+'</b></span>'+
+  '<span class="gstat">❤️ '+'♥'.repeat(Math.max(0,G.lives))+'<span style="opacity:.25">'+'♥'.repeat(Math.max(0,3-G.lives))+'</span></span>'+
+  '<span class="gstat">🎯 击落 <b>'+G.killed+'</b></span>';}
+function gameReplay(){var e=G&&(G.locked||G.enemies.slice().sort(function(a,b){return b.y-a.y;})[0]);if(e)play(e.item.audio);var inp=document.getElementById('ginput');if(inp)inp.focus();}
+function gameOver(){G.running=false;if(G.raf)cancelAnimationFrame(G.raf);var mode=G.mode,sc=G.score,ki=G.killed;
+ document.getElementById('main').innerHTML='<div class="panel" style="text-align:center"><div style="font-size:40px">🎮</div>'+
+  '<div class="score">'+sc+'</div><div style="color:var(--mut);margin-bottom:6px">得分　·　击落 '+ki+' 个　·　'+(mode==='sentence'?'句子':'单词')+'模式</div>'+
+  '<div class="rowbtns" style="justify-content:center"><button class="big" onclick="gameRestart(\''+mode+'\')">再来一局</button><button class="big ghost" onclick="gameQuit()">返回</button></div></div>';}
+function gameRestart(mode){G=null;document.getElementById('main').innerHTML=gameSetupHTML();var r=document.querySelector('input[name=gmode][value=\"'+mode+'\"]');if(r)r.checked=true;gameStart();}
+function gameQuit(){stopGame();renderGame();}
+function stopGame(){if(G){G.running=false;if(G.raf)cancelAnimationFrame(G.raf);}G=null;}
 render();
 </script></body></html>
