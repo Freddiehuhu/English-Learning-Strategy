@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="description" content="面向雅思学习者的发音、拼写、词形和造句综合词汇训练工具。" />
+    <meta
+      name="description"
+      content="面向雅思学习者的发音、拼写、词形、图像词义辨析和造句综合词汇训练工具。"
+    />
     <meta name="theme-color" content="#17324d" />
     <title>WordLab 50 · 雅思薄弱词专项训练</title>
     <link rel="manifest" href="./manifest.webmanifest" />
@@ -58,6 +61,10 @@
             <span class="nav-icon" aria-hidden="true">⇄</span>
             <span>词形变换</span>
           </button>
+          <button class="nav-item" type="button" data-view-link="visual">
+            <span class="nav-icon" aria-hidden="true">◫</span>
+            <span>图像词义</span>
+          </button>
           <button class="nav-item" type="button" data-view-link="sentence">
             <span class="nav-icon" aria-hidden="true">¶</span>
             <span>句子工坊</span>
@@ -87,6 +94,10 @@
         <button class="bottom-nav-item" type="button" data-view-link="spell">
           <span aria-hidden="true">⌨</span>
           <small>听写</small>
+        </button>
+        <button class="bottom-nav-item" type="button" data-view-link="visual">
+          <span aria-hidden="true">◫</span>
+          <small>图义</small>
         </button>
         <button class="bottom-nav-item" type="button" data-view-link="forms">
           <span aria-hidden="true">⇄</span>
@@ -200,6 +211,7 @@
     </noscript>
 
     <script src="./vocabulary.js" defer></script>
+    <script src="./visual-data.js" defer></script>
     <script src="./app.js" defer></script>
   </body>
 </html>
