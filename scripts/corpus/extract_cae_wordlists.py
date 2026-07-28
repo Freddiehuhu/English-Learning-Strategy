@@ -14,7 +14,7 @@ import pdfplumber
 
 ENTRY_RE = re.compile(
     r"^(?P<head>.+?)\s+"
-    r"(?P<pos>adv\+adj|adj\+n|idiom|n|np|v|vp|adj|adjp|adv|advp|pp)"
+    r"(?P<pos>adv\+adj|adj\+n|v\+adv|idiom|n|np|v|vp|adj|adjp|adv|advp|pp)"
     r"(?:\s+\[(?P<grammar>[^\]]+)\])?\s+"
     r"\((?P<ref>(?:U\d+\s*,\s*)?(?:\d+|RS))\)\s*"
     r"(?P<definition>.*)$",
@@ -43,7 +43,18 @@ POS_LABELS = {
     "pp": "prepositional phrase",
     "adj+n": "adjective + noun",
     "adv+adj": "adverb + adjective",
+    "v+adv": "verb + adverb",
     "idiom": "idiom",
+}
+EXPECTED_COUNTS = {
+    **{
+        f"CompleteCAE_WLM_ExtendedUnit{unit:02d}": count
+        for unit, count in enumerate(
+            (62, 73, 67, 64, 64, 68, 41, 66, 65, 74, 72, 62, 53, 75),
+            start=1,
+        )
+    },
+    "CompleteCAE_WLM_PhrasalVerbs": 54,
 }
 
 
@@ -55,6 +66,7 @@ class Entry:
     source_ref: str
     definition: str
     pdf_page: int
+    notes: str = ""
 
 
 def clean_line(line: str) -> str:
@@ -103,12 +115,21 @@ def parse_page(page: pdfplumber.page.Page, page_number: int) -> list[Entry]:
                 continue
             if match:
                 started = True
+                matched_head = match.group("head")
+                if (
+                    current
+                    and not pending_head
+                    and re.fullmatch(r"\d+", matched_head.strip())
+                ):
+                    previous_sense = re.match(r"^(.*?)\s+\d+$", current.raw_term)
+                    if previous_sense:
+                        pending_head = previous_sense.group(1)
                 if current:
                     entries.append(current)
                 raw_head = clean_line(
-                    f"{pending_head} {match.group('head')}"
+                    f"{pending_head} {matched_head}"
                     if pending_head
-                    else match.group("head")
+                    else matched_head
                 )
                 pending_head = ""
                 current = Entry(
@@ -161,6 +182,139 @@ def extract_pdf(path: Path) -> list[Entry]:
     with pdfplumber.open(path) as document:
         for page_number, page in enumerate(document.pages, start=1):
             entries.extend(parse_page(page, page_number))
+    return repair_known_wrapped_headwords(path, entries)
+
+
+def validate_entries(path: Path, entries: list[Entry]) -> None:
+    expected_count = EXPECTED_COUNTS.get(path.stem)
+    if expected_count is not None and len(entries) != expected_count:
+        raise ValueError(
+            f"{path.name}: expected {expected_count} entries, found {len(entries)}"
+        )
+
+    forbidden_definition_text = (
+        "Complete CAE by ",
+        "Extended wordlist",
+        "Abbreviations:",
+        "Cambridge University Press",
+        "PHOTOCOPIABLE",
+    )
+    for entry in entries:
+        if not entry.raw_term or not entry.definition:
+            raise ValueError(
+                f"{path.name}: blank headword or definition on page {entry.pdf_page}"
+            )
+        leaked = next(
+            (
+                marker
+                for marker in forbidden_definition_text
+                if marker in entry.definition
+            ),
+            "",
+        )
+        if leaked:
+            raise ValueError(
+                f"{path.name}: page furniture leaked into {entry.raw_term!r}: {leaked}"
+            )
+
+    required_headwords = {
+        "CompleteCAE_WLM_ExtendedUnit02": {
+            "switch between languages/from one language to another",
+            "work tirelessly",
+        },
+        "CompleteCAE_WLM_ExtendedUnit04": {
+            "kill a few birds with one stone (usually to kill two birds with one stone)",
+        },
+        "CompleteCAE_WLM_ExtendedUnit06": {
+            "have an ear for something/have a good ear for something",
+        },
+        "CompleteCAE_WLM_ExtendedUnit08": {"update 1", "update 2"},
+    }.get(path.stem, set())
+    observed = {entry.raw_term for entry in entries}
+    missing = sorted(required_headwords - observed)
+    if missing:
+        raise ValueError(
+            f"{path.name}: required reconstructed/sense entries missing: {missing}"
+        )
+
+
+def repair_known_wrapped_headwords(path: Path, entries: list[Entry]) -> list[Entry]:
+    """Repair three headwords visibly wrapped before their POS label.
+
+    The PDF text layer places the first half of each headword at the end of the
+    preceding definition and the second half on the following line. These
+    repairs preserve the printed lexical item without trying to infer any new
+    vocabulary.
+    """
+
+    unit_match = re.search(r"Unit(\d+)", path.stem, re.IGNORECASE)
+    if not unit_match:
+        return entries
+    unit = int(unit_match.group(1))
+    repairs = {
+        2: {
+            "previous": "sweep sth aside",
+            "prefix": "switch between languages/from one language to",
+            "fragment": "another",
+            "headword": "switch between languages/from one language to another",
+        },
+        4: {
+            "previous": "job-sharing",
+            "prefix": "kill a few birds with one stone (usually to kill two birds",
+            "fragment": "with one stone)",
+            "headword": (
+                "kill a few birds with one stone "
+                "(usually to kill two birds with one stone)"
+            ),
+        },
+        6: {
+            "previous": "grin",
+            "prefix": "have an ear for something/have a good ear for",
+            "fragment": "something",
+            "headword": "have an ear for something/have a good ear for something",
+        },
+    }
+    repair = repairs.get(unit)
+    if not repair:
+        return entries
+    if any(
+        entry.raw_term.casefold() == repair["headword"].casefold()
+        for entry in entries
+    ):
+        return entries
+
+    previous = next(
+        (
+            entry
+            for entry in entries
+            if entry.raw_term.casefold() == repair["previous"].casefold()
+        ),
+        None,
+    )
+    fragment = next(
+        (
+            entry
+            for entry in entries
+            if entry.raw_term.casefold() == repair["fragment"].casefold()
+        ),
+        None,
+    )
+    if not previous or not fragment or repair["prefix"] not in previous.definition:
+        raise ValueError(
+            f"{path.name}: expected wrapped-headword layout was not found"
+        )
+
+    previous.definition = previous.definition.split(repair["prefix"], 1)[0].rstrip()
+    fragment_index = entries.index(fragment)
+    entries[fragment_index] = Entry(
+        raw_term=repair["headword"],
+        pos=fragment.pos,
+        grammar=fragment.grammar,
+        source_ref=fragment.source_ref,
+        definition=fragment.definition,
+        pdf_page=fragment.pdf_page,
+        notes="source layout: wrapped headword reconstructed",
+    )
     return entries
 
 
@@ -184,7 +338,9 @@ def write_tsv(path: Path, pdf_path: Path, entries: list[Entry]) -> None:
         for entry in entries:
             headword, sense_note = normalise_headword(entry.raw_term)
             grammar_note = f"grammar={entry.grammar}" if entry.grammar else ""
-            notes = "; ".join(note for note in (grammar_note, sense_note) if note)
+            notes = "; ".join(
+                note for note in (grammar_note, sense_note, entry.notes) if note
+            )
             writer.writerow(
                 {
                     "source": source,
@@ -210,6 +366,7 @@ def main() -> None:
 
     for pdf_path in args.pdfs:
         entries = extract_pdf(pdf_path)
+        validate_entries(pdf_path, entries)
         output_path = args.output_dir / f"{pdf_path.stem}.tsv"
         write_tsv(output_path, pdf_path, entries)
         print(f"{pdf_path.name}\t{len(entries)}\t{output_path}")

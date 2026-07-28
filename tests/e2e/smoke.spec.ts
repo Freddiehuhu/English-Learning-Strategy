@@ -182,6 +182,36 @@ test('service worker lets ranged natural-audio requests reach the network', asyn
   expect([200, 206]).toContain(result.status);
 });
 
+test('service worker caches the on-demand corpus for offline reuse', async ({ page, context }) => {
+  await page.goto('/ielts/index.html');
+  const controlled = await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+    return Boolean(navigator.serviceWorker.controller);
+  });
+  if (!controlled) await page.reload();
+  await expect
+    .poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)))
+    .toBe(true);
+
+  await expect
+    .poll(() =>
+      page.evaluate(async () => {
+        const response = await fetch('./corpus/catalog.json');
+        const payload = await response.json();
+        const cached = await caches.match('./corpus/catalog.json');
+        return response.ok && payload.entries.length === 7229 && Boolean(cached);
+      }),
+    )
+    .toBe(true);
+
+  await context.setOffline(true);
+  await page.locator('[data-view-link="visual"]:visible').first().click();
+  await page.getByRole('button', { name: /词库地图/ }).click();
+  await expect(page.locator('.corpus-stat-grid')).toContainText('7,229');
+  await expect(page.locator('[data-corpus-results] .corpus-entry')).toHaveCount(60);
+  await context.setOffline(false);
+});
+
 test('dictation keeps answers hidden through hints and supports skipping', async ({ page }) => {
   await page.goto('/ielts/index.html');
   await page.getByRole('button', { name: /02 听写拼词/ }).click();

@@ -372,7 +372,7 @@
             targetWordId: 'walrus',
             title: '动物的上位类别',
             prompt: 'walrus 和 caribou 都可以归入哪一个更大的类别？',
-            choices: ['mammal', 'marine animal', 'prey', 'Inuit'],
+            choices: ['mammal', 'marine animal', 'prey', 'tree'],
             answer: 'mammal',
             hint: '一个生活在海边，一个生活在陆地；上义词要同时包含两者。',
             feedback: 'walrus 和 caribou 都是 mammal；marine animal 不能包含 caribou。',

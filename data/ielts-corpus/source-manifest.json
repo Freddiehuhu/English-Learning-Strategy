@@ -1,0 +1,506 @@
+[
+  {
+    "id": "cambridge-b1-preliminary-and-preliminary-for-schools-v-179d61e8",
+    "name": "Cambridge B1 Preliminary and Preliminary for Schools Vocabulary List (2025)",
+    "source_files": [
+      "b1_preliminary.tsv"
+    ],
+    "pdf_files": [
+      "506887-b1-preliminary-vocabulary-list.pdf"
+    ],
+    "pdf_pages": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40
+    ],
+    "extracted_rows": 3119,
+    "unique_normalized_terms": 3109,
+    "cefr_levels": [
+      "B1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "cambridge-ket-and-ket-for-schools-vocabulary-list-2009-f6cd16bc",
+    "name": "Cambridge KET and KET for Schools Vocabulary List (2009)",
+    "source_files": [
+      "ket_schools.tsv"
+    ],
+    "pdf_files": [
+      "23387-ket-schools-vocabulary-list.pdf"
+    ],
+    "pdf_pages": [
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ],
+    "extracted_rows": 1244,
+    "unique_normalized_terms": 1241,
+    "cefr_levels": [
+      "A2"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "complete-cae-extended-unit-01-26f200ed",
+    "name": "Complete CAE Extended Unit 01",
+    "source_files": [
+      "CompleteCAE_WLM_ExtendedUnit01.tsv"
+    ],
+    "pdf_files": [
+      "CompleteCAE_WLM_ExtendedUnit01.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2
+    ],
+    "extracted_rows": 62,
+    "unique_normalized_terms": 62,
+    "cefr_levels": [
+      "C1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "complete-cae-extended-unit-02-6745d1f6",
+    "name": "Complete CAE Extended Unit 02",
+    "source_files": [
+      "CompleteCAE_WLM_ExtendedUnit02.tsv"
+    ],
+    "pdf_files": [
+      "CompleteCAE_WLM_ExtendedUnit02.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2
+    ],
+    "extracted_rows": 73,
+    "unique_normalized_terms": 73,
+    "cefr_levels": [
+      "C1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "complete-cae-extended-unit-03-c32c4266",
+    "name": "Complete CAE Extended Unit 03",
+    "source_files": [
+      "CompleteCAE_WLM_ExtendedUnit03.tsv"
+    ],
+    "pdf_files": [
+      "CompleteCAE_WLM_ExtendedUnit03.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2
+    ],
+    "extracted_rows": 67,
+    "unique_normalized_terms": 67,
+    "cefr_levels": [
+      "C1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "complete-cae-extended-unit-04-6d62bd85",
+    "name": "Complete CAE Extended Unit 04",
+    "source_files": [
+      "CompleteCAE_WLM_ExtendedUnit04.tsv"
+    ],
+    "pdf_files": [
+      "CompleteCAE_WLM_ExtendedUnit04.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2
+    ],
+    "extracted_rows": 64,
+    "unique_normalized_terms": 64,
+    "cefr_levels": [
+      "C1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "complete-cae-extended-unit-05-b7f921cc",
+    "name": "Complete CAE Extended Unit 05",
+    "source_files": [
+      "CompleteCAE_WLM_ExtendedUnit05.tsv"
+    ],
+    "pdf_files": [
+      "CompleteCAE_WLM_ExtendedUnit05.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2
+    ],
+    "extracted_rows": 64,
+    "unique_normalized_terms": 64,
+    "cefr_levels": [
+      "C1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "complete-cae-extended-unit-06-168f9855",
+    "name": "Complete CAE Extended Unit 06",
+    "source_files": [
+      "CompleteCAE_WLM_ExtendedUnit06.tsv"
+    ],
+    "pdf_files": [
+      "CompleteCAE_WLM_ExtendedUnit06.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2
+    ],
+    "extracted_rows": 68,
+    "unique_normalized_terms": 68,
+    "cefr_levels": [
+      "C1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "complete-cae-extended-unit-07-4c41a262",
+    "name": "Complete CAE Extended Unit 07",
+    "source_files": [
+      "CompleteCAE_WLM_ExtendedUnit07.tsv"
+    ],
+    "pdf_files": [
+      "CompleteCAE_WLM_ExtendedUnit07.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2
+    ],
+    "extracted_rows": 41,
+    "unique_normalized_terms": 41,
+    "cefr_levels": [
+      "C1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "complete-cae-extended-unit-08-158e8a62",
+    "name": "Complete CAE Extended Unit 08",
+    "source_files": [
+      "CompleteCAE_WLM_ExtendedUnit08.tsv"
+    ],
+    "pdf_files": [
+      "CompleteCAE_WLM_ExtendedUnit08.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2
+    ],
+    "extracted_rows": 66,
+    "unique_normalized_terms": 65,
+    "cefr_levels": [
+      "C1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "complete-cae-extended-unit-09-6ffec48f",
+    "name": "Complete CAE Extended Unit 09",
+    "source_files": [
+      "CompleteCAE_WLM_ExtendedUnit09.tsv"
+    ],
+    "pdf_files": [
+      "CompleteCAE_WLM_ExtendedUnit09.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2
+    ],
+    "extracted_rows": 65,
+    "unique_normalized_terms": 65,
+    "cefr_levels": [
+      "C1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "complete-cae-extended-unit-10-d26424fe",
+    "name": "Complete CAE Extended Unit 10",
+    "source_files": [
+      "CompleteCAE_WLM_ExtendedUnit10.tsv"
+    ],
+    "pdf_files": [
+      "CompleteCAE_WLM_ExtendedUnit10.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2
+    ],
+    "extracted_rows": 74,
+    "unique_normalized_terms": 74,
+    "cefr_levels": [
+      "C1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "complete-cae-extended-unit-11-2f9a931a",
+    "name": "Complete CAE Extended Unit 11",
+    "source_files": [
+      "CompleteCAE_WLM_ExtendedUnit11.tsv"
+    ],
+    "pdf_files": [
+      "CompleteCAE_WLM_ExtendedUnit11.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2
+    ],
+    "extracted_rows": 72,
+    "unique_normalized_terms": 72,
+    "cefr_levels": [
+      "C1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "complete-cae-extended-unit-12-9b402090",
+    "name": "Complete CAE Extended Unit 12",
+    "source_files": [
+      "CompleteCAE_WLM_ExtendedUnit12.tsv"
+    ],
+    "pdf_files": [
+      "CompleteCAE_WLM_ExtendedUnit12.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2
+    ],
+    "extracted_rows": 62,
+    "unique_normalized_terms": 62,
+    "cefr_levels": [
+      "C1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "complete-cae-extended-unit-13-2ca66860",
+    "name": "Complete CAE Extended Unit 13",
+    "source_files": [
+      "CompleteCAE_WLM_ExtendedUnit13.tsv"
+    ],
+    "pdf_files": [
+      "CompleteCAE_WLM_ExtendedUnit13.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2
+    ],
+    "extracted_rows": 53,
+    "unique_normalized_terms": 53,
+    "cefr_levels": [
+      "C1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "complete-cae-extended-unit-14-cb19756c",
+    "name": "Complete CAE Extended Unit 14",
+    "source_files": [
+      "CompleteCAE_WLM_ExtendedUnit14.tsv"
+    ],
+    "pdf_files": [
+      "CompleteCAE_WLM_ExtendedUnit14.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2
+    ],
+    "extracted_rows": 75,
+    "unique_normalized_terms": 75,
+    "cefr_levels": [
+      "C1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "complete-cae-phrasal-verbs-654dd4ef",
+    "name": "Complete CAE Phrasal Verbs",
+    "source_files": [
+      "CompleteCAE_WLM_PhrasalVerbs.tsv"
+    ],
+    "pdf_files": [
+      "CompleteCAE_WLM_PhrasalVerbs.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2
+    ],
+    "extracted_rows": 54,
+    "unique_normalized_terms": 54,
+    "cefr_levels": [
+      "C1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "grammar-and-vocabulary-for-first-and-first-for-schools-8b73ed4c",
+    "name": "Grammar and Vocabulary for First and First for Schools wordlist (2015)",
+    "source_files": [
+      "first_first_for_schools.tsv"
+    ],
+    "pdf_files": [
+      "Grammar--Vocabulary-First-and-First-for-Schools-wordlist.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "extracted_rows": 744,
+    "unique_normalized_terms": 725,
+    "cefr_levels": [
+      "B2"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "ielts-listening-1200-high-frequency-wordlist-c4fee3ec",
+    "name": "IELTS Listening 1200 High-Frequency Wordlist",
+    "source_files": [
+      "ielts_listening_1200.tsv"
+    ],
+    "pdf_files": [
+      "雅思听力1200高频词.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+    ],
+    "extracted_rows": 927,
+    "unique_normalized_terms": 919,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "oxford-3000-by-cefr-level-2e40d37c",
+    "name": "Oxford 3000 by CEFR level",
+    "source_files": [
+      "oxford_3000.tsv"
+    ],
+    "pdf_files": [
+      "The Oxford 3000_by CEFR level.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "extracted_rows": 3307,
+    "unique_normalized_terms": 2976,
+    "cefr_levels": [
+      "A1",
+      "A2",
+      "B1",
+      "B2"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "oxford-5000-by-cefr-level-eaf617de",
+    "name": "Oxford 5000 by CEFR level",
+    "source_files": [
+      "oxford_5000.tsv"
+    ],
+    "pdf_files": [
+      "The Oxford 5000_by CEFR level.pdf"
+    ],
+    "pdf_pages": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "extracted_rows": 2015,
+    "unique_normalized_terms": 1996,
+    "cefr_levels": [
+      "B2",
+      "C1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  }
+]

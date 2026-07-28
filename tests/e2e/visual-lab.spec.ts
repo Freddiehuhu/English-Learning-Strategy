@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+test.use({ serviceWorkers: 'block' });
+
 async function openVisualLab(page: import('@playwright/test').Page) {
   await page.goto('/ielts/index.html');
   await page.locator('[data-view-link="visual"]:visible').first().click();
@@ -174,4 +176,233 @@ test('supports homophone, homograph, analogy and taxonomy games without revealin
   expect(saved.skipped.mastered).toBe(false);
   expect(saved.skipped.attempts).toBe(1);
   expect(saved.skipped.correct).toBe(0);
+});
+
+test('loads the full corpus only on demand and filters its auditable index', async ({ page }) => {
+  let corpusRequests = 0;
+  await page.route('**/ielts/corpus/catalog.json', async (route) => {
+    corpusRequests += 1;
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schema_version: 1,
+        generated_at: '2026-07-29T00:00:00+08:00',
+        statistics: {
+          active_entries: 4,
+          source_rows: 9,
+          image_eligible_entries: 3,
+          excluded_proper_nouns: 1,
+        },
+        sources: [],
+        entries: [
+          {
+            id: 'environment',
+            headword: 'environment',
+            status: 'active',
+            is_phrase: false,
+            pos: ['noun'],
+            cefr: ['B1'],
+            primary_skill: 'reading',
+            skill_labels: ['reading', 'writing'],
+            skill_confidence: 'medium',
+            source_count: 3,
+            source_ids: [],
+            topics: ['环境 Environment'],
+            image_mode: 'concept-metaphor',
+            image_priority: 'high',
+            image_prompt_status: 'needs_teacher_approved_sense',
+            proper_noun_sense_removed: false,
+          },
+          {
+            id: 'accountability',
+            headword: 'accountability',
+            status: 'active',
+            is_phrase: false,
+            pos: ['noun'],
+            cefr: ['C1'],
+            primary_skill: 'writing',
+            skill_labels: ['reading', 'writing'],
+            skill_confidence: 'review',
+            source_count: 2,
+            source_ids: [],
+            topics: ['Academic'],
+            image_mode: 'concept-metaphor',
+            image_priority: 'medium',
+            image_prompt_status: 'needs_teacher_approved_sense',
+            proper_noun_sense_removed: false,
+          },
+          {
+            id: 'guided-tour',
+            headword: 'guided tour',
+            status: 'active',
+            is_phrase: true,
+            pos: ['phrase'],
+            cefr: ['B1'],
+            primary_skill: 'speaking',
+            skill_labels: ['listening', 'speaking'],
+            skill_confidence: 'medium',
+            source_count: 1,
+            source_ids: [],
+            topics: ['旅游 Touring'],
+            image_mode: 'none',
+            image_priority: 'none',
+            image_prompt_status: 'not_applicable',
+            proper_noun_sense_removed: false,
+          },
+          {
+            id: 'may',
+            headword: 'may',
+            status: 'active',
+            is_phrase: false,
+            pos: ['unspecified'],
+            cefr: [],
+            primary_skill: 'listening',
+            skill_labels: ['listening'],
+            skill_confidence: 'high',
+            source_count: 1,
+            source_ids: [],
+            topics: ['月份 Months'],
+            image_mode: 'none',
+            image_priority: 'none',
+            image_prompt_status: 'not_applicable',
+            proper_noun_sense_removed: true,
+          },
+        ],
+      }),
+    });
+  });
+
+  await openVisualLab(page);
+  expect(corpusRequests).toBe(0);
+  await page.getByRole('button', { name: /词库地图/ }).click();
+  await expect(page.getByRole('heading', { name: '从 PDF 词表到可审核的学习地图' })).toBeVisible();
+  expect(corpusRequests).toBe(1);
+  await expect(page.locator('.corpus-entry')).toHaveCount(4);
+  await expect(page.getByText('专名义项已隔离')).toBeVisible();
+
+  const skillFilter = page.locator('[data-action="corpus-filter"][data-filter="skill"]');
+  await skillFilter.selectOption('writing');
+  await expect(page.locator('.corpus-entry')).toHaveCount(1);
+  await expect(page.getByText('accountability', { exact: true })).toBeVisible();
+
+  await skillFilter.selectOption('all');
+  await page.getByLabel('查单词或主题').fill('environment');
+  await expect(page.locator('.corpus-entry')).toHaveCount(1);
+  await expect(page.getByText('environment', { exact: true })).toBeVisible();
+
+  await page.getByLabel('查单词或主题').fill('');
+  await page.locator('[data-action="corpus-filter"][data-filter="pos"]').selectOption('phrase');
+  await page.locator('[data-action="corpus-filter"][data-filter="cefr"]').selectOption('B1');
+  await page.locator('[data-action="corpus-filter"][data-filter="image"]').selectOption('none');
+  await expect(page.locator('.corpus-entry')).toHaveCount(1);
+  await expect(page.getByText('guided tour', { exact: true })).toBeVisible();
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('browses the published 21-PDF corpus on desktop and mobile', async ({ page }) => {
+  let corpusRequests = 0;
+  page.on('request', (request) => {
+    if (request.url().endsWith('/ielts/corpus/catalog.json')) corpusRequests += 1;
+  });
+
+  await openVisualLab(page);
+  expect(corpusRequests).toBe(0);
+  await page.getByRole('button', { name: /词库地图/ }).click();
+
+  await expect(page.getByRole('heading', { name: '从 PDF 词表到可审核的学习地图' })).toBeVisible();
+  await expect(page.locator('.corpus-stat-grid')).toContainText('7,229');
+  await expect(page.locator('.corpus-stat-grid')).toContainText('12,316');
+  expect(corpusRequests).toBe(1);
+  await expect(page.locator('.corpus-entry')).toHaveCount(60);
+  await page.getByRole('button', { name: /再显示 60 个/ }).click();
+  await expect(page.locator('.corpus-entry')).toHaveCount(120);
+
+  await page.locator('[data-action="corpus-quick-skill"][data-skill="listening"]').click();
+  await expect(page.locator('[data-corpus-match-count]')).toHaveText('853');
+  await expect(page.locator('[data-action="corpus-filter"][data-filter="skill"]')).toHaveValue(
+    'listening',
+  );
+  await page.locator('[data-action="corpus-quick-skill"][data-skill="listening"]').click();
+
+  const search = page.getByLabel('查单词或主题');
+  await search.fill('burning fossil fuels');
+  const correctedEntry = page.locator('.corpus-entry', {
+    has: page.getByText('burning fossil fuels', { exact: true }),
+  });
+  await expect(correctedEntry).toBeVisible();
+  await expect(correctedEntry).toContainText('听力');
+  await expect(correctedEntry).toContainText('环境 Environment');
+
+  await search.fill('may');
+  const properNounReview = page.locator('.corpus-entry', {
+    has: page.getByText('may', { exact: true }),
+  });
+  await expect(properNounReview).toBeVisible();
+  await expect(properNounReview).toContainText('专名义项已隔离');
+
+  await search.fill('Antarctica');
+  await expect(page.locator('.corpus-entry')).toHaveCount(0);
+
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('recovers when the on-demand corpus request initially fails', async ({ page }) => {
+  let attempts = 0;
+  await page.route('**/ielts/corpus/catalog.json', async (route) => {
+    attempts += 1;
+    if (attempts === 1) {
+      await route.fulfill({ status: 503, body: 'temporarily unavailable' });
+      return;
+    }
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        schema_version: 2,
+        generated_at: '2026-07-28T21:34:21Z',
+        statistics: {
+          active_entries: 1,
+          source_rows: 1,
+          image_eligible_entries: 1,
+          excluded_proper_nouns: 0,
+          primary_skill_counts: { reading: 1 },
+        },
+        sources: [],
+        entries: [
+          {
+            id: 'word',
+            headword: 'word',
+            status: 'active',
+            is_phrase: false,
+            pos: ['noun'],
+            cefr: ['A1'],
+            primary_skill: 'reading',
+            skill_labels: ['reading'],
+            skill_confidence: 'high',
+            source_count: 1,
+            source_ids: [],
+            topics: ['CEFR A1'],
+            image_mode: 'object-or-context-scene',
+            image_priority: 'medium',
+            image_prompt_status: 'needs_teacher_approved_sense',
+            proper_noun_sense_removed: false,
+          },
+        ],
+      }),
+    });
+  });
+
+  await openVisualLab(page);
+  await page.getByRole('button', { name: /词库地图/ }).click();
+  await expect(page.getByRole('heading', { name: '全量词库暂时没有载入' })).toBeVisible();
+  await page.getByRole('button', { name: '重新载入' }).click();
+  await expect(page.getByRole('heading', { name: '从 PDF 词表到可审核的学习地图' })).toBeVisible();
+  await expect(page.getByText('word', { exact: true })).toBeVisible();
+  expect(attempts).toBe(2);
 });
