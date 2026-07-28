@@ -2,7 +2,7 @@
   'use strict';
 
   window.IELTS_VISUAL_LAB = {
-    version: 2,
+    version: 3,
     posScene: {
       id: 'pos-foundation',
       image: './images/semantic-lab/pos-scene.webp',
@@ -54,6 +54,148 @@
         },
       ],
     },
+    familyAtlases: [
+      {
+        id: 'family-atlas-beauty',
+        targetWordId: 'foundation-beauty',
+        title: 'beauty 词族',
+        image: './images/semantic-lab/family-beauty-v1.webp',
+        width: 1200,
+        height: 800,
+        alt: '同一校园花园的四格无文字场景：欣赏花朵、改造花箱、完成后的庭院和插花。',
+        panels: [
+          {
+            slot: 'n.',
+            area: 'top-left',
+            sceneLabel: '欣赏花园中令人赞叹的美',
+            prompt: '已知名词',
+          },
+          {
+            slot: 'v.',
+            area: 'top-right',
+            sceneLabel: '种花并粉刷花箱，让庭院变美',
+            prompt: '把 beauty 变成动词：The students planted flowers to ______ the courtyard.',
+          },
+          {
+            slot: 'adj.',
+            area: 'bottom-left',
+            sceneLabel: '改造完成后的花园呈现美丽特征',
+            prompt: '把 beauty 变成形容词：The completed garden looks ______.',
+          },
+          {
+            slot: 'adv.',
+            area: 'bottom-right',
+            sceneLabel: '以赏心悦目的方式完成插花',
+            prompt: '把 beauty 变成副词：She arranged the flowers ______.',
+          },
+        ],
+      },
+      {
+        id: 'family-atlas-success',
+        targetWordId: 'foundation-success',
+        title: 'success 词族',
+        image: './images/semantic-lab/family-success-v1.webp',
+        width: 1200,
+        height: 800,
+        alt: '同一机器人挑战赛的四格无文字场景：庆祝成果、冲线、展示获奖作品和完成高架测试。',
+        panels: [
+          {
+            slot: 'n.',
+            area: 'top-left',
+            sceneLabel: '团队庆祝比赛成果',
+            prompt: '已知名词',
+          },
+          {
+            slot: 'v.',
+            area: 'top-right',
+            sceneLabel: '机器人顺利冲过终点',
+            prompt: '把 success 变成动词：The team hoped to ______ in the robot challenge.',
+          },
+          {
+            slot: 'adj.',
+            area: 'bottom-left',
+            sceneLabel: '获奖作品体现出成功的结果',
+            prompt: '把 success 变成形容词：The robot project was ______.',
+          },
+          {
+            slot: 'adv.',
+            area: 'bottom-right',
+            sceneLabel: '机器人顺利完成高架测试',
+            prompt: '把 success 变成副词：The robot crossed the bridge ______.',
+          },
+        ],
+      },
+      {
+        id: 'family-atlas-decision',
+        targetWordId: 'foundation-decision',
+        title: 'decision 词族',
+        image: './images/semantic-lab/family-decision-v1.webp',
+        width: 1200,
+        height: 800,
+        alt: '同一野外营地的四格无文字场景：地图上的路线选择、比较方案、雨中指挥和关闭漏水阀门。',
+        panels: [
+          {
+            slot: 'n.',
+            area: 'top-left',
+            sceneLabel: '地图上已经选定一条路线',
+            prompt: '已知名词',
+          },
+          {
+            slot: 'v.',
+            area: 'top-right',
+            sceneLabel: '队员比较两种路线方案',
+            prompt: '把 decision 变成动词：They must ______ which route to take.',
+          },
+          {
+            slot: 'adj.',
+            area: 'bottom-left',
+            sceneLabel: '领队在雨中果断采取行动',
+            prompt: '把 decision 变成形容词：The leader took ______ action in the storm.',
+          },
+          {
+            slot: 'adv.',
+            area: 'bottom-right',
+            sceneLabel: '领队果断行动，立即关闭漏水阀门',
+            prompt: '把 decision 变成副词：She acted ______ and shut the leaking valve at once.',
+          },
+        ],
+      },
+      {
+        id: 'family-atlas-danger',
+        targetWordId: 'foundation-danger',
+        title: 'danger 词族',
+        image: './images/semantic-lab/family-danger-v1.webp',
+        width: 1200,
+        height: 800,
+        alt: '同一山路徒步队的四格无文字场景：松动岩石、踢落石块、受损步道和靠近悬崖边缘。',
+        panels: [
+          {
+            slot: 'n.',
+            area: 'top-left',
+            sceneLabel: '松动岩石形成潜在风险',
+            prompt: '已知名词',
+          },
+          {
+            slot: 'v.',
+            area: 'top-right',
+            sceneLabel: '有人踢落石块，使全队面临风险',
+            prompt: '把 danger 变成动词：A careless step could ______ the whole group.',
+          },
+          {
+            slot: 'adj.',
+            area: 'bottom-left',
+            sceneLabel: '受损步道具有明显风险',
+            prompt: '把 danger 变成形容词：The damaged trail is ______.',
+          },
+          {
+            slot: 'adv.',
+            area: 'bottom-right',
+            sceneLabel: '徒步者以有风险的方式靠近悬崖边缘',
+            prompt: '把 danger 变成副词：The hiker stood ______ close to the cliff edge.',
+          },
+        ],
+      },
+    ],
     gameModes: [
       {
         id: 'guess',
