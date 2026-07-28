@@ -1,5 +1,46 @@
 import { expect, test } from '@playwright/test';
 
+async function installControllableAudio(page: import('@playwright/test').Page) {
+  await page.addInitScript(() => {
+    class ControllableAudio extends EventTarget {
+      static instances: ControllableAudio[] = [];
+
+      src: string;
+      currentTime = 0;
+      playbackRate = 1;
+      preload = '';
+      paused = true;
+      ended = false;
+
+      constructor(src: string) {
+        super();
+        this.src = src;
+        ControllableAudio.instances.push(this);
+      }
+
+      play() {
+        this.paused = false;
+        queueMicrotask(() => this.dispatchEvent(new Event('playing')));
+        return Promise.resolve();
+      }
+
+      pause() {
+        this.paused = true;
+        setTimeout(() => this.dispatchEvent(new Event('pause')), 25);
+      }
+    }
+
+    Object.defineProperty(window, 'Audio', {
+      configurable: true,
+      value: ControllableAudio,
+    });
+    Object.defineProperty(window, '__controllableAudio', {
+      configurable: true,
+      value: ControllableAudio.instances,
+    });
+  });
+}
+
 test('opens the learning list and boots the Phaser mission', async ({ page }) => {
   await page.goto('/');
 
@@ -43,6 +84,196 @@ test('lets learners skip word-form questions before using hints', async ({ page 
 
   await skipButton.click();
   await expect(page.locator('.training-count')).toHaveText('3 / 12');
+});
+
+test('dictation audio pauses, resumes, and ignores stale playback events', async ({ page }) => {
+  await installControllableAudio(page);
+  await page.goto('/ielts/index.html');
+  await page.getByRole('button', { name: /02 听写拼词/ }).click();
+
+  const mainPlay = page.locator('.listen-orb');
+  await expect(mainPlay).toContainText('▶');
+  await mainPlay.click();
+  await expect(mainPlay).toHaveAttribute('aria-label', '暂停单词');
+  await expect(mainPlay).toContainText('❚❚');
+  await expect(page.locator('#listenStatus')).toContainText('点击暂停');
+
+  await page.evaluate(() => {
+    const audios = (
+      window as unknown as {
+        __controllableAudio: Array<{ currentTime: number }>;
+      }
+    ).__controllableAudio;
+    audios[0]!.currentTime = 2.4;
+  });
+  await mainPlay.click();
+  await expect(mainPlay).toHaveAttribute('aria-label', '继续单词');
+  await expect(page.locator('#listenStatus')).toContainText('已暂停');
+
+  await mainPlay.click();
+  await expect(mainPlay).toHaveAttribute('aria-label', '暂停单词');
+  await page.waitForTimeout(50);
+  await expect(mainPlay).toHaveAttribute('aria-label', '暂停单词');
+  const resumedState = await page.evaluate(() => {
+    const audios = (
+      window as unknown as {
+        __controllableAudio: Array<{ currentTime: number }>;
+      }
+    ).__controllableAudio;
+    return { count: audios.length, currentTime: audios[0]!.currentTime };
+  });
+  expect(resumedState).toEqual({ count: 1, currentTime: 2.4 });
+
+  const normalReplay = page.locator('.spell-replay-button[data-rate="1"]');
+  const slowReplay = page.locator('.spell-replay-button[data-rate="0.85"]');
+  await normalReplay.click();
+  await expect(normalReplay).toHaveAttribute('aria-label', '暂停正常 1.0×');
+  await slowReplay.click();
+  await expect(slowReplay).toHaveAttribute('aria-label', '暂停慢速 0.85×');
+
+  await page.evaluate(() => {
+    const audios = (
+      window as unknown as {
+        __controllableAudio: Array<EventTarget & { ended: boolean; paused: boolean }>;
+      }
+    ).__controllableAudio;
+    const stale = audios[audios.length - 2]!;
+    stale.ended = true;
+    stale.paused = true;
+    stale.dispatchEvent(new Event('ended'));
+    stale.dispatchEvent(new Event('error'));
+  });
+  await expect(slowReplay).toHaveAttribute('aria-label', '暂停慢速 0.85×');
+
+  await page.evaluate(() => {
+    const audios = (
+      window as unknown as {
+        __controllableAudio: Array<EventTarget & { ended: boolean; paused: boolean }>;
+      }
+    ).__controllableAudio;
+    const active = audios.at(-1)!;
+    active.ended = true;
+    active.paused = true;
+    active.dispatchEvent(new Event('ended'));
+  });
+  await expect(slowReplay).toHaveAttribute('aria-label', '播放慢速 0.85×');
+  await expect(page.locator('#listenStatus')).toContainText('播放完成');
+});
+
+test('service worker lets ranged natural-audio requests reach the network', async ({ page }) => {
+  await page.goto('/ielts/index.html');
+  const controlled = await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+    return Boolean(navigator.serviceWorker.controller);
+  });
+  if (!controlled) await page.reload();
+  await expect
+    .poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller)))
+    .toBe(true);
+
+  const result = await page.evaluate(async () => {
+    const response = await fetch('./audio/uk/blubber.mp3?v=range-regression', {
+      headers: { Range: 'bytes=0-1023' },
+      cache: 'no-store',
+    });
+    return { ok: response.ok, status: response.status };
+  });
+  expect(result.ok).toBe(true);
+  expect([200, 206]).toContain(result.status);
+});
+
+test('dictation keeps answers hidden through hints and supports skipping', async ({ page }) => {
+  await page.goto('/ielts/index.html');
+  await page.getByRole('button', { name: /02 听写拼词/ }).click();
+
+  const question = page.locator('.question-lead');
+  const input = page.getByLabel('TYPE WHAT YOU HEAR');
+  const hintButton = page.getByRole('button', { name: '给一点提示' });
+  const answer = await page.locator('.listen-orb').evaluate((button) => {
+    const id = (button as HTMLElement).dataset.audioId;
+    return window.IELTS_VOCABULARY.find((word: { id: string; word: string }) => word.id === id)!
+      .word;
+  });
+
+  await expect(question).not.toContainText('个字母');
+  await expect(input).not.toBeFocused();
+  await expect(page.getByRole('button', { name: '先跳过（稍后复习）' })).toBeVisible();
+
+  await hintButton.click();
+  await expect(page.locator('#spellFeedback')).toContainText('目标词');
+  await expect(page.getByRole('button', { name: '再给音节提示' })).toBeVisible();
+  await page.getByRole('button', { name: '再给音节提示' }).click();
+  await expect(page.locator('#spellFeedback')).toContainText('音节轮廓');
+  await page.getByRole('button', { name: '最后给乱序字母' }).click();
+  await expect(page.locator('.scrambled-letter-bank')).toBeVisible();
+  await expect(page.getByText(answer, { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '提示已用完' })).toBeDisabled();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const actions = document.querySelector('.spell-action-grid')!.getBoundingClientRect();
+        const bottomInset = innerWidth <= 780 ? 84 : 0;
+        return actions.top >= 0 && actions.bottom <= innerHeight - bottomInset + 1;
+      }),
+    )
+    .toBe(true);
+
+  await page.getByRole('button', { name: '先跳过（稍后复习）' }).click();
+  await expect(page.locator('.training-count')).toHaveText('2 / 10');
+  const history = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return saved.history?.at(-1);
+  });
+  expect(history.correct).toBe(false);
+  expect(history.detail).toBe('尝试或使用提示后主动跳过；未显示答案');
+});
+
+test('dictation double tap skips only one question', async ({ page }) => {
+  await page.goto('/ielts/index.html');
+  await page.getByRole('button', { name: /02 听写拼词/ }).click();
+
+  const skipButton = page.getByRole('button', { name: '先跳过（稍后复习）' });
+  await skipButton.scrollIntoViewIfNeeded();
+  const box = await skipButton.boundingBox();
+  expect(box).not.toBeNull();
+  const x = box!.x + box!.width / 2;
+  const y = box!.y + box!.height / 2;
+  await page.mouse.click(x, y);
+  await page.waitForTimeout(50);
+  await page.mouse.click(x, y);
+
+  await expect(page.locator('.training-count')).toHaveText('2 / 10');
+  const skippedEntries = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return saved.history?.filter(
+      (item: { skill: string; detail: string }) =>
+        item.skill === 'spell' && item.detail === '主动跳过；未显示答案',
+    ).length;
+  });
+  expect(skippedEntries).toBe(1);
+});
+
+test('dictation waits for the learner after a correct spelling', async ({ page }) => {
+  await page.goto('/ielts/index.html');
+  await page.getByRole('button', { name: /02 听写拼词/ }).click();
+
+  const answer = await page.locator('.listen-orb').evaluate((button) => {
+    const id = (button as HTMLElement).dataset.audioId;
+    return window.IELTS_VOCABULARY.find((word: { id: string; word: string }) => word.id === id)!
+      .word;
+  });
+  const input = page.getByLabel('TYPE WHAT YOU HEAR');
+  await input.fill(answer.toUpperCase());
+  await page.getByRole('button', { name: '检查拼写' }).click();
+
+  await expect(page.locator('#spellFeedback')).toContainText('首次正确');
+  await expect(input).toBeDisabled();
+  await expect(page.getByRole('button', { name: '下一题 →' })).toBeVisible();
+  await page.waitForTimeout(1000);
+  await expect(page.locator('.training-count')).toHaveText('1 / 10');
+
+  await page.getByRole('button', { name: '下一题 →' }).click();
+  await expect(page.locator('.training-count')).toHaveText('2 / 10');
 });
 
 test('hides sentence-order capitalization and punctuation until reveal', async ({ page }) => {
