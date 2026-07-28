@@ -1,0 +1,19 @@
+{
+  "name": "WordLab 50 · 雅思薄弱词专项训练",
+  "short_name": "WordLab 50",
+  "description": "发音、拼写、词形和造句综合词汇训练",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f1eb",
+  "theme_color": "#17324d",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="WordLab 50">
+  <rect width="512" height="512" rx="112" fill="#17324d"/>
+  <path d="M91 126h330v260H91z" fill="#fffefa" rx="34"/>
+  <path d="M118 155h276v202H118z" fill="#dff2ee"/>
+  <path d="M143 188l53 139h31l30-82 30 82h31l52-139h-38l-30 89-30-89h-30l-30 89-30-89z" fill="#17324d"/>
+  <path d="M93 389h326" stroke="#8be0d5" stroke-width="22" stroke-linecap="round"/>
+  <circle cx="399" cy="113" r="52" fill="#d96145"/>
+  <text x="399" y="131" text-anchor="middle" font-family="Arial, sans-serif" font-size="53" font-weight="700" fill="#fff">50</text>
+</svg>
