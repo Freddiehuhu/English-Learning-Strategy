@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wordlab-50-v6-sentence-clues';
+const CACHE_NAME = 'wordlab-50-v7-dictation-player';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -31,13 +31,25 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET' || url.origin !== self.location.origin) return;
 
   if (url.pathname.includes('/ielts/audio/')) {
+    // Safari and other media engines request byte ranges. Partial (206) responses
+    // cannot be stored by Cache API, so let the browser handle them directly.
+    if (request.headers.has('range')) return;
+    const cachePromise = caches.open(CACHE_NAME);
+    const refresh = cachePromise
+      .then((cache) =>
+        fetch(request).then((response) => {
+          if (!response.ok || response.status === 206) return response;
+          return cache.put(request, response.clone()).then(() => response);
+        }),
+      )
+      .catch(() => null);
+    event.waitUntil(refresh.then(() => undefined));
     event.respondWith(
-      caches.open(CACHE_NAME).then(async (cache) => {
+      cachePromise.then(async (cache) => {
         const cached = await cache.match(request);
         if (cached) return cached;
-        const response = await fetch(request);
-        if (response.ok) cache.put(request, response.clone());
-        return response;
+        const response = await refresh;
+        return response || Response.error();
       }),
     );
     return;

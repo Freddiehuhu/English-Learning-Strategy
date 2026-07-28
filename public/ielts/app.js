@@ -3,6 +3,7 @@
 
   var WORDS = Array.isArray(window.IELTS_VOCABULARY) ? window.IELTS_VOCABULARY : [];
   var STORAGE_KEY = 'els-ielts-wordlab-v1';
+  var AUDIO_ASSET_VERSION = 'natural-20260728';
   var SKILLS = ['sound', 'spell', 'forms', 'sentence'];
   var SKILL_LABELS = {
     sound: '听音跟读',
@@ -455,6 +456,11 @@
   var session = null;
   var currentAudio = null;
   var playingButton = null;
+  var playbackToken = 0;
+  var playbackStatus = 'idle';
+  var playbackDesired = 'idle';
+  var playbackTimer = null;
+  var skipLockedUntil = 0;
   var recorder = null;
   var recordStream = null;
   var recordChunks = [];
@@ -516,6 +522,7 @@
     main.addEventListener('click', handleMainClick);
     main.addEventListener('submit', handleMainSubmit);
     main.addEventListener('change', handleMainChange);
+    main.addEventListener('input', handleMainInput);
 
     if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
     renderToday();
@@ -536,7 +543,6 @@
       settings: {
         accent: 'uk',
         dailyNew: 6,
-        slowFirst: true,
       },
       daily: {
         date: '',
@@ -743,7 +749,12 @@
         '听英音／美音，拆音节与重音，录下自己的发音做 A/B 对比。',
         'sound',
       ) +
-      moduleCard('02', '听写拼词', '关闭键盘自动纠错，只听声音输入；错误提示逐级出现。', 'spell') +
+      moduleCard(
+        '02',
+        '听写拼词',
+        '盲听输入，支持暂停与变速重播；需要时获取不直接给答案的提示。',
+        'spell',
+      ) +
       moduleCard(
         '03',
         '词形变换',
@@ -829,6 +840,7 @@
       taskState: {},
       token: Date.now(),
     };
+    skipLockedUntil = 0;
     renderSession();
     scrollToTop();
   }
@@ -855,6 +867,7 @@
       taskState: {},
       token: Date.now(),
     };
+    skipLockedUntil = 0;
     renderSession();
     scrollToTop();
   }
@@ -872,6 +885,7 @@
       taskState: {},
       token: Date.now(),
     };
+    skipLockedUntil = 0;
     renderSession();
     scrollToTop();
   }
@@ -898,7 +912,7 @@
     currentView = skill;
     var headings = {
       sound: ['听音跟读', '先建立声音，再看拼写。录音只在当前页面内使用。'],
-      spell: ['听写拼词', '关掉提示，只听音输入。答错时提示会逐级增加。'],
+      spell: ['听写拼词', '先盲听拼写，可暂停和变速重播；提示不会直接显示答案。'],
       forms: ['词形变换', '四格词族、直接变形与语境填空交替出现；答案在答对前保持隐藏。'],
       sentence: ['句子工坊', '先用词块搭好骨架，再完成受控仿写与修改。'],
     };
@@ -932,12 +946,7 @@
       '</aside>' +
       '</section>';
 
-    if (skill === 'spell') {
-      setTimeout(function () {
-        var input = document.getElementById('spellInput');
-        if (input) input.focus({ preventScroll: true });
-      }, 50);
-    } else if (skill === 'forms' && !session.taskState.completed) {
+    if (skill === 'forms' && !session.taskState.completed) {
       var formExercise = getFormExercise(word);
       if (formExercise.type !== 'context' || session.taskState.posPassed) {
         focusCurrentFormInput(formExercise, session.taskState);
@@ -1088,9 +1097,13 @@
       esc(id) +
       '" data-rate="' +
       rate +
-      '">▶ ' +
+      '" data-audio-label="' +
       esc(label) +
-      '</button>'
+      '" aria-label="播放' +
+      esc(label) +
+      '"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">' +
+      esc(label) +
+      '</span></button>'
     );
   }
 
@@ -1100,53 +1113,89 @@
       accent +
       '" data-audio-id="' +
       esc(id) +
-      '">▶ ' +
+      '" data-audio-label="' +
       esc(label) +
-      '</button>'
+      '" aria-label="播放' +
+      esc(label) +
+      '"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">' +
+      esc(label) +
+      '</span></button>'
     );
   }
 
   function renderSpellTask(word) {
     var stateForTask = session.taskState;
-    var visibleAnswer = stateForTask.answerVisible;
+    var attempts = stateForTask.attempts || 0;
+    var completed = Boolean(stateForTask.completed);
+    var accent = state.settings.accent === 'us' ? 'us' : 'uk';
+    var accentLabel = accent === 'us' ? '美音' : '英音';
     return (
       '<div class="word-stage">' +
       '<span class="topic-badge">' +
       esc(word.topic) +
       '</span>' +
-      '<p class="question-lead">点击播放，输入你听到的完整单词。' +
-      letterCountText(word.word) +
-      '</p>' +
+      '<p class="question-lead">先只听声音，输入完整单词；首次作答不显示长度。</p>' +
       '<button class="listen-orb" type="button" data-action="play-word" data-accent="' +
-      state.settings.accent +
+      accent +
       '" data-audio-id="' +
       esc(word.id) +
-      '" data-rate="' +
-      (state.settings.slowFirst && !stateForTask.played ? '0.78' : '1') +
-      '" aria-label="播放单词">▶</button>' +
+      '" data-rate="1" data-audio-label="单词" data-status-target="listenStatus" aria-label="播放单词" aria-describedby="listenStatus"><span class="audio-control-icon" aria-hidden="true">▶</span></button>' +
+      '<p class="listen-status" id="listenStatus" aria-live="polite">' +
+      accentLabel +
+      ' · 正常语速；播放后可暂停或继续</p>' +
+      '<div class="spell-replay-row" aria-label="重播速度">' +
+      spellReplayButton(accent, word.id, 0.85, '慢速 0.85×') +
+      spellReplayButton(accent, word.id, 1, '正常 1.0×') +
+      '</div>' +
+      '<div class="feedback spell-feedback" id="spellFeedback" data-feedback-class="feedback spell-feedback" aria-live="polite"></div>' +
       '<form class="answer-form" data-skill-form="spell">' +
       '<label class="eyebrow" for="spellInput">TYPE WHAT YOU HEAR</label>' +
-      '<input class="answer-input" id="spellInput" name="answer" type="text" inputmode="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="在这里拼写" ' +
-      (visibleAnswer ? 'disabled' : '') +
+      '<input class="answer-input" id="spellInput" name="answer" type="text" inputmode="text" enterkeyhint="done" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-describedby="spellFeedback" placeholder="在这里拼写" value="' +
+      esc(stateForTask.answerValue || '') +
+      '"' +
+      (completed ? ' disabled' : '') +
       ' />' +
-      '<div class="input-actions">' +
-      '<button class="secondary-button" type="button" data-action="reveal-spell">不会，逐级提示</button>' +
-      '<button class="primary-button" type="submit"' +
-      (visibleAnswer ? ' disabled' : '') +
+      '<div class="spell-action-grid">' +
+      '<button class="primary-button spell-check-button" type="submit"' +
+      (completed ? ' disabled' : '') +
       '>检查拼写</button>' +
+      '<button class="secondary-button spell-hint-button" type="button" data-action="reveal-spell"' +
+      (attempts >= 3 || completed ? ' disabled' : '') +
+      '>' +
+      spellHintButtonLabel(attempts) +
+      '</button>' +
+      (completed
+        ? ''
+        : '<button class="quiet-button spell-skip-button" type="button" data-action="skip-spell" aria-label="先跳过（稍后复习）">先跳过 · 稍后练</button>') +
       '</div>' +
       '</form>' +
-      '<div class="feedback' +
-      (visibleAnswer ? ' is-wrong' : '') +
-      '" id="spellFeedback" aria-live="polite">' +
-      (visibleAnswer
-        ? '答案：<strong>' +
-          esc(word.word) +
-          '</strong>。看清音节后，点击“遮住并重写”。<div class="input-actions"><button class="secondary-button" type="button" data-action="hide-spell-answer">遮住并重写</button></div>'
-        : '') +
-      '</div>' +
       '</div>'
     );
+  }
+
+  function spellReplayButton(accent, id, rate, label) {
+    return (
+      '<button class="audio-button secondary-audio spell-replay-button" type="button" data-action="play-word" data-accent="' +
+      accent +
+      '" data-audio-id="' +
+      esc(id) +
+      '" data-rate="' +
+      rate +
+      '" data-audio-label="' +
+      esc(label) +
+      '" data-status-target="listenStatus" aria-label="播放' +
+      esc(label) +
+      '"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">' +
+      esc(label) +
+      '</span></button>'
+    );
+  }
+
+  function spellHintButtonLabel(attempts) {
+    if (attempts <= 0) return '给一点提示';
+    if (attempts === 1) return '再给音节提示';
+    if (attempts === 2) return '最后给乱序字母';
+    return '提示已用完';
   }
 
   function renderFormsTask(word) {
@@ -1777,7 +1826,8 @@
     if (action === 'play-recording') return playRecording(button);
     if (action === 'mark-sound') return markSound(button.dataset.correct === 'true');
     if (action === 'reveal-spell') return revealSpellHint();
-    if (action === 'hide-spell-answer') return hideSpellAnswer();
+    if (action === 'skip-spell') return skipSpelling();
+    if (action === 'advance-spell') return advanceSession();
     if (action === 'choose-pos') return choosePartOfSpeech(button.dataset.pos);
     if (action === 'reveal-form') return revealFormHint();
     if (action === 'skip-form') return skipFormExercise();
@@ -1810,6 +1860,11 @@
     }
   }
 
+  function handleMainInput(event) {
+    if (!session || currentSkill() !== 'spell' || event.target.id !== 'spellInput') return;
+    session.taskState.answerValue = event.target.value;
+  }
+
   function revealWord() {
     var card = document.getElementById('wordReveal');
     if (card) {
@@ -1834,45 +1889,59 @@
     if (!session || currentSkill() !== 'spell') return;
     var word = currentWord();
     var answer = String(rawAnswer || '').trim();
+    var task = session.taskState;
+    if (task.completed || task.skipping) return;
+    task.answerValue = answer;
     if (!answer) {
       setFeedback('spellFeedback', '先输入你听到的单词。', 'is-wrong');
+      focusSpellInput();
       return;
     }
-    var task = session.taskState;
     var accepted = [word.word].concat(word.spellAccept || []);
     var correct = accepted.some(function (candidate) {
       return normaliseAnswer(candidate) === normaliseAnswer(answer);
     });
     if (correct) {
-      var firstTry = !task.hadError && !task.answerVisible && !task.retype;
+      task.completed = true;
+      var firstTry = !task.hadError;
       var variant = normaliseAnswer(answer) !== normaliseAnswer(word.word);
       recordResult(
         word,
         'spell',
         firstTry,
-        firstTry
-          ? '听写首次正确'
-          : variant
-            ? '接受变体拼写；建议记住规范展示形式'
-            : '提示或看答案后完成重写',
+        variant
+          ? firstTry
+            ? '接受变体拼写；首次正确'
+            : '接受变体拼写；提示后完成'
+          : firstTry
+            ? '听写首次正确'
+            : '提示后完成；仍列入复习',
       );
       setFeedback(
         'spellFeedback',
-        variant
-          ? '可以接受；IELTS 英式书写建议使用 <strong>' + esc(word.word) + '</strong>。'
-          : firstTry
-            ? '正确。声音和拼写已经连上了。'
-            : '重写正确。本次仍记为错项，稍后会重新出现。',
+        '<div class="spell-result-copy">' +
+          (variant
+            ? '可以接受；IELTS 英式书写建议使用 <strong>' + esc(word.word) + '</strong>。'
+            : firstTry
+              ? '首次正确。声音和拼写已经连上了。'
+              : '这次拼对了；因为使用过提示，本词仍会稍后复习。') +
+          '<small>音节复盘：' +
+          syllableHtml(word) +
+          '</small></div>' +
+          '<div class="spell-result-actions">' +
+          spellReviewAudioButton(word) +
+          '<button class="primary-button" type="button" data-action="advance-spell">下一题 →</button></div>',
         'is-correct',
         true,
       );
       disableForm('spellInput');
-      scheduleAdvance();
+      var skipButton = document.querySelector('[data-action="skip-spell"]');
+      if (skipButton) skipButton.disabled = true;
       return;
     }
 
     task.hadError = true;
-    task.attempts = (task.attempts || 0) + 1;
+    task.attempts = Math.min(3, (task.attempts || 0) + 1);
     showSpellingHint(answer);
   }
 
@@ -1881,6 +1950,17 @@
     var input = document.getElementById('spellInput');
     var answer = input ? input.value : '';
     var task = session.taskState;
+    if (task.completed || task.skipping) return;
+    task.answerValue = answer;
+    if ((task.attempts || 0) >= 3) {
+      setFeedback(
+        'spellFeedback',
+        '提示已经用完，答案仍然隐藏。请再听、继续尝试，或先跳过稍后复习。',
+        'is-wrong',
+      );
+      updateSpellHintButton();
+      return;
+    }
     task.hadError = true;
     task.attempts = Math.min(3, (task.attempts || 0) + 1);
     showSpellingHint(answer);
@@ -1891,35 +1971,105 @@
     var task = session.taskState;
     var attempt = task.attempts || 1;
     if (attempt === 1) {
-      var position = firstMismatchPosition(answer, word.word);
-      var message =
-        '还不对。第 ' +
-        position +
-        ' 个字符附近有误；你写了 ' +
-        compactLength(answer) +
-        ' 个字母，目标有 ' +
-        compactLength(word.word) +
-        ' 个。答案仍然隐藏。';
-      setFeedback('spellFeedback', message + positionDiffHtml(answer, word.word), 'is-wrong', true);
+      var hintTarget = closestSpellingTarget(answer, word);
+      var analysis = spellingAlignment(answer, hintTarget);
+      var message = answer
+        ? '还不对。' + analysis.summary + letterCountText(hintTarget) + '；答案仍然隐藏。'
+        : '第一层提示：目标词' + letterCountText(hintTarget) + '。答案仍然隐藏。';
+      setFeedback(
+        'spellFeedback',
+        message + (answer ? spellingAlignmentHtml(analysis) : ''),
+        'is-wrong',
+        true,
+      );
     } else if (attempt === 2) {
       setFeedback(
         'spellFeedback',
-        '再试一次。音节拼写提示：<strong>' + esc(maskedSyllables(word)) + '</strong>',
+        '第二层提示：音节轮廓为 <strong>' +
+          esc(maskedSyllables(word)) +
+          '</strong>。完整答案仍然隐藏。',
         'is-wrong',
         true,
       );
     } else {
-      task.answerVisible = true;
-      renderSession();
+      setFeedback(
+        'spellFeedback',
+        '最后一层提示：请把这些字母重新排列并完整输入。' +
+          scrambledLetterBankHtml(word) +
+          '<small class="hint-note">系统不会直接显示答案；不会做可以先跳过。</small>',
+        'is-wrong',
+        true,
+      );
+    }
+    updateSpellHintButton();
+    focusSpellInput();
+  }
+
+  function skipSpelling() {
+    if (!session || currentSkill() !== 'spell') return;
+    var task = session.taskState;
+    if (task.completed || task.skipping) return;
+    if (!acquireSkipLock()) return;
+    task.skipping = true;
+    stopAudio();
+    var input = document.getElementById('spellInput');
+    var answer = input ? input.value.trim() : '';
+    var usedHelp = Boolean(task.hadError || task.attempts || answer);
+    recordResult(
+      currentWord(),
+      'spell',
+      false,
+      usedHelp ? '尝试或使用提示后主动跳过；未显示答案' : '主动跳过；未显示答案',
+    );
+    showToast('已跳过，不显示答案；这道题已加入待复习。');
+    advanceSession();
+  }
+
+  function acquireSkipLock() {
+    var now = Date.now();
+    if (now < skipLockedUntil) return false;
+    skipLockedUntil = now + 650;
+    return true;
+  }
+
+  function updateSpellHintButton() {
+    if (!session || currentSkill() !== 'spell') return;
+    var button = document.querySelector('[data-action="reveal-spell"]');
+    if (!button) return;
+    var attempts = session.taskState.attempts || 0;
+    button.textContent = spellHintButtonLabel(attempts);
+    button.disabled = attempts >= 3 || Boolean(session.taskState.completed);
+  }
+
+  function focusSpellInput() {
+    var input = document.getElementById('spellInput');
+    if (!input || input.disabled) return;
+    input.focus({ preventScroll: true });
+    var alignActions = function () {
+      var actions = document.querySelector('.spell-action-grid');
+      if (!actions) return;
+      var reducedMotion =
+        window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      actions.scrollIntoView({
+        block: 'end',
+        behavior: reducedMotion ? 'auto' : 'smooth',
+      });
+    };
+    setTimeout(alignActions, 100);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', alignActions, { once: true });
     }
   }
 
-  function hideSpellAnswer() {
-    if (!session) return;
-    session.taskState.answerVisible = false;
-    session.taskState.retype = true;
-    renderSession();
-    setFeedback('spellFeedback', '答案已遮住。现在不看提示，完整重写一次。', '');
+  function spellReviewAudioButton(word) {
+    var accent = state.settings.accent === 'us' ? 'us' : 'uk';
+    return (
+      '<button class="audio-button secondary-audio spell-review-audio" type="button" data-action="play-word" data-accent="' +
+      accent +
+      '" data-audio-id="' +
+      esc(word.id) +
+      '" data-rate="1" data-audio-label="正确拼写读音" data-status-target="listenStatus" aria-label="播放正确拼写读音"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">再听一次</span></button>'
+    );
   }
 
   function choosePartOfSpeech(pos) {
@@ -2736,42 +2886,100 @@
 
   function playWordFromButton(button) {
     if (!session) return;
-    session.taskState.played = true;
-    var accent = button.dataset.accent || state.settings.accent;
+    var accent = button.classList.contains('listen-orb')
+      ? state.settings.accent
+      : button.dataset.accent || state.settings.accent;
     var rate = Number(button.dataset.rate) || 1;
-    if (button.classList.contains('listen-orb')) {
-      button.dataset.rate = '1';
-    }
+    button.dataset.accent = accent;
     playFixedAudio(currentWord(), accent, rate, button, 'word');
   }
 
   function playFixedAudio(word, accent, rate, button, kind) {
-    stopAudio();
-    markPlaying(button);
+    if (toggleCurrentPlayback(button)) return;
     var isSentence = kind === 'sentence';
     var suffix = isSentence ? '_sentence' : '';
-    var text = isSentence ? joinChunks(word.chunks) : word.word;
-    var audio = new Audio('./audio/' + accent + '/' + word.id + suffix + '.mp3');
+    var source =
+      './audio/' +
+      accent +
+      '/' +
+      word.id +
+      suffix +
+      '.mp3?v=' +
+      encodeURIComponent(AUDIO_ASSET_VERSION);
+    startAudioPlayback(source, button, rate);
+  }
+
+  function startAudioPlayback(source, button, rate) {
+    stopAudio();
+    var audio = new Audio(source);
+    var token = ++playbackToken;
     currentAudio = audio;
+    playingButton = button;
+    playbackStatus = 'loading';
+    playbackDesired = 'playing';
     audio.playbackRate = rate;
     audio.preload = 'auto';
-    var fellBack = false;
-    var fallback = function () {
-      if (fellBack) return;
-      fellBack = true;
-      if (currentAudio === audio) currentAudio = null;
-      speakText(text, accent, rate, button);
+    button.dataset.activeRate = String(rate);
+    updatePlaybackButton(button, 'loading');
+    updatePlaybackMessage(button, 'loading');
+
+    var isCurrent = function () {
+      return playbackToken === token && currentAudio === audio;
     };
-    audio.addEventListener(
-      'ended',
-      function () {
-        if (currentAudio === audio) currentAudio = null;
-        clearPlaying();
-      },
-      { once: true },
-    );
-    audio.addEventListener('error', fallback, { once: true });
-    audio.play().catch(fallback);
+
+    var finish = function () {
+      if (!isCurrent()) return;
+      clearTimeout(playbackTimer);
+      currentAudio = null;
+      playingButton = null;
+      playbackStatus = 'idle';
+      playbackDesired = 'idle';
+      updatePlaybackButton(button, 'idle');
+      updatePlaybackMessage(button, 'ended');
+    };
+
+    var fail = function (error) {
+      if (!isCurrent()) return;
+      if (error && error.name === 'AbortError') return;
+      clearTimeout(playbackTimer);
+      currentAudio = null;
+      playingButton = null;
+      playbackStatus = 'idle';
+      playbackDesired = 'idle';
+      updatePlaybackButton(button, 'idle');
+      updatePlaybackMessage(button, 'error');
+      showToast('自然语音加载失败，请检查网络后重试。');
+    };
+
+    audio.addEventListener('playing', function () {
+      if (!isCurrent() || playbackDesired !== 'playing') return;
+      clearTimeout(playbackTimer);
+      playbackStatus = 'playing';
+      updatePlaybackButton(button, 'playing');
+      updatePlaybackMessage(button, 'playing');
+    });
+    audio.addEventListener('waiting', function () {
+      if (!isCurrent() || playbackDesired !== 'playing') return;
+      playbackStatus = 'loading';
+      updatePlaybackButton(button, 'loading');
+      updatePlaybackMessage(button, 'loading');
+    });
+    audio.addEventListener('stalled', function () {
+      if (!isCurrent() || playbackDesired !== 'playing') return;
+      updatePlaybackMessage(button, 'loading');
+    });
+    audio.addEventListener('pause', function () {
+      if (!isCurrent() || audio.ended || playbackDesired !== 'paused' || !audio.paused) {
+        return;
+      }
+      playbackStatus = 'paused';
+      updatePlaybackButton(button, 'paused');
+      updatePlaybackMessage(button, 'paused');
+    });
+    audio.addEventListener('ended', finish, { once: true });
+    audio.addEventListener('error', fail, { once: true });
+    armPlaybackTimeout(token, audio, button);
+    audio.play().catch(fail);
   }
 
   function playExample(button) {
@@ -2780,46 +2988,108 @@
     playFixedAudio(currentWord(), accent, 1, button, 'sentence');
   }
 
-  function speakText(text, accent, rate, button) {
-    if (!('speechSynthesis' in window)) {
-      clearPlaying();
-      showToast('当前浏览器无法播放语音，请检查网络或更换系统浏览器。');
-      return;
+  function toggleCurrentPlayback(button) {
+    if (!currentAudio || playingButton !== button) return false;
+    if (playbackDesired === 'playing') {
+      playbackDesired = 'paused';
+      currentAudio.pause();
+      playbackStatus = 'paused';
+      updatePlaybackButton(button, 'paused');
+      updatePlaybackMessage(button, 'paused');
+      return true;
     }
-    stopAudio();
-    markPlaying(button);
-    var utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = accent === 'us' ? 'en-US' : 'en-GB';
-    utterance.rate = Math.max(0.55, Math.min(1.1, rate));
-    var voices = speechSynthesis.getVoices();
-    var preferred = voices.find(function (voice) {
-      return voice.lang.toLowerCase().startsWith(utterance.lang.toLowerCase());
+    var audio = currentAudio;
+    var token = playbackToken;
+    playbackDesired = 'playing';
+    playbackStatus = 'loading';
+    updatePlaybackButton(button, 'loading');
+    updatePlaybackMessage(button, 'loading');
+    armPlaybackTimeout(token, audio, button);
+    audio.play().catch(function (error) {
+      if (playbackToken !== token || currentAudio !== audio || playingButton !== button) return;
+      if (error && error.name === 'AbortError') return;
+      stopAudio();
+      updatePlaybackMessage(button, 'error');
+      showToast('自然语音无法继续播放，请重新点击播放。');
     });
-    if (preferred) utterance.voice = preferred;
-    utterance.onend = clearPlaying;
-    utterance.onerror = clearPlaying;
-    speechSynthesis.speak(utterance);
+    return true;
   }
 
-  function markPlaying(button) {
-    clearPlaying();
-    playingButton = button;
-    if (playingButton) playingButton.classList.add('is-playing');
+  function armPlaybackTimeout(token, audio, button) {
+    clearTimeout(playbackTimer);
+    playbackTimer = setTimeout(function () {
+      if (
+        playbackToken !== token ||
+        currentAudio !== audio ||
+        playingButton !== button ||
+        playbackDesired !== 'playing' ||
+        playbackStatus !== 'loading'
+      ) {
+        return;
+      }
+      stopAudio();
+      updatePlaybackMessage(button, 'error');
+      showToast('自然语音加载超时，请检查网络后重试。');
+    }, 10000);
   }
 
-  function clearPlaying() {
-    if (playingButton) playingButton.classList.remove('is-playing');
-    playingButton = null;
+  function updatePlaybackButton(button, status) {
+    if (!button) return;
+    button.classList.toggle('is-playing', status === 'playing');
+    button.classList.toggle('is-paused', status === 'paused');
+    button.classList.toggle('is-loading', status === 'loading');
+    button.dataset.playbackState = status;
+    button.setAttribute(
+      'aria-pressed',
+      status === 'playing' || status === 'loading' ? 'true' : 'false',
+    );
+    var icon = button.querySelector('.audio-control-icon');
+    if (icon) icon.textContent = status === 'playing' || status === 'loading' ? '❚❚' : '▶';
+    var label = button.dataset.audioLabel || '语音';
+    var action =
+      status === 'playing' || status === 'loading' ? '暂停' : status === 'paused' ? '继续' : '播放';
+    button.setAttribute('aria-label', action + label);
+  }
+
+  function updatePlaybackMessage(button, status) {
+    if (!button || !button.dataset.statusTarget) return;
+    var element = document.getElementById(button.dataset.statusTarget);
+    if (!element) return;
+    var accent = button.dataset.accent === 'us' ? '美音' : '英音';
+    var rate = Number(button.dataset.activeRate || button.dataset.rate) || 1;
+    if (status === 'playing') {
+      element.textContent =
+        accent + ' · ' + (rate < 1 ? rate.toFixed(2) + '× 慢速' : '正常语速') + ' · 点击暂停';
+    } else if (status === 'paused') {
+      element.textContent = '已暂停 · 点击同一个按钮继续';
+    } else if (status === 'loading') {
+      element.textContent = '正在加载自然语音…';
+    } else if (status === 'ended') {
+      element.textContent = '播放完成 · 可以再次播放';
+    } else if (status === 'error') {
+      element.textContent = '语音加载失败 · 请检查网络后重试';
+    }
   }
 
   function stopAudio() {
-    if (currentAudio) {
-      currentAudio.pause();
-      currentAudio.currentTime = 0;
-      currentAudio = null;
+    playbackToken += 1;
+    clearTimeout(playbackTimer);
+    playbackTimer = null;
+    var audio = currentAudio;
+    var button = playingButton;
+    currentAudio = null;
+    playingButton = null;
+    playbackStatus = 'idle';
+    playbackDesired = 'idle';
+    if (audio) {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch (error) {
+        // Safari can reject currentTime changes before metadata is available.
+      }
     }
-    if ('speechSynthesis' in window) speechSynthesis.cancel();
-    clearPlaying();
+    if (button) updatePlaybackButton(button, 'idle');
   }
 
   async function toggleRecording(button) {
@@ -2894,14 +3164,13 @@
 
   function playRecording(button) {
     if (!recordUrl) return;
-    stopAudio();
-    markPlaying(button);
-    currentAudio = new Audio(recordUrl);
-    currentAudio.addEventListener('ended', clearPlaying, { once: true });
-    currentAudio.play().catch(function () {
-      clearPlaying();
-      showToast('录音回放失败，请重新录制。');
-    });
+    if (!button.dataset.audioLabel) button.dataset.audioLabel = '跟读录音';
+    if (!button.querySelector('.audio-control-icon')) {
+      button.innerHTML =
+        '<span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">回放自己</span>';
+    }
+    if (toggleCurrentPlayback(button)) return;
+    startAudioPlayback(recordUrl, button, 1);
   }
 
   function cleanupMedia() {
@@ -2927,7 +3196,6 @@
     var form = document.getElementById('settingsForm');
     form.elements.accent.value = state.settings.accent;
     form.elements.dailyNew.value = String(state.settings.dailyNew);
-    form.elements.slowFirst.checked = Boolean(state.settings.slowFirst);
     settingsDialog.showModal();
   }
 
@@ -2935,7 +3203,6 @@
     var form = document.getElementById('settingsForm');
     state.settings.accent = form.elements.accent.value === 'us' ? 'us' : 'uk';
     state.settings.dailyNew = Number(form.elements.dailyNew.value) || 6;
-    state.settings.slowFirst = Boolean(form.elements.slowFirst.checked);
     saveState();
     settingsDialog.close();
     showToast('训练设置已保存。');
@@ -3063,35 +3330,121 @@
   }
 
   function normaliseAnswer(value) {
-    return String(value || '')
+    var text = String(value || '');
+    if (typeof text.normalize === 'function') text = text.normalize('NFKC');
+    return text
       .trim()
       .toLowerCase()
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
       .replace(/[‐‑‒–—]/g, '-')
       .replace(/\s+/g, ' ');
   }
 
-  function firstMismatchPosition(input, target) {
-    var a = normaliseAnswer(input);
-    var b = normaliseAnswer(target);
-    var length = Math.max(a.length, b.length);
-    for (var index = 0; index < length; index += 1) {
-      if (a[index] !== b[index]) return index + 1;
-    }
-    return Math.max(1, length);
+  function closestSpellingTarget(answer, word) {
+    var candidates = [word.word].concat(word.spellAccept || []);
+    return candidates
+      .map(function (candidate) {
+        return {
+          candidate: candidate,
+          distance: spellingAlignment(answer, candidate).distance,
+        };
+      })
+      .sort(function (a, b) {
+        return a.distance - b.distance;
+      })[0].candidate;
   }
 
-  function positionDiffHtml(input, target) {
-    var answer = normaliseAnswer(input);
-    var expected = normaliseAnswer(target);
-    if (!answer) return '';
+  function spellingAlignment(input, target) {
+    var answer = normaliseAnswer(input).replace(/[^a-z]/g, '');
+    var expected = normaliseAnswer(target).replace(/[^a-z]/g, '');
+    var rows = answer.length + 1;
+    var columns = expected.length + 1;
+    var table = Array.from({ length: rows }, function () {
+      return Array(columns).fill(0);
+    });
+    var row;
+    var column;
+    for (row = 0; row < rows; row += 1) table[row][0] = row;
+    for (column = 0; column < columns; column += 1) table[0][column] = column;
+    for (row = 1; row < rows; row += 1) {
+      for (column = 1; column < columns; column += 1) {
+        var substitutionCost = answer[row - 1] === expected[column - 1] ? 0 : 1;
+        table[row][column] = Math.min(
+          table[row - 1][column] + 1,
+          table[row][column - 1] + 1,
+          table[row - 1][column - 1] + substitutionCost,
+        );
+      }
+    }
+
+    var tokens = [];
+    var missing = 0;
+    var extra = 0;
+    var changed = 0;
+    row = answer.length;
+    column = expected.length;
+    while (row > 0 || column > 0) {
+      if (
+        row > 0 &&
+        column > 0 &&
+        answer[row - 1] === expected[column - 1] &&
+        table[row][column] === table[row - 1][column - 1]
+      ) {
+        tokens.push({ value: answer[row - 1], status: 'ok' });
+        row -= 1;
+        column -= 1;
+      } else if (row > 0 && column > 0 && table[row][column] === table[row - 1][column - 1] + 1) {
+        tokens.push({ value: answer[row - 1], status: 'changed' });
+        changed += 1;
+        row -= 1;
+        column -= 1;
+      } else if (row > 0 && table[row][column] === table[row - 1][column] + 1) {
+        tokens.push({ value: answer[row - 1], status: 'extra' });
+        extra += 1;
+        row -= 1;
+      } else {
+        tokens.push({ value: '□', status: 'missing' });
+        missing += 1;
+        column -= 1;
+      }
+    }
+    tokens.reverse();
+
+    var parts = [];
+    if (missing) parts.push('少了 ' + missing + ' 个字母');
+    if (extra) parts.push('多了 ' + extra + ' 个字母');
+    if (changed) parts.push(changed + ' 个字母需要修改');
+    return {
+      distance: table[answer.length][expected.length],
+      tokens: tokens,
+      summary: parts.length ? parts.join('，') + '。' : '请检查拼写边界。',
+    };
+  }
+
+  function spellingAlignmentHtml(analysis) {
     return (
-      '<div class="letter-diff" aria-label="你的字母位置">' +
-      answer
-        .split('')
-        .map(function (letter, index) {
-          if (letter === ' ') return '';
-          var ok = letter === expected[index];
-          return '<span class="diff-letter ' + (ok ? 'ok' : 'bad') + '">' + esc(letter) + '</span>';
+      '<div class="letter-diff" aria-label="' +
+      esc(analysis.summary) +
+      '">' +
+      analysis.tokens
+        .map(function (token) {
+          return '<span class="diff-letter ' + token.status + '">' + esc(token.value) + '</span>';
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
+  function scrambledLetterBankHtml(word) {
+    var letters = normaliseAnswer(word.word)
+      .replace(/[^a-z]/g, '')
+      .split('');
+    var order = shuffledIndices(letters.length, word.id + '-spell-hint');
+    return (
+      '<div class="scrambled-letter-bank" aria-label="乱序字母">' +
+      order
+        .map(function (index) {
+          return '<span>' + esc(letters[index]) + '</span>';
         })
         .join('') +
       '</div>'
@@ -3126,7 +3479,8 @@
   function setFeedback(id, message, className, allowHtml) {
     var element = document.getElementById(id);
     if (!element) return;
-    element.className = 'feedback' + (className ? ' ' + className : '');
+    element.className =
+      (element.dataset.feedbackClass || 'feedback') + (className ? ' ' + className : '');
     if (allowHtml) {
       element.innerHTML = message;
     } else {
