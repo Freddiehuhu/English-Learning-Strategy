@@ -1,9 +1,10 @@
-const CACHE_NAME = 'wordlab-50-v7-dictation-player';
+const CACHE_NAME = 'wordlab-50-v9-word-relations';
 const CORE_ASSETS = [
   './',
   './index.html',
   './styles.css',
   './vocabulary.js',
+  './visual-data.js',
   './app.js',
   './icon.svg',
   './manifest.webmanifest',

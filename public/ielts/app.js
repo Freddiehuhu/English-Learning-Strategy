@@ -2,7 +2,12 @@
   'use strict';
 
   var WORDS = Array.isArray(window.IELTS_VOCABULARY) ? window.IELTS_VOCABULARY : [];
+  var VISUAL_LAB =
+    window.IELTS_VISUAL_LAB && typeof window.IELTS_VISUAL_LAB === 'object'
+      ? window.IELTS_VISUAL_LAB
+      : { posScene: null, groups: [], gameModes: [] };
   var STORAGE_KEY = 'els-ielts-wordlab-v1';
+  var VISUAL_STORAGE_KEY = 'els-ielts-visual-lab-v1';
   var AUDIO_ASSET_VERSION = 'natural-20260728';
   var SKILLS = ['sound', 'spell', 'forms', 'sentence'];
   var SKILL_LABELS = {
@@ -452,6 +457,9 @@
   }, {});
   var INTERVAL_DAYS = [0, 1, 3, 7, 14, 30];
   var state = loadState();
+  var visualState = loadVisualState();
+  var visualSection = 'pos';
+  var visualRuntime = defaultVisualRuntime();
   var currentView = 'today';
   var session = null;
   var currentAudio = null;
@@ -493,6 +501,7 @@
     if (ids.size !== WORDS.length) {
       console.error('WordLab vocabulary contains duplicate IDs.');
     }
+    validateVisualLab(ids);
 
     document.querySelectorAll('[data-view-link]').forEach(function (button) {
       button.addEventListener('click', function () {
@@ -523,6 +532,8 @@
     main.addEventListener('submit', handleMainSubmit);
     main.addEventListener('change', handleMainChange);
     main.addEventListener('input', handleMainInput);
+    main.addEventListener('error', handleVisualImageError, true);
+    main.addEventListener('load', handleVisualImageLoad, true);
 
     if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
     renderToday();
@@ -552,6 +563,165 @@
       history: [],
       journal: [],
     };
+  }
+
+  function visualTaskIds() {
+    var ids = [];
+    if (VISUAL_LAB.posScene && VISUAL_LAB.posScene.id) ids.push(VISUAL_LAB.posScene.id);
+    if (Array.isArray(VISUAL_LAB.groups)) {
+      VISUAL_LAB.groups.forEach(function (task) {
+        if (task && task.id) ids.push(task.id);
+      });
+    }
+    if (Array.isArray(VISUAL_LAB.gameModes)) {
+      VISUAL_LAB.gameModes.forEach(function (mode) {
+        if (!mode || !Array.isArray(mode.tasks)) return;
+        mode.tasks.forEach(function (task) {
+          if (task && task.id) ids.push(task.id);
+        });
+      });
+    }
+    return ids;
+  }
+
+  function defaultVisualState() {
+    return {
+      version: 2,
+      tasks: {},
+      history: [],
+    };
+  }
+
+  function defaultVisualRuntime() {
+    return {
+      posStep: 0,
+      taskSteps: {},
+      unlockedTasks: {},
+      gameMode: 'guess',
+      gameIndices: {},
+      gameAnswered: {},
+      gameReplay: {},
+    };
+  }
+
+  function normaliseVisualState(saved) {
+    var base = defaultVisualState();
+    if (!saved || typeof saved !== 'object') return base;
+    var allowedIds = new Set(visualTaskIds());
+    var tasks = {};
+    if (saved.tasks && typeof saved.tasks === 'object') {
+      Object.keys(saved.tasks).forEach(function (taskId) {
+        if (!allowedIds.has(taskId)) return;
+        var task = saved.tasks[taskId] || {};
+        tasks[taskId] = {
+          attempts: Math.max(0, Number(task.attempts) || 0),
+          correct: Math.max(0, Number(task.correct) || 0),
+          mastered: Boolean(task.mastered),
+          last: Math.max(0, Number(task.last) || 0),
+        };
+      });
+    }
+    var history = Array.isArray(saved.history)
+      ? saved.history
+          .filter(function (item) {
+            return item && allowedIds.has(String(item.taskId || ''));
+          })
+          .slice(-240)
+      : [];
+    return {
+      version: 2,
+      tasks: tasks,
+      history: history.slice(-240),
+    };
+  }
+
+  function loadVisualState() {
+    try {
+      return normaliseVisualState(JSON.parse(localStorage.getItem(VISUAL_STORAGE_KEY) || 'null'));
+    } catch (error) {
+      console.warn('Could not read saved visual vocabulary progress.', error);
+      return defaultVisualState();
+    }
+  }
+
+  function saveVisualState() {
+    try {
+      localStorage.setItem(VISUAL_STORAGE_KEY, JSON.stringify(visualState));
+    } catch (error) {
+      showToast('浏览器未能保存图像练习进度，请稍后导出备份。');
+    }
+  }
+
+  function getVisualTaskState(taskId) {
+    if (!visualState.tasks[taskId]) {
+      visualState.tasks[taskId] = {
+        attempts: 0,
+        correct: 0,
+        mastered: false,
+        last: 0,
+      };
+    }
+    return visualState.tasks[taskId];
+  }
+
+  function recordVisualResult(taskId, correct, choice) {
+    var taskState = getVisualTaskState(taskId);
+    var now = Date.now();
+    taskState.attempts += 1;
+    if (correct) taskState.correct += 1;
+    taskState.last = now;
+    visualState.history.push({
+      taskId: taskId,
+      correct: Boolean(correct),
+      choice: String(choice || ''),
+      at: now,
+    });
+    visualState.history = visualState.history.slice(-240);
+    saveVisualState();
+  }
+
+  function validateVisualLab(wordIds) {
+    var ids = visualTaskIds();
+    if (!VISUAL_LAB.posScene || !Array.isArray(VISUAL_LAB.groups)) {
+      console.error('WordLab visual vocabulary data is unavailable.');
+      return;
+    }
+    if (new Set(ids).size !== ids.length) {
+      console.error('WordLab visual vocabulary data contains duplicate task IDs.');
+    }
+    VISUAL_LAB.groups.forEach(function (task) {
+      var answersValid =
+        Array.isArray(task.choices) &&
+        Array.isArray(task.scenes) &&
+        task.scenes.every(function (scene) {
+          return task.choices.indexOf(scene.answer) >= 0;
+        });
+      if (
+        !answersValid ||
+        !wordIds.has(task.targetWordId) ||
+        String(task.image || '').indexOf('./images/semantic-lab/') !== 0
+      ) {
+        console.error('Invalid visual vocabulary task:', task.id);
+      }
+    });
+    (Array.isArray(VISUAL_LAB.gameModes) ? VISUAL_LAB.gameModes : []).forEach(function (mode) {
+      if (!mode || !mode.id || !Array.isArray(mode.tasks) || mode.tasks.length === 0) {
+        console.error('Invalid visual game mode:', mode && mode.id);
+        return;
+      }
+      mode.tasks.forEach(function (task) {
+        var validImage = !task.image || String(task.image).indexOf('./images/semantic-lab/') === 0;
+        if (
+          !task.id ||
+          !wordIds.has(task.targetWordId) ||
+          !Array.isArray(task.choices) ||
+          task.choices.indexOf(task.answer) < 0 ||
+          !validImage
+        ) {
+          console.error('Invalid visual word game:', task && task.id);
+        }
+      });
+    });
   }
 
   function loadState() {
@@ -661,6 +831,8 @@
       renderToday();
     } else if (view === 'progress') {
       renderProgress();
+    } else if (view === 'visual') {
+      renderVisualLab();
     } else if (SKILLS.indexOf(view) >= 0) {
       startSkillSession(view);
     } else if (view === 'learn') {
@@ -767,6 +939,12 @@
         '从词块排序到受控仿写，用范句和检查表修改自己的句子。',
         'sentence',
       ) +
+      viewModuleCard(
+        '05',
+        '图像词义实验室',
+        '用手绘场景看懂名、动、形、副，再辨别近义词的细微差别和反义词。',
+        'visual',
+      ) +
       '</section>';
   }
 
@@ -801,6 +979,27 @@
     );
   }
 
+  function viewModuleCard(number, title, description, view) {
+    return (
+      '<button class="module-card visual-module-card" type="button" data-action="go-view" data-view="' +
+      esc(view) +
+      '">' +
+      '<span>' +
+      '<span class="module-number">' +
+      esc(number) +
+      '</span>' +
+      '<h3>' +
+      esc(title) +
+      '</h3>' +
+      '<p>' +
+      esc(description) +
+      '</p>' +
+      '</span>' +
+      '<small>看图辨词 →</small>' +
+      '</button>'
+    );
+  }
+
   function skillBars(skills) {
     return (
       '<div class="skill-list">' +
@@ -822,6 +1021,581 @@
       }).join('') +
       '</div>'
     );
+  }
+
+  function visualSummary() {
+    var ids = visualTaskIds();
+    var completed = ids.filter(function (taskId) {
+      return Boolean(visualState.tasks[taskId] && visualState.tasks[taskId].mastered);
+    }).length;
+    var attempts = 0;
+    var correct = 0;
+    ids.forEach(function (taskId) {
+      var task = visualState.tasks[taskId];
+      if (!task) return;
+      attempts += Number(task.attempts) || 0;
+      correct += Number(task.correct) || 0;
+    });
+    return {
+      total: ids.length,
+      completed: completed,
+      attempts: attempts,
+      correct: correct,
+      accuracy: attempts ? Math.round((correct / attempts) * 100) : 0,
+    };
+  }
+
+  function renderVisualLab() {
+    currentView = 'visual';
+    setActiveNav('visual');
+    if (!VISUAL_LAB.posScene || !Array.isArray(VISUAL_LAB.groups)) {
+      main.innerHTML = '<div class="empty-state">图像词义课程载入失败，请刷新页面后重试。</div>';
+      return;
+    }
+    var summary = visualSummary();
+    main.innerHTML =
+      '<section class="page-heading visual-page-heading">' +
+      '<div>' +
+      '<p class="eyebrow">VISUAL MEANING LAB</p>' +
+      '<h1>图像词义实验室</h1>' +
+      '<p>先看场景作判断，再读精确区别；图片帮助理解，但拼写和语境仍要自己完成。</p>' +
+      '</div>' +
+      '<span class="date-chip">手绘场景课</span>' +
+      '</section>' +
+      '<section class="visual-overview panel" aria-label="图像课程进度">' +
+      '<div>' +
+      '<p class="eyebrow">YOUR PROGRESS</p>' +
+      '<strong data-visual-completed>' +
+      summary.completed +
+      ' / ' +
+      summary.total +
+      '</strong>' +
+      '<span>组已完成</span>' +
+      '</div>' +
+      '<div class="visual-overview-accuracy"><strong data-visual-accuracy>' +
+      summary.accuracy +
+      '%</strong><span>本课程作答准确率</span></div>' +
+      '<div class="visual-progress-track" aria-hidden="true"><span data-visual-progress style="--visual-progress:' +
+      (summary.total ? Math.round((summary.completed / summary.total) * 100) : 0) +
+      '%"></span></div>' +
+      '</section>' +
+      '<nav class="visual-tabs" aria-label="图像词义课程章节">' +
+      visualTab('pos', '词性入门', '名 · 动 · 形 · 副') +
+      visualTab('synonym', '近义辨析', '4 组') +
+      visualTab('antonym', '反义对照', '4 组') +
+      visualTab(
+        'games',
+        '词网游戏',
+        (Array.isArray(VISUAL_LAB.gameModes) ? VISUAL_LAB.gameModes.length : 0) + ' 类',
+      ) +
+      '</nav>' +
+      '<section id="visualContent" class="visual-content"></section>';
+    renderVisualSection();
+  }
+
+  function visualTab(section, label, meta) {
+    var active = visualSection === section;
+    return (
+      '<button class="visual-tab' +
+      (active ? ' is-active' : '') +
+      '" type="button" data-action="visual-section" data-section="' +
+      section +
+      '" aria-selected="' +
+      String(active) +
+      '"><span>' +
+      esc(label) +
+      '</span><small>' +
+      esc(meta) +
+      '</small></button>'
+    );
+  }
+
+  function renderVisualSection() {
+    var container = document.getElementById('visualContent');
+    if (!container) return;
+    document.querySelectorAll('.visual-tab').forEach(function (button) {
+      var active = button.dataset.section === visualSection;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-selected', String(active));
+    });
+    if (visualSection === 'pos') {
+      container.innerHTML = renderVisualPosLesson();
+    } else if (visualSection === 'games') {
+      container.innerHTML = renderVisualGames();
+    } else {
+      var tasks = VISUAL_LAB.groups.filter(function (task) {
+        return task.relation === visualSection;
+      });
+      container.innerHTML =
+        '<section class="visual-section-intro">' +
+        '<div><p class="eyebrow">' +
+        (visualSection === 'synonym' ? 'PRECISE WORD CHOICE' : 'MEANING CONTRAST') +
+        '</p><h2>' +
+        (visualSection === 'synonym' ? '选出本场景中更贴切的词' : '在同一维度上看清相反方向') +
+        '</h2></div>' +
+        '<p>' +
+        (visualSection === 'synonym'
+          ? '近义词常有重叠。题目要求“更精确”，不会把另一个词粗暴判成所有语境都错误。'
+          : '反义关系也要看场景和词性；先抓住图中的共同维度，再判断方向。') +
+        '</p></section>' +
+        '<div class="visual-card-grid">' +
+        tasks.map(renderVisualComparisonCard).join('') +
+        '</div>';
+    }
+  }
+
+  function renderVisualPosLesson() {
+    var scene = VISUAL_LAB.posScene;
+    var taskState = getVisualTaskState(scene.id);
+    var retrying = Boolean(visualRuntime.unlockedTasks[scene.id]);
+    var complete = taskState.mastered && !retrying;
+    var step = Math.min(visualRuntime.posStep, scene.questions.length - 1);
+    var question = scene.questions[step];
+    return (
+      '<article class="panel visual-pos-card" data-visual-task-id="' +
+      esc(scene.id) +
+      '" data-complete="' +
+      String(complete) +
+      '">' +
+      '<div class="visual-pos-copy"><p class="eyebrow">PARTS OF SPEECH</p><h2>一张图看懂四种词性</h2>' +
+      '<p>词性不是单词的中文意思，而是它在句子里承担的工作。先看图，再点击句中的词。</p></div>' +
+      '<figure class="visual-figure">' +
+      '<div class="visual-image-frame">' +
+      '<img src="' +
+      esc(scene.image) +
+      '" data-src="' +
+      esc(scene.image) +
+      '" data-visual-image alt="' +
+      esc(scene.alt) +
+      '" width="' +
+      scene.width +
+      '" height="' +
+      scene.height +
+      '" loading="eager" decoding="async" fetchpriority="high">' +
+      '<div class="visual-image-error" data-image-error hidden role="status">图片暂时没有载入。' +
+      '<button type="button" data-action="visual-retry-image">重新加载图片</button></div>' +
+      '</div>' +
+      '<figcaption>观察：哪些词给人和物命名？哪个词说明动作？哪些词补充特征和方式？</figcaption>' +
+      '</figure>' +
+      '<div class="visual-sentence" aria-label="The sturdy bridge safely supports the hiker.">' +
+      scene.sentence
+        .map(function (token) {
+          if (token.id === 'period') return '<span aria-hidden="true">.</span>';
+          if (complete) {
+            return (
+              '<span class="visual-token' +
+              (token.role ? ' role-' + token.role : '') +
+              '">' +
+              esc(token.text) +
+              '</span>'
+            );
+          }
+          return (
+            '<button class="visual-token" type="button" data-action="visual-pos-token" data-token="' +
+            esc(token.text) +
+            '">' +
+            esc(token.text) +
+            '</button>'
+          );
+        })
+        .join(' ') +
+      '</div>' +
+      (complete
+        ? renderVisualPosComplete(scene)
+        : '<section class="visual-question" aria-labelledby="visualPosPrompt">' +
+          '<div class="visual-question-meta"><span>第 ' +
+          (step + 1) +
+          ' / ' +
+          scene.questions.length +
+          ' 步</span><strong>' +
+          esc(question.label) +
+          '</strong></div>' +
+          '<h3 id="visualPosPrompt">' +
+          esc(question.prompt) +
+          '</h3>' +
+          '<p id="visualPosFeedback" class="visual-feedback" role="status" aria-live="polite">先自己判断，答错不会直接显示答案。</p>' +
+          '</section>') +
+      '</article>'
+    );
+  }
+
+  function renderVisualPosComplete(scene) {
+    return (
+      '<section class="visual-pos-result"><div class="visual-pos-role-grid">' +
+      scene.questions
+        .map(function (question) {
+          return (
+            '<article class="role-card role-' +
+            question.role +
+            '"><strong>' +
+            esc(question.label) +
+            '</strong><p>' +
+            esc(question.explanation) +
+            '</p></article>'
+          );
+        })
+        .join('') +
+      '</div><div class="visual-result-actions"><span>✓ 四种实词已经全部找对</span>' +
+      '<button class="secondary-button" type="button" data-action="visual-retry" data-task-id="' +
+      esc(scene.id) +
+      '">再挑战一次</button></div></section>'
+    );
+  }
+
+  function renderVisualComparisonCard(task) {
+    var taskState = getVisualTaskState(task.id);
+    var retrying = Boolean(visualRuntime.unlockedTasks[task.id]);
+    var skipped = Boolean(visualRuntime.skippedTasks && visualRuntime.skippedTasks[task.id]);
+    var complete = taskState.mastered && !retrying;
+    var step = Math.min(Number(visualRuntime.taskSteps[task.id]) || 0, task.scenes.length - 1);
+    var scene = task.scenes[step];
+    var relationLabel = task.relation === 'synonym' ? '近义辨析' : '反义对照';
+    var stateClass = complete ? ' is-complete' : skipped ? ' is-skipped' : '';
+    return (
+      '<article class="panel visual-comparison-card' +
+      stateClass +
+      '" data-visual-task-id="' +
+      esc(task.id) +
+      '" data-complete="' +
+      String(complete) +
+      '">' +
+      '<div class="visual-card-head"><span class="relation-chip ' +
+      task.relation +
+      '">' +
+      relationLabel +
+      '</span><span class="visual-pair">' +
+      esc(task.pair[0]) +
+      ' <i>↔</i> ' +
+      esc(task.pair[1]) +
+      '</span></div>' +
+      '<h3>' +
+      esc(task.title) +
+      '</h3>' +
+      '<figure class="visual-figure">' +
+      '<div class="visual-image-frame' +
+      (!complete && !skipped ? ' focus-' + scene.side : '') +
+      '">' +
+      '<img src="' +
+      esc(task.image) +
+      '" data-src="' +
+      esc(task.image) +
+      '" data-visual-image alt="' +
+      esc(task.alt) +
+      '" width="' +
+      task.width +
+      '" height="' +
+      task.height +
+      '" loading="lazy" decoding="async">' +
+      (!complete && !skipped
+        ? '<span class="visual-side-cue">观察' + (scene.side === 'left' ? '左' : '右') + '图</span>'
+        : '') +
+      '<div class="visual-image-error" data-image-error hidden role="status">图片暂时没有载入。' +
+      '<button type="button" data-action="visual-retry-image">重新加载图片</button></div>' +
+      '</div>' +
+      '<figcaption>' +
+      esc(task.alt) +
+      '</figcaption></figure>' +
+      (complete
+        ? renderVisualComparisonResult(task)
+        : skipped
+          ? '<div class="visual-skipped"><strong>本轮已跳过</strong><p>答案没有直接显示，可以稍后重新判断。</p>' +
+            '<button class="secondary-button" type="button" data-action="visual-retry" data-task-id="' +
+            esc(task.id) +
+            '">重新挑战</button></div>'
+          : renderVisualComparisonQuestion(task, scene, step)) +
+      '</article>'
+    );
+  }
+
+  function renderVisualComparisonQuestion(task, scene, step) {
+    return (
+      '<section class="visual-question"><div class="visual-question-meta"><span>场景 ' +
+      (step + 1) +
+      ' / ' +
+      task.scenes.length +
+      '</span><strong>Choose the more precise word</strong></div>' +
+      '<h4>' +
+      esc(scene.prompt) +
+      '</h4>' +
+      '<div class="visual-choice-grid">' +
+      task.choices
+        .map(function (choice) {
+          return (
+            '<button type="button" data-action="visual-choice" data-task-id="' +
+            esc(task.id) +
+            '" data-choice="' +
+            esc(choice) +
+            '">' +
+            esc(choice) +
+            '</button>'
+          );
+        })
+        .join('') +
+      '</div>' +
+      '<p id="visualFeedback-' +
+      esc(task.id) +
+      '" class="visual-feedback" role="status" aria-live="polite">先看图和句中线索，再选择更贴切的词。</p>' +
+      '<button class="visual-skip-link" type="button" data-action="visual-skip" data-task-id="' +
+      esc(task.id) +
+      '">先跳过 · 稍后再练</button></section>'
+    );
+  }
+
+  function renderVisualComparisonResult(task) {
+    return (
+      '<section class="visual-comparison-result"><div class="visual-meaning-pair">' +
+      '<div><span>左图</span><strong>' +
+      esc(task.pair[0]) +
+      '</strong><p>' +
+      esc(task.leftNote) +
+      '</p></div>' +
+      '<div><span>右图</span><strong>' +
+      esc(task.pair[1]) +
+      '</strong><p>' +
+      esc(task.rightNote) +
+      '</p></div></div>' +
+      '<p class="visual-rule"><strong>辨析边界：</strong>' +
+      esc(task.rule) +
+      '</p><div class="visual-result-actions"><span>✓ 两个场景都已判断正确</span>' +
+      '<button class="secondary-button" type="button" data-action="visual-retry" data-task-id="' +
+      esc(task.id) +
+      '">再挑战一次</button></div></section>'
+    );
+  }
+
+  function visualGameModes() {
+    return Array.isArray(VISUAL_LAB.gameModes) ? VISUAL_LAB.gameModes : [];
+  }
+
+  function findVisualGameMode(modeId) {
+    return visualGameModes().find(function (mode) {
+      return mode.id === modeId;
+    });
+  }
+
+  function visualGameModeProgress(mode) {
+    var completed = mode.tasks.filter(function (task) {
+      return Boolean(visualState.tasks[task.id] && visualState.tasks[task.id].mastered);
+    }).length;
+    return {
+      completed: completed,
+      total: mode.tasks.length,
+    };
+  }
+
+  function renderVisualGames() {
+    var modes = visualGameModes();
+    if (!modes.length) {
+      return '<div class="empty-state">词网游戏暂时没有载入，请刷新页面后重试。</div>';
+    }
+    var activeMode = findVisualGameMode(visualRuntime.gameMode) || modes[0];
+    visualRuntime.gameMode = activeMode.id;
+    return (
+      '<section class="visual-section-intro visual-games-intro">' +
+      '<div><p class="eyebrow">WORD RELATION GAMES</p><h2>把单词连成一张会思考的网</h2></div>' +
+      '<p>先判断，再看解释。答错只给线索；不会的可以跳过，系统不会直接泄露答案。</p></section>' +
+      '<div class="visual-game-mode-grid" role="group" aria-label="选择词义关系游戏">' +
+      modes
+        .map(function (mode) {
+          var progress = visualGameModeProgress(mode);
+          var active = mode.id === activeMode.id;
+          return (
+            '<button class="visual-game-mode' +
+            (active ? ' is-active' : '') +
+            '" type="button" data-action="visual-game-mode" data-mode-id="' +
+            esc(mode.id) +
+            '" aria-pressed="' +
+            String(active) +
+            '"><span class="visual-game-icon" aria-hidden="true">' +
+            esc(mode.icon) +
+            '</span><span><strong>' +
+            esc(mode.label) +
+            '</strong><small>' +
+            esc(mode.description) +
+            '</small></span><b>' +
+            progress.completed +
+            '/' +
+            progress.total +
+            '</b></button>'
+          );
+        })
+        .join('') +
+      '</div>' +
+      renderVisualGameStage(activeMode)
+    );
+  }
+
+  function renderVisualGameStage(mode) {
+    var tasks = mode.tasks;
+    var replaying = Boolean(visualRuntime.gameReplay[mode.id]);
+    var index = Math.max(0, Number(visualRuntime.gameIndices[mode.id]) || 0);
+
+    if (!replaying) {
+      while (
+        index < tasks.length &&
+        visualState.tasks[tasks[index].id] &&
+        visualState.tasks[tasks[index].id].mastered &&
+        !visualRuntime.gameAnswered[tasks[index].id]
+      ) {
+        index += 1;
+      }
+      visualRuntime.gameIndices[mode.id] = index;
+    }
+
+    if (index >= tasks.length) {
+      return renderVisualGameRoundEnd(mode, replaying);
+    }
+
+    var task = tasks[index];
+    var answered = Boolean(visualRuntime.gameAnswered[task.id]);
+    var progress = visualGameModeProgress(mode);
+    var image = task.image
+      ? '<figure class="visual-game-figure"><div class="visual-image-frame focus-' +
+        esc(task.focus || 'left') +
+        '"><img src="' +
+        esc(task.image) +
+        '" data-src="' +
+        esc(task.image) +
+        '" data-visual-image alt="' +
+        esc(task.alt) +
+        '" width="' +
+        Number(task.width || 1200) +
+        '" height="' +
+        Number(task.height || 751) +
+        '" loading="lazy" decoding="async"><span class="visual-side-cue">只看' +
+        (task.focus === 'right' ? '右' : '左') +
+        '图</span><div class="visual-image-error" data-image-error hidden role="status">图片暂时没有载入。' +
+        '<button type="button" data-action="visual-retry-image">重新加载图片</button></div></div>' +
+        '<figcaption>' +
+        esc(task.alt) +
+        '</figcaption></figure>'
+      : '';
+    var audio = task.audioId
+      ? '<div class="visual-game-listen"><button class="audio-button visual-game-audio" type="button" data-action="visual-game-audio" data-audio-id="' +
+        esc(task.audioId) +
+        '" data-audio-label="同音词语音" data-status-target="visualGameAudioStatus" aria-label="播放同音词语音"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">先听声音</span></button>' +
+        '<span id="visualGameAudioStatus" aria-live="polite">同音词要靠句子决定拼写</span></div>'
+      : '';
+    var word = task.word
+      ? '<div class="visual-game-word" aria-label="本题单词">' + esc(task.word) + '</div>'
+      : '';
+
+    return (
+      '<article class="panel visual-game-stage" data-visual-task-id="' +
+      esc(task.id) +
+      '" data-complete="' +
+      String(answered) +
+      '">' +
+      '<header class="visual-game-stage-head"><div><span class="relation-chip game">' +
+      esc(mode.shortLabel) +
+      '</span><p>第 ' +
+      (index + 1) +
+      ' / ' +
+      tasks.length +
+      ' 题</p></div><div class="visual-game-score"><strong>' +
+      progress.completed +
+      '</strong><span>已掌握</span></div></header>' +
+      '<div class="visual-game-track" aria-hidden="true"><span style="--game-progress:' +
+      Math.round((index / tasks.length) * 100) +
+      '%"></span></div>' +
+      '<div class="visual-game-layout"><div class="visual-game-media">' +
+      image +
+      word +
+      audio +
+      '</div><section class="visual-game-question"><p class="eyebrow">THINK BEFORE YOU PICK</p><h3>' +
+      esc(task.title) +
+      '</h3><p class="visual-game-prompt">' +
+      esc(task.prompt) +
+      '</p><div class="visual-game-choice-grid">' +
+      task.choices
+        .map(function (choice) {
+          return (
+            '<button type="button" data-action="visual-game-choice" data-task-id="' +
+            esc(task.id) +
+            '" data-choice="' +
+            esc(choice) +
+            '"' +
+            (answered ? ' disabled' : '') +
+            ' class="' +
+            (answered && choice === task.answer ? 'is-correct' : '') +
+            '">' +
+            esc(choice) +
+            '</button>'
+          );
+        })
+        .join('') +
+      '</div>' +
+      (answered
+        ? '<div class="visual-game-answer" role="status"><strong>答对了：' +
+          esc(task.answer) +
+          '</strong><p>' +
+          esc(task.feedback) +
+          '</p></div><div class="visual-game-actions"><button class="primary-button" type="button" data-action="visual-game-next" data-mode-id="' +
+          esc(mode.id) +
+          '">下一题 →</button></div>'
+        : '<p id="visualGameFeedback-' +
+          esc(task.id) +
+          '" class="visual-feedback" role="status" aria-live="polite">先独立判断；答错后只会得到一条线索。</p><div class="visual-game-actions"><button class="visual-skip-link" type="button" data-action="visual-game-skip" data-mode-id="' +
+          esc(mode.id) +
+          '" data-task-id="' +
+          esc(task.id) +
+          '">先跳过 · 不看答案</button></div>') +
+      '</section></div></article>'
+    );
+  }
+
+  function renderVisualGameRoundEnd(mode, replaying) {
+    var progress = visualGameModeProgress(mode);
+    var remaining = progress.total - progress.completed;
+    return (
+      '<section class="panel visual-game-finish"><span class="visual-game-finish-mark" aria-hidden="true">' +
+      (remaining ? '↺' : '✓') +
+      '</span><div><p class="eyebrow">' +
+      (remaining ? 'ROUND REVIEW' : 'MODE COMPLETE') +
+      '</p><h3>' +
+      (remaining ? '这一轮已经走完' : esc(mode.label) + ' 已全部掌握') +
+      '</h3><p>' +
+      (remaining
+        ? '还有 ' + remaining + ' 题没有答对；跳过的题没有显示答案，可以继续回来判断。'
+        : replaying
+          ? '复习轮完成。已掌握记录会保留，仍可再玩一轮巩固。'
+          : '这一类词义关系已经全部答对，可以重玩来巩固速度。') +
+      '</p></div><div class="visual-game-finish-actions">' +
+      (remaining
+        ? '<button class="primary-button" type="button" data-action="visual-game-continue" data-mode-id="' +
+          esc(mode.id) +
+          '">继续未完成题</button>'
+        : '') +
+      '<button class="secondary-button" type="button" data-action="visual-game-replay" data-mode-id="' +
+      esc(mode.id) +
+      '">再玩一轮</button></div></section>'
+    );
+  }
+
+  function updateVisualProgress() {
+    var summary = visualSummary();
+    var completed = document.querySelector('[data-visual-completed]');
+    var accuracy = document.querySelector('[data-visual-accuracy]');
+    var bar = document.querySelector('[data-visual-progress]');
+    if (completed) completed.textContent = summary.completed + ' / ' + summary.total;
+    if (accuracy) accuracy.textContent = summary.accuracy + '%';
+    if (bar) {
+      bar.style.setProperty(
+        '--visual-progress',
+        (summary.total ? Math.round((summary.completed / summary.total) * 100) : 0) + '%',
+      );
+    }
+  }
+
+  function replaceVisualComparisonCard(task) {
+    var card = document.querySelector('[data-visual-task-id="' + task.id + '"]');
+    if (!card) return;
+    card.outerHTML = renderVisualComparisonCard(task);
+    var nextCard = document.querySelector('[data-visual-task-id="' + task.id + '"]');
+    if (nextCard) {
+      var firstChoice = nextCard.querySelector('[data-action="visual-choice"]');
+      if (firstChoice) firstChoice.focus({ preventScroll: true });
+    }
   }
 
   function startDailySession() {
@@ -1816,9 +2590,23 @@
     if (action === 'start-daily') return startDailySession();
     if (action === 'start-weak') return startWeakSession();
     if (action === 'start-skill') return startSkillSession(button.dataset.skill);
+    if (action === 'go-view') return navigate(button.dataset.view);
     if (action === 'go-today') return navigate('today');
     if (action === 'go-progress') return navigate('progress');
     if (action === 'leave-session') return navigate('today');
+    if (action === 'visual-section') return changeVisualSection(button.dataset.section);
+    if (action === 'visual-pos-token') return chooseVisualPosToken(button);
+    if (action === 'visual-choice') return chooseVisualWord(button);
+    if (action === 'visual-skip') return skipVisualWord(button);
+    if (action === 'visual-retry') return retryVisualTask(button.dataset.taskId);
+    if (action === 'visual-retry-image') return retryVisualImage(button);
+    if (action === 'visual-game-mode') return changeVisualGameMode(button.dataset.modeId);
+    if (action === 'visual-game-choice') return chooseVisualGameAnswer(button);
+    if (action === 'visual-game-skip') return skipVisualGame(button);
+    if (action === 'visual-game-next') return advanceVisualGame(button.dataset.modeId);
+    if (action === 'visual-game-continue') return continueVisualGame(button.dataset.modeId);
+    if (action === 'visual-game-replay') return replayVisualGame(button.dataset.modeId);
+    if (action === 'visual-game-audio') return playVisualGameAudio(button);
     if (action === 'reveal-word') return revealWord();
     if (action === 'play-word') return playWordFromButton(button);
     if (action === 'play-example') return playExample(button);
@@ -1841,6 +2629,316 @@
     if (action === 'finish-sentence') return finishSentence(button.dataset.correct === 'true');
     if (action === 'export-data') return exportData();
     if (action === 'reset-data') return resetData();
+  }
+
+  function changeVisualSection(section) {
+    if (['pos', 'synonym', 'antonym', 'games'].indexOf(section) < 0) return;
+    stopAudio();
+    visualSection = section;
+    renderVisualSection();
+    var container = document.getElementById('visualContent');
+    if (!container) return;
+    if (window.matchMedia('(max-width: 780px)').matches) {
+      var tabs = document.querySelector('.visual-tabs');
+      var topbar = document.querySelector('.topbar');
+      var visibleTop =
+        (topbar ? topbar.getBoundingClientRect().height : 0) +
+        (tabs ? tabs.getBoundingClientRect().height : 0) +
+        14;
+      var delta = container.getBoundingClientRect().top - visibleTop;
+      window.scrollBy({ top: delta, behavior: 'smooth' });
+      return;
+    }
+    container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function chooseVisualPosToken(button) {
+    var card = button.closest('[data-visual-task-id]');
+    var scene = VISUAL_LAB.posScene;
+    if (!card || !scene || card.dataset.locked === 'true') return;
+    var step = Math.min(visualRuntime.posStep, scene.questions.length - 1);
+    var question = scene.questions[step];
+    var choice = String(button.dataset.token || '');
+    var correct = question.answers.indexOf(choice) >= 0;
+    card.dataset.locked = 'true';
+    recordVisualResult(scene.id, correct, choice);
+    if (!correct) {
+      button.classList.add('is-wrong');
+      setFeedback('visualPosFeedback', '再想想：' + question.clue, 'is-wrong');
+      setTimeout(function () {
+        card.dataset.locked = 'false';
+      }, 260);
+      updateVisualProgress();
+      return;
+    }
+
+    button.classList.add('is-correct');
+    card.querySelectorAll('[data-action="visual-pos-token"]').forEach(function (token) {
+      token.disabled = true;
+    });
+    setFeedback('visualPosFeedback', '正确。' + question.explanation, 'is-correct');
+    setTimeout(function () {
+      visualRuntime.posStep += 1;
+      if (visualRuntime.posStep >= scene.questions.length) {
+        var taskState = getVisualTaskState(scene.id);
+        taskState.mastered = true;
+        taskState.last = Date.now();
+        visualRuntime.posStep = 0;
+        delete visualRuntime.unlockedTasks[scene.id];
+        saveVisualState();
+      }
+      renderVisualSection();
+      updateVisualProgress();
+    }, 620);
+  }
+
+  function findVisualTask(taskId) {
+    return VISUAL_LAB.groups.find(function (task) {
+      return task.id === taskId;
+    });
+  }
+
+  function chooseVisualWord(button) {
+    var task = findVisualTask(button.dataset.taskId);
+    var card = button.closest('[data-visual-task-id]');
+    if (!task || !card || card.dataset.locked === 'true') return;
+    var step = Math.min(Number(visualRuntime.taskSteps[task.id]) || 0, task.scenes.length - 1);
+    var scene = task.scenes[step];
+    var choice = String(button.dataset.choice || '');
+    var correct = choice === scene.answer;
+    card.dataset.locked = 'true';
+    recordVisualResult(task.id, correct, choice);
+    if (!correct) {
+      button.classList.add('is-wrong');
+      button.setAttribute('aria-invalid', 'true');
+      setFeedback(
+        'visualFeedback-' + task.id,
+        '这个词还不够贴切。再看图中的姿态、距离、结构或结果线索。',
+        'is-wrong',
+      );
+      setTimeout(function () {
+        card.dataset.locked = 'false';
+      }, 260);
+      updateVisualProgress();
+      return;
+    }
+
+    button.classList.add('is-correct');
+    card.querySelectorAll('[data-action="visual-choice"]').forEach(function (choiceButton) {
+      choiceButton.disabled = true;
+    });
+    setFeedback('visualFeedback-' + task.id, '正确。' + scene.feedback, 'is-correct');
+    setTimeout(function () {
+      var nextStep = step + 1;
+      if (nextStep >= task.scenes.length) {
+        var taskState = getVisualTaskState(task.id);
+        taskState.mastered = true;
+        taskState.last = Date.now();
+        visualRuntime.taskSteps[task.id] = 0;
+        delete visualRuntime.unlockedTasks[task.id];
+      } else {
+        visualRuntime.taskSteps[task.id] = nextStep;
+      }
+      if (visualRuntime.skippedTasks) delete visualRuntime.skippedTasks[task.id];
+      saveVisualState();
+      replaceVisualComparisonCard(task);
+      updateVisualProgress();
+    }, 720);
+  }
+
+  function skipVisualWord(button) {
+    var task = findVisualTask(button.dataset.taskId);
+    var card = button.closest('[data-visual-task-id]');
+    if (!task || !card || card.dataset.locked === 'true') return;
+    var step = Math.min(Number(visualRuntime.taskSteps[task.id]) || 0, task.scenes.length - 1);
+    card.dataset.locked = 'true';
+    recordVisualResult(task.id, false, 'skip');
+    if (step + 1 < task.scenes.length) {
+      visualRuntime.taskSteps[task.id] = step + 1;
+    } else {
+      if (!visualRuntime.skippedTasks) visualRuntime.skippedTasks = {};
+      visualRuntime.skippedTasks[task.id] = true;
+      visualRuntime.taskSteps[task.id] = 0;
+    }
+    replaceVisualComparisonCard(task);
+    updateVisualProgress();
+  }
+
+  function retryVisualTask(taskId) {
+    delete visualRuntime.unlockedTasks[taskId];
+    visualRuntime.unlockedTasks[taskId] = true;
+    if (visualRuntime.skippedTasks) delete visualRuntime.skippedTasks[taskId];
+    if (VISUAL_LAB.posScene && VISUAL_LAB.posScene.id === taskId) {
+      visualRuntime.posStep = 0;
+      renderVisualSection();
+      return;
+    }
+    var task = findVisualTask(taskId);
+    if (!task) return;
+    visualRuntime.taskSteps[taskId] = 0;
+    replaceVisualComparisonCard(task);
+  }
+
+  function findVisualGameTask(taskId) {
+    var result = null;
+    visualGameModes().some(function (mode) {
+      var task = mode.tasks.find(function (candidate) {
+        return candidate.id === taskId;
+      });
+      if (!task) return false;
+      result = { mode: mode, task: task };
+      return true;
+    });
+    return result;
+  }
+
+  function changeVisualGameMode(modeId) {
+    var mode = findVisualGameMode(modeId);
+    if (!mode) return;
+    stopAudio();
+    visualRuntime.gameMode = mode.id;
+    renderVisualSection();
+    var stage = document.querySelector('.visual-game-stage, .visual-game-finish');
+    if (stage) stage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function chooseVisualGameAnswer(button) {
+    var found = findVisualGameTask(button.dataset.taskId);
+    var card = button.closest('[data-visual-task-id]');
+    if (!found || !card || card.dataset.locked === 'true') return;
+    var task = found.task;
+    var choice = String(button.dataset.choice || '');
+    var correct = choice === task.answer;
+    card.dataset.locked = 'true';
+    recordVisualResult(task.id, correct, choice);
+    if (!correct) {
+      button.classList.add('is-wrong');
+      button.setAttribute('aria-invalid', 'true');
+      setFeedback('visualGameFeedback-' + task.id, '还不对。线索：' + task.hint, 'is-wrong');
+      setTimeout(function () {
+        card.dataset.locked = 'false';
+      }, 260);
+      updateVisualProgress();
+      return;
+    }
+
+    var taskState = getVisualTaskState(task.id);
+    taskState.mastered = true;
+    taskState.last = Date.now();
+    visualRuntime.gameAnswered[task.id] = true;
+    saveVisualState();
+    renderVisualSection();
+    updateVisualProgress();
+  }
+
+  function skipVisualGame(button) {
+    var found = findVisualGameTask(button.dataset.taskId);
+    var card = button.closest('[data-visual-task-id]');
+    if (!found || !card || card.dataset.locked === 'true') return;
+    card.dataset.locked = 'true';
+    stopAudio();
+    recordVisualResult(found.task.id, false, 'skip');
+    delete visualRuntime.gameAnswered[found.task.id];
+    visualRuntime.gameIndices[found.mode.id] =
+      (Number(visualRuntime.gameIndices[found.mode.id]) || 0) + 1;
+    renderVisualSection();
+    updateVisualProgress();
+  }
+
+  function advanceVisualGame(modeId) {
+    var mode = findVisualGameMode(modeId);
+    if (!mode) return;
+    stopAudio();
+    var index = Math.max(0, Number(visualRuntime.gameIndices[mode.id]) || 0);
+    if (mode.tasks[index]) delete visualRuntime.gameAnswered[mode.tasks[index].id];
+    visualRuntime.gameIndices[mode.id] = index + 1;
+    renderVisualSection();
+  }
+
+  function continueVisualGame(modeId) {
+    var mode = findVisualGameMode(modeId);
+    if (!mode) return;
+    stopAudio();
+    delete visualRuntime.gameReplay[mode.id];
+    var firstIncomplete = mode.tasks.findIndex(function (task) {
+      return !(visualState.tasks[task.id] && visualState.tasks[task.id].mastered);
+    });
+    visualRuntime.gameIndices[mode.id] = firstIncomplete < 0 ? mode.tasks.length : firstIncomplete;
+    renderVisualSection();
+  }
+
+  function replayVisualGame(modeId) {
+    var mode = findVisualGameMode(modeId);
+    if (!mode) return;
+    stopAudio();
+    visualRuntime.gameReplay[mode.id] = true;
+    visualRuntime.gameIndices[mode.id] = 0;
+    mode.tasks.forEach(function (task) {
+      delete visualRuntime.gameAnswered[task.id];
+    });
+    renderVisualSection();
+  }
+
+  function playVisualGameAudio(button) {
+    var audioId = String(button.dataset.audioId || '');
+    if (!audioId) return;
+    var accent = state.settings.accent === 'us' ? 'us' : 'uk';
+    button.dataset.accent = accent;
+    var source =
+      './audio/' + accent + '/' + audioId + '.mp3?v=' + encodeURIComponent(AUDIO_ASSET_VERSION);
+    startAudioPlayback(source, button, 1);
+  }
+
+  function retryVisualImage(button) {
+    var card = button.closest('[data-visual-task-id]');
+    var image = card && card.querySelector('[data-visual-image]');
+    var error = card && card.querySelector('[data-image-error]');
+    if (!card || !image) return;
+    card.classList.remove('is-image-error');
+    card.setAttribute('aria-busy', 'true');
+    image.hidden = false;
+    if (error) error.hidden = true;
+    var base = image.dataset.src;
+    image.src = base + (base.indexOf('?') >= 0 ? '&' : '?') + 'retry=' + Date.now();
+  }
+
+  function handleVisualImageError(event) {
+    var image = event.target;
+    if (!(image instanceof HTMLImageElement) || !image.matches('[data-visual-image]')) return;
+    var card = image.closest('[data-visual-task-id]');
+    if (!card) return;
+    image.hidden = true;
+    card.classList.add('is-image-error');
+    card.setAttribute('aria-busy', 'false');
+    var error = card.querySelector('[data-image-error]');
+    if (error) error.hidden = false;
+    card
+      .querySelectorAll(
+        '[data-action="visual-choice"], [data-action="visual-pos-token"], [data-action="visual-game-choice"]',
+      )
+      .forEach(function (answerButton) {
+        answerButton.disabled = true;
+      });
+  }
+
+  function handleVisualImageLoad(event) {
+    var image = event.target;
+    if (!(image instanceof HTMLImageElement) || !image.matches('[data-visual-image]')) return;
+    var card = image.closest('[data-visual-task-id]');
+    if (!card) return;
+    card.classList.remove('is-image-error');
+    card.setAttribute('aria-busy', 'false');
+    var error = card.querySelector('[data-image-error]');
+    if (error) error.hidden = true;
+    if (card.dataset.complete !== 'true') {
+      card
+        .querySelectorAll(
+          '[data-action="visual-choice"], [data-action="visual-pos-token"], [data-action="visual-game-choice"]',
+        )
+        .forEach(function (answerButton) {
+          answerButton.disabled = false;
+        });
+    }
   }
 
   function handleMainSubmit(event) {
@@ -3215,6 +4313,7 @@
       version: 1,
       exportedAt: new Date().toISOString(),
       state: state,
+      visualState: visualState,
     };
     var blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json',
@@ -3255,8 +4354,11 @@
         history: Array.isArray(imported.history) ? imported.history.slice(-240) : [],
         journal: Array.isArray(imported.journal) ? imported.journal.slice(-120) : [],
       };
+      visualState = normaliseVisualState(payload.visualState);
+      visualRuntime = defaultVisualRuntime();
       saveState();
-      showToast('进度已导入。');
+      saveVisualState();
+      showToast('词汇与图像课程进度已导入。');
       renderProgress();
     } catch (error) {
       showToast('导入失败：请选择由 WordLab 50 导出的 JSON 文件。');
@@ -3268,7 +4370,10 @@
       return;
     }
     state = defaultState();
+    visualState = defaultVisualState();
+    visualRuntime = defaultVisualRuntime();
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(VISUAL_STORAGE_KEY);
     showToast('本机练习记录已清空。');
     renderProgress();
   }
