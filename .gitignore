@@ -1,2 +1,10 @@
 .DS_Store
 *.zip
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+__pycache__/
+*.pyc
