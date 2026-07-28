@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wordlab-50-v3-natural-audio';
+const CACHE_NAME = 'wordlab-50-v4-form-practice';
 const CORE_ASSETS = [
   './',
   './index.html',
