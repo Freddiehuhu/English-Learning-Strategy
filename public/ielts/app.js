@@ -1441,8 +1441,11 @@
 
   function renderSentenceTask(word) {
     var task = session.taskState;
-    if (!Array.isArray(task.chunkOrder)) {
-      task.chunkOrder = shuffledIndices(word.chunks.length, word.id);
+    var sortableIndices = sortableChunkIndices(word.chunks);
+    if (!Array.isArray(task.chunkOrder) || task.chunkOrder.length !== sortableIndices.length) {
+      task.chunkOrder = shuffledIndices(sortableIndices.length, word.id).map(function (position) {
+        return sortableIndices[position];
+      });
       task.selectedChunks = [];
       task.chunkAttempts = 0;
     }
@@ -1462,27 +1465,40 @@
       esc(word.zh) +
       '</span></div>' +
       '<section class="sentence-step">' +
-      '<div class="sentence-step-header"><span class="step-number">1</span><div><h3>搭出正确句子骨架</h3><p>按顺序点击词块；已选词块可点回。</p></div></div>' +
-      '<div class="chunk-pool" aria-label="待选词块">' +
-      remaining
-        .map(function (index) {
-          return chunkButton(word.chunks[index], 'chunk-select', index);
-        })
-        .join('') +
-      '</div>' +
-      '<div class="chunk-answer" aria-label="已选词块">' +
-      (selected.length
-        ? selected
-            .map(function (index, position) {
-              return chunkButton(word.chunks[index], 'chunk-remove', position);
+      '<div class="sentence-step-header"><span class="step-number">1</span><div><h3>搭出正确句子骨架</h3><p>大小写和句末标点已隐藏；请只根据语法和语义排序。</p></div></div>' +
+      (task.chunksCorrect
+        ? ''
+        : '<div class="chunk-pool" aria-label="待选词块">' +
+          remaining
+            .map(function (index) {
+              return chunkButton(word.chunks[index], 'chunk-select', index);
             })
-            .join('')
-        : '<span class="fine-print">答案会出现在这里</span>') +
+            .join('') +
+          '</div>') +
+      '<div class="chunk-answer" aria-label="已选词块">' +
+      (task.chunksCorrect
+        ? task.writingUnlocked
+          ? '<span class="fine-print">标准骨架已遮住；请只看中文独立仿写。</span>'
+          : '<div class="chunk-solved-sentence"><span>标准骨架</span><strong>' +
+            esc(joinChunks(word.chunks)) +
+            '</strong></div>'
+        : selected.length
+          ? selected
+              .map(function (index, position) {
+                return chunkButton(word.chunks[index], 'chunk-remove', position);
+              })
+              .join('')
+          : '<span class="fine-print">答案会出现在这里</span>') +
       '</div>' +
       '<div class="sentence-toolbar">' +
-      '<button class="secondary-button" type="button" data-action="chunk-reset">重排</button>' +
-      '<button class="secondary-button" type="button" data-action="chunk-reveal">显示骨架</button>' +
-      '<button class="primary-button" type="button" data-action="chunk-check">检查顺序</button>' +
+      (task.chunksCorrect
+        ? '<button class="secondary-button" type="button" data-action="chunk-reset">重新排序</button>' +
+          (task.writingUnlocked
+            ? ''
+            : '<button class="primary-button" type="button" data-action="start-sentence-writing">遮住骨架，开始仿写</button>')
+        : '<button class="secondary-button" type="button" data-action="chunk-reset">重排</button>' +
+          '<button class="secondary-button" type="button" data-action="chunk-reveal">显示骨架</button>' +
+          '<button class="primary-button" type="button" data-action="chunk-check">检查顺序</button>') +
       '</div>' +
       '<div class="feedback' +
       (task.chunkFeedbackClass ? ' ' + task.chunkFeedbackClass : '') +
@@ -1490,6 +1506,28 @@
       esc(task.chunkFeedback || '') +
       '</div>' +
       '</section>' +
+      renderSentenceWritingStep(word, task) +
+      '</div>'
+    );
+  }
+
+  function renderSentenceWritingStep(word, task) {
+    if (!task.chunksCorrect || !task.writingUnlocked) {
+      var lockedTitle = task.chunksCorrect ? '遮住骨架后开始仿写' : '完成排序后再仿写';
+      var lockedNote = task.chunksCorrect
+        ? '先读一遍标准骨架，再点击“遮住骨架，开始仿写”。'
+        : '中文句子和写作检查项将在第一步完成后出现。';
+      return (
+        '<section class="sentence-step sentence-step-locked" aria-label="第二步尚未解锁">' +
+        '<div class="sentence-step-header"><span class="step-number">2</span><div><h3>' +
+        lockedTitle +
+        '</h3><p>' +
+        lockedNote +
+        '</p></div></div>' +
+        '</section>'
+      );
+    }
+    return (
       '<section class="sentence-step">' +
       '<div class="sentence-step-header"><span class="step-number">2</span><div><h3>按中文受控仿写</h3><p>必须使用目标词或本卡中的一个词形。</p></div></div>' +
       '<p class="model-sentence">' +
@@ -1527,8 +1565,7 @@
       '<button class="secondary-button" type="button" data-action="finish-sentence" data-correct="false">仍需老师帮助</button>' +
       '<button class="primary-button" type="button" data-action="finish-sentence" data-correct="true">已对照并修改 →</button>' +
       '</div>' +
-      '</section>' +
-      '</div>'
+      '</section>'
     );
   }
 
@@ -1539,9 +1576,30 @@
       '" data-index="' +
       index +
       '">' +
-      esc(text) +
+      esc(sentencePuzzleChunkText(text)) +
       '</button>'
     );
+  }
+
+  function sortableChunkIndices(chunks) {
+    return chunks
+      .map(function (chunk, index) {
+        return { chunk: String(chunk || '').trim(), index: index };
+      })
+      .filter(function (item) {
+        return item.chunk && !/^[,.;:!?]+$/.test(item.chunk);
+      })
+      .map(function (item) {
+        return item.index;
+      });
+  }
+
+  function sentencePuzzleChunkText(text) {
+    return String(text || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[.!?]+$/, '')
+      .trim();
   }
 
   function defaultChecklistHtml() {
@@ -1729,6 +1787,7 @@
     if (action === 'chunk-reset') return resetChunks();
     if (action === 'chunk-reveal') return revealChunks();
     if (action === 'chunk-check') return checkChunks();
+    if (action === 'start-sentence-writing') return startSentenceWriting();
     if (action === 'finish-sentence') return finishSentence(button.dataset.correct === 'true');
     if (action === 'export-data') return exportData();
     if (action === 'reset-data') return resetData();
@@ -2195,20 +2254,26 @@
 
   function resetChunks() {
     if (!session || currentSkill() !== 'sentence') return;
-    session.taskState.selectedChunks = [];
-    session.taskState.chunksCorrect = false;
-    session.taskState.chunkFeedback = '';
-    session.taskState.chunkFeedbackClass = '';
+    var task = session.taskState;
+    task.selectedChunks = [];
+    task.chunksCorrect = false;
+    task.writingUnlocked = false;
+    task.chunkFeedback = '';
+    task.chunkFeedbackClass = '';
+    task.writing = '';
+    task.checks = null;
+    task.mechanicsPass = false;
+    task.evaluated = false;
+    task.sentenceFeedback = '';
     renderSession();
   }
 
   function revealChunks() {
     if (!session || currentSkill() !== 'sentence') return;
     var word = currentWord();
-    session.taskState.selectedChunks = word.chunks.map(function (_, index) {
-      return index;
-    });
+    session.taskState.selectedChunks = sortableChunkIndices(word.chunks);
     session.taskState.chunksCorrect = true;
+    session.taskState.writingUnlocked = false;
     session.taskState.hadError = true;
     session.taskState.chunkFeedback = '已显示正确骨架。请读一遍，再完成下面的仿写。';
     session.taskState.chunkFeedbackClass = 'is-wrong';
@@ -2219,9 +2284,7 @@
     if (!session || currentSkill() !== 'sentence') return;
     var word = currentWord();
     var task = session.taskState;
-    var expected = word.chunks.map(function (_, index) {
-      return index;
-    });
+    var expected = sortableChunkIndices(word.chunks);
     var selected = task.selectedChunks || [];
     var correct =
       selected.length === expected.length &&
@@ -2231,7 +2294,8 @@
     task.chunkAttempts = (task.chunkAttempts || 0) + 1;
     if (correct) {
       task.chunksCorrect = true;
-      task.chunkFeedback = '顺序正确。现在不要照抄英文，按中文自己写一遍。';
+      task.writingUnlocked = false;
+      task.chunkFeedback = '顺序正确。先读一遍标准骨架，再遮住英文完成仿写。';
       task.chunkFeedbackClass = 'is-correct';
     } else {
       task.hadError = true;
@@ -2245,6 +2309,20 @@
       task.chunkFeedbackClass = 'is-wrong';
     }
     renderSession();
+  }
+
+  function startSentenceWriting() {
+    if (!session || currentSkill() !== 'sentence') return;
+    var task = session.taskState;
+    if (!task.chunksCorrect || task.writingUnlocked) return;
+    task.writingUnlocked = true;
+    task.chunkFeedback = '骨架已遮住。现在只看中文，独立写出完整句子。';
+    task.chunkFeedbackClass = '';
+    renderSession();
+    setTimeout(function () {
+      var textarea = document.getElementById('sentenceInput');
+      if (textarea) textarea.focus({ preventScroll: true });
+    }, 40);
   }
 
   function evaluateSentence(rawSentence) {

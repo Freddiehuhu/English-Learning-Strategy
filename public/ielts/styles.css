@@ -1478,6 +1478,30 @@ a {
   background: #f1f5f2;
 }
 
+.chunk-solved-sentence {
+  display: grid;
+  width: 100%;
+  align-content: center;
+  gap: 4px;
+  padding: 4px 6px;
+  text-align: left;
+}
+
+.chunk-solved-sentence span {
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.chunk-solved-sentence strong {
+  color: var(--navy);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 18px;
+  line-height: 1.45;
+}
+
 .chunk-button {
   min-height: 36px;
   padding: 5px 10px;
@@ -1494,6 +1518,16 @@ a {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
+}
+
+.sentence-step-locked {
+  border-style: dashed;
+  background: #f4f6f3;
+}
+
+.sentence-step-locked .step-number {
+  color: var(--ink-soft);
+  background: #d9dfda;
 }
 
 .sentence-input {

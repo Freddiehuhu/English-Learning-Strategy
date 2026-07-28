@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wordlab-50-v5-form-skip';
+const CACHE_NAME = 'wordlab-50-v6-sentence-clues';
 const CORE_ASSETS = [
   './',
   './index.html',

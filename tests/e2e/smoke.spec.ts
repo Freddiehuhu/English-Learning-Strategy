@@ -44,3 +44,43 @@ test('lets learners skip word-form questions before using hints', async ({ page 
   await skipButton.click();
   await expect(page.locator('.training-count')).toHaveText('3 / 12');
 });
+
+test('hides sentence-order capitalization and punctuation until reveal', async ({ page }) => {
+  await page.goto('/ielts/index.html');
+
+  await page.getByRole('button', { name: /04 句子工坊/ }).click();
+  const chunkPool = page.getByLabel('待选词块');
+  const chunkLabels = await chunkPool.getByRole('button').allTextContents();
+
+  expect(chunkLabels.length).toBeGreaterThan(1);
+  chunkLabels.forEach((label) => {
+    expect(label).toBe(label.toLowerCase());
+    expect(label).not.toMatch(/[.!?]$/);
+  });
+  expect(chunkLabels).not.toContain('.');
+  await expect(page.getByLabel('YOUR SENTENCE')).toHaveCount(0);
+
+  await page.getByRole('button', { name: '显示骨架' }).click();
+
+  const solvedSentence = page.locator('.chunk-solved-sentence strong');
+  await expect(solvedSentence).toBeVisible();
+  await expect(solvedSentence).toHaveText(/^[A-Z].*[.!?]$/);
+  await expect(page.getByLabel('YOUR SENTENCE')).toHaveCount(0);
+
+  await page.getByRole('button', { name: '遮住骨架，开始仿写' }).click();
+
+  await expect(solvedSentence).toHaveCount(0);
+  const writingInput = page.getByLabel('YOUR SENTENCE');
+  await expect(writingInput).toBeVisible();
+
+  await writingInput.fill('test.');
+  await page.getByRole('button', { name: '检查并对照' }).click();
+  await expect(page.locator('#modelSentence')).toBeVisible();
+
+  await page.getByRole('button', { name: '重新排序' }).click();
+  await page.getByRole('button', { name: '显示骨架' }).click();
+  await page.getByRole('button', { name: '遮住骨架，开始仿写' }).click();
+
+  await expect(page.locator('#modelSentence')).toBeHidden();
+  await expect(writingInput).toHaveValue('');
+});
