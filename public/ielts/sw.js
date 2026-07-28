@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wordlab-50-v9-word-relations';
+const CACHE_NAME = 'wordlab-50-v10-corpus-map';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -30,6 +30,26 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+
+  if (url.pathname.endsWith('/ielts/corpus/catalog.json')) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(request);
+        const network = fetch(request)
+          .then((response) => {
+            if (!response.ok) return response;
+            return cache.put(request, response.clone()).then(() => response);
+          })
+          .catch(() => null);
+        if (cached) {
+          event.waitUntil(network.then(() => undefined));
+          return cached;
+        }
+        return (await network) || Response.error();
+      }),
+    );
+    return;
+  }
 
   if (url.pathname.includes('/ielts/audio/')) {
     // Safari and other media engines request byte ranges. Partial (206) responses

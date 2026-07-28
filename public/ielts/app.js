@@ -460,6 +460,18 @@
   var visualState = loadVisualState();
   var visualSection = 'pos';
   var visualRuntime = defaultVisualRuntime();
+  var corpusCatalog = null;
+  var corpusLoadState = 'idle';
+  var corpusLoadError = '';
+  var corpusQuery = '';
+  var corpusSearchTimer = null;
+  var corpusFilters = {
+    skill: 'all',
+    pos: 'all',
+    cefr: 'all',
+    image: 'all',
+  };
+  var corpusVisible = 60;
   var currentView = 'today';
   var session = null;
   var currentAudio = null;
@@ -1088,6 +1100,13 @@
         '词网游戏',
         (Array.isArray(VISUAL_LAB.gameModes) ? VISUAL_LAB.gameModes.length : 0) + ' 类',
       ) +
+      visualTab(
+        'corpus',
+        '词库地图',
+        corpusCatalog && corpusCatalog.statistics
+          ? Number(corpusCatalog.statistics.active_entries || 0).toLocaleString('en-US') + ' 词'
+          : 'PDF 总库',
+      ) +
       '</nav>' +
       '<section id="visualContent" class="visual-content"></section>';
     renderVisualSection();
@@ -1122,6 +1141,8 @@
       container.innerHTML = renderVisualPosLesson();
     } else if (visualSection === 'games') {
       container.innerHTML = renderVisualGames();
+    } else if (visualSection === 'corpus') {
+      renderCorpusCatalog(container);
     } else {
       var tasks = VISUAL_LAB.groups.filter(function (task) {
         return task.relation === visualSection;
@@ -1569,6 +1590,356 @@
       '<button class="secondary-button" type="button" data-action="visual-game-replay" data-mode-id="' +
       esc(mode.id) +
       '">再玩一轮</button></div></section>'
+    );
+  }
+
+  function renderCorpusCatalog(container) {
+    if (corpusLoadState === 'idle') {
+      container.innerHTML =
+        '<section class="panel corpus-loading" aria-live="polite">' +
+        '<span class="corpus-loading-mark" aria-hidden="true">↻</span>' +
+        '<div><p class="eyebrow">LOADING CORPUS</p><h2>正在载入全量词库地图</h2>' +
+        '<p>大词库只在打开这一页时下载，不影响手机进入日常训练的速度。</p></div></section>';
+      loadCorpusCatalog(false);
+      return;
+    }
+    if (corpusLoadState === 'loading') {
+      container.innerHTML =
+        '<section class="panel corpus-loading" aria-live="polite">' +
+        '<span class="corpus-loading-mark" aria-hidden="true">↻</span>' +
+        '<div><p class="eyebrow">LOADING CORPUS</p><h2>正在载入全量词库地图</h2>' +
+        '<p>完成后可以按听、说、读、写、词性和 CEFR 筛选。</p></div></section>';
+      return;
+    }
+    if (corpusLoadState === 'error' || !corpusCatalog) {
+      container.innerHTML =
+        '<section class="panel corpus-loading corpus-error" role="alert">' +
+        '<span class="corpus-loading-mark" aria-hidden="true">!</span>' +
+        '<div><p class="eyebrow">CORPUS UNAVAILABLE</p><h2>全量词库暂时没有载入</h2>' +
+        '<p>' +
+        esc(corpusLoadError || '请检查网络后重试；现有 50 词训练和图片游戏不受影响。') +
+        '</p><button class="secondary-button" type="button" data-action="corpus-retry">重新载入</button>' +
+        '</div></section>';
+      return;
+    }
+
+    var stats = corpusCatalog.statistics || {};
+    container.innerHTML =
+      '<section class="visual-section-intro corpus-intro">' +
+      '<div><p class="eyebrow">AUDITABLE IELTS CORPUS</p><h2>从 PDF 词表到可审核的学习地图</h2></div>' +
+      '<p>这里展示去重并剔除专名后的索引。听说读写可以重叠；“主分类”只用于浏览。词义、关系词和图片进入正式题目之前仍需教师确认。</p>' +
+      '</section>' +
+      '<section class="corpus-stat-grid" aria-label="词库统计">' +
+      corpusMetric(stats.active_entries, '去重词条') +
+      corpusMetric(stats.source_rows, '来源记录') +
+      corpusMetric(stats.image_eligible_entries, '待做图实词') +
+      corpusMetric(stats.excluded_proper_nouns, '专名词条剔除') +
+      '</section>' +
+      '<section class="corpus-skill-grid" aria-label="听说读写快捷入口">' +
+      corpusSkillButton('listening', '听力', stats.primary_skill_counts) +
+      corpusSkillButton('speaking', '口语', stats.primary_skill_counts) +
+      corpusSkillButton('reading', '阅读', stats.primary_skill_counts) +
+      corpusSkillButton('writing', '写作', stats.primary_skill_counts) +
+      '</section>' +
+      '<section class="panel corpus-browser">' +
+      '<div class="corpus-browser-head"><div><p class="eyebrow">FILTER THE MAP</p><h3>筛选词库</h3></div>' +
+      '<p><strong data-corpus-match-count>0</strong><span> 个匹配词条</span></p></div>' +
+      '<div class="corpus-controls">' +
+      '<label class="corpus-search"><span>查单词或主题</span><input type="search" inputmode="search" autocomplete="off" placeholder="例如 environment / health" value="' +
+      esc(corpusQuery) +
+      '" data-action="corpus-search"></label>' +
+      corpusSelect(
+        'skill',
+        '主分类',
+        [
+          ['all', '全部'],
+          ['listening', '听力'],
+          ['speaking', '口语'],
+          ['reading', '阅读'],
+          ['writing', '写作'],
+        ],
+        corpusFilters.skill,
+      ) +
+      corpusSelect(
+        'pos',
+        '词性',
+        [
+          ['all', '全部'],
+          ['noun', '名词'],
+          ['verb', '动词'],
+          ['adjective', '形容词'],
+          ['adverb', '副词'],
+          ['phrase', '短语'],
+        ],
+        corpusFilters.pos,
+      ) +
+      corpusSelect(
+        'cefr',
+        'CEFR',
+        [
+          ['all', '全部'],
+          ['A1', 'A1'],
+          ['A2', 'A2'],
+          ['B1', 'B1'],
+          ['B2', 'B2'],
+          ['C1', 'C1'],
+          ['unknown', '待标注'],
+        ],
+        corpusFilters.cefr,
+      ) +
+      corpusSelect(
+        'image',
+        '图片队列',
+        [
+          ['all', '全部'],
+          ['eligible', '可做图'],
+          ['review', '需确认词义'],
+          ['none', '非实词/暂不做图'],
+        ],
+        corpusFilters.image,
+      ) +
+      '</div>' +
+      '<div class="corpus-quality-note"><strong>为什么不是直接批量出图？</strong>' +
+      '<span>同一个拼写可能有不同词性和词义；先确认 sense，才能避免图片把学生带偏。</span></div>' +
+      '<div data-corpus-results></div>' +
+      '</section>';
+    renderCorpusResults(false);
+  }
+
+  function corpusMetric(value, label) {
+    return (
+      '<article><strong>' +
+      Number(value || 0).toLocaleString('en-US') +
+      '</strong><span>' +
+      esc(label) +
+      '</span></article>'
+    );
+  }
+
+  function corpusSkillButton(skill, label, counts) {
+    var active = corpusFilters.skill === skill;
+    return (
+      '<button class="corpus-skill-button skill-' +
+      esc(skill) +
+      (active ? ' is-active' : '') +
+      '" type="button" data-action="corpus-quick-skill" data-skill="' +
+      esc(skill) +
+      '" aria-pressed="' +
+      String(active) +
+      '"><span>' +
+      esc(label) +
+      '</span><strong>' +
+      Number((counts && counts[skill]) || 0).toLocaleString('en-US') +
+      '</strong><small>主分类词</small></button>'
+    );
+  }
+
+  function corpusSelect(filter, label, options, value) {
+    return (
+      '<label><span>' +
+      esc(label) +
+      '</span><select data-action="corpus-filter" data-filter="' +
+      esc(filter) +
+      '">' +
+      options
+        .map(function (option) {
+          return (
+            '<option value="' +
+            esc(option[0]) +
+            '"' +
+            (option[0] === value ? ' selected' : '') +
+            '>' +
+            esc(option[1]) +
+            '</option>'
+          );
+        })
+        .join('') +
+      '</select></label>'
+    );
+  }
+
+  function loadCorpusCatalog(force) {
+    if (corpusLoadState === 'loading' && !force) {
+      return;
+    }
+    corpusLoadState = 'loading';
+    corpusLoadError = '';
+    renderVisualSection();
+    fetchCorpusCatalogPayload(force ? 'reload' : 'no-cache')
+      .then(acceptCorpusCatalog)
+      .catch(failCorpusCatalog);
+  }
+
+  function fetchCorpusCatalogPayload(cacheMode) {
+    var catalogUrl = './corpus/catalog.json';
+    var networkError = null;
+    return fetch(catalogUrl, { cache: cacheMode })
+      .then(function (response) {
+        if (!response.ok) throw new Error('服务器返回 ' + response.status);
+        return response;
+      })
+      .catch(function (error) {
+        networkError = error;
+        if (!('caches' in window)) throw error;
+        return caches.match(catalogUrl).then(function (cached) {
+          if (cached) return cached;
+          throw networkError;
+        });
+      })
+      .then(function (response) {
+        return response.json();
+      });
+  }
+
+  function acceptCorpusCatalog(payload) {
+    if (!payload || !Array.isArray(payload.entries) || !payload.statistics) {
+      throw new Error('词库文件结构不完整');
+    }
+    corpusCatalog = payload;
+    corpusCatalog.entries.forEach(function (entry) {
+      entry._searchText = normaliseAnswer(
+        String(entry.headword || '') +
+          ' ' +
+          (Array.isArray(entry.topics) ? entry.topics.join(' ') : ''),
+      );
+    });
+    corpusLoadState = 'ready';
+    corpusLoadError = '';
+    var meta = document.querySelector('[data-section="corpus"] small');
+    if (meta) {
+      meta.textContent =
+        Number(payload.statistics.active_entries || 0).toLocaleString('en-US') + ' 词';
+    }
+    if (currentView === 'visual' && visualSection === 'corpus') renderVisualSection();
+  }
+
+  function failCorpusCatalog(error) {
+    corpusCatalog = null;
+    corpusLoadState = 'error';
+    corpusLoadError = error && error.message ? error.message : '网络请求失败';
+    if (currentView === 'visual' && visualSection === 'corpus') renderVisualSection();
+  }
+
+  function filteredCorpusEntries() {
+    if (!corpusCatalog || !Array.isArray(corpusCatalog.entries)) return [];
+    var query = normaliseAnswer(corpusQuery);
+    return corpusCatalog.entries.filter(function (entry) {
+      if (!entry || entry.status !== 'active') return false;
+      if (query && String(entry._searchText || '').indexOf(query) < 0) {
+        return false;
+      }
+      if (corpusFilters.skill !== 'all' && entry.primary_skill !== corpusFilters.skill) {
+        return false;
+      }
+      if (corpusFilters.pos !== 'all') {
+        var pos = Array.isArray(entry.pos) ? entry.pos : [];
+        if (
+          corpusFilters.pos === 'phrase' ? !entry.is_phrase : pos.indexOf(corpusFilters.pos) < 0
+        ) {
+          return false;
+        }
+      }
+      if (corpusFilters.cefr !== 'all') {
+        var levels = Array.isArray(entry.cefr) ? entry.cefr : [];
+        if (
+          corpusFilters.cefr === 'unknown'
+            ? levels.length > 0
+            : levels.indexOf(corpusFilters.cefr) < 0
+        ) {
+          return false;
+        }
+      }
+      var imageEligible = entry.image_mode && entry.image_mode !== 'none';
+      if (corpusFilters.image === 'eligible' && !imageEligible) return false;
+      if (
+        corpusFilters.image === 'review' &&
+        entry.image_prompt_status !== 'needs_teacher_approved_sense'
+      ) {
+        return false;
+      }
+      if (corpusFilters.image === 'none' && imageEligible) return false;
+      return true;
+    });
+  }
+
+  function renderCorpusResults(resetVisible) {
+    var mount = document.querySelector('[data-corpus-results]');
+    if (!mount) return;
+    if (resetVisible) corpusVisible = 60;
+    var matches = filteredCorpusEntries();
+    var shown = matches.slice(0, corpusVisible);
+    var count = document.querySelector('[data-corpus-match-count]');
+    if (count) count.textContent = matches.length.toLocaleString('en-US');
+    if (!matches.length) {
+      mount.innerHTML =
+        '<div class="empty-state corpus-empty">没有符合当前条件的词。可以清空搜索词或放宽筛选条件。</div>';
+      return;
+    }
+    mount.innerHTML =
+      '<div class="corpus-result-summary"><span>当前显示 ' +
+      shown.length.toLocaleString('en-US') +
+      ' / ' +
+      matches.length.toLocaleString('en-US') +
+      '</span><small>来源释义与例句不会在此公开复制</small></div>' +
+      '<div class="corpus-list">' +
+      shown.map(renderCorpusEntry).join('') +
+      '</div>' +
+      (shown.length < matches.length
+        ? '<button class="secondary-button corpus-more" type="button" data-action="corpus-more">再显示 ' +
+          Math.min(60, matches.length - shown.length) +
+          ' 个</button>'
+        : '');
+  }
+
+  function renderCorpusEntry(entry) {
+    var pos = Array.isArray(entry.pos) ? entry.pos : [];
+    var cefr = Array.isArray(entry.cefr) ? entry.cefr : [];
+    var topic = Array.isArray(entry.topics) && entry.topics.length ? entry.topics[0] : '主题待整理';
+    var imageEligible = entry.image_mode && entry.image_mode !== 'none';
+    var review = entry.proper_noun_sense_removed
+      ? '<span class="corpus-flag">专名义项已隔离</span>'
+      : '';
+    return (
+      '<article class="corpus-entry">' +
+      '<div class="corpus-entry-word"><strong>' +
+      esc(entry.headword) +
+      '</strong><span>' +
+      esc(topic) +
+      '</span></div>' +
+      '<div class="corpus-entry-tags">' +
+      '<span class="corpus-skill skill-' +
+      esc(entry.primary_skill) +
+      '">' +
+      esc(corpusSkillLabel(entry.primary_skill)) +
+      '</span>' +
+      pos
+        .slice(0, 3)
+        .map(function (label) {
+          return '<span>' + esc(label) + '</span>';
+        })
+        .join('') +
+      (cefr.length ? '<span>' + esc(cefr.join(' / ')) + '</span>' : '<span>CEFR 待标注</span>') +
+      '<span>' +
+      Number(entry.source_count || 0) +
+      ' 个来源</span>' +
+      '<span class="' +
+      (imageEligible ? 'image-ready' : 'image-none') +
+      '">' +
+      (imageEligible ? '待确认词义后做图' : '暂不进入图片队列') +
+      '</span>' +
+      review +
+      '</div></article>'
+    );
+  }
+
+  function corpusSkillLabel(skill) {
+    return (
+      {
+        listening: '听力',
+        speaking: '口语',
+        reading: '阅读',
+        writing: '写作',
+      }[skill] || '待分类'
     );
   }
 
@@ -2607,6 +2978,16 @@
     if (action === 'visual-game-continue') return continueVisualGame(button.dataset.modeId);
     if (action === 'visual-game-replay') return replayVisualGame(button.dataset.modeId);
     if (action === 'visual-game-audio') return playVisualGameAudio(button);
+    if (action === 'corpus-retry') return loadCorpusCatalog(true);
+    if (action === 'corpus-quick-skill') {
+      corpusFilters.skill =
+        corpusFilters.skill === button.dataset.skill ? 'all' : button.dataset.skill;
+      return renderVisualSection();
+    }
+    if (action === 'corpus-more') {
+      corpusVisible += 60;
+      return renderCorpusResults(false);
+    }
     if (action === 'reveal-word') return revealWord();
     if (action === 'play-word') return playWordFromButton(button);
     if (action === 'play-example') return playExample(button);
@@ -2632,7 +3013,7 @@
   }
 
   function changeVisualSection(section) {
-    if (['pos', 'synonym', 'antonym', 'games'].indexOf(section) < 0) return;
+    if (['pos', 'synonym', 'antonym', 'games', 'corpus'].indexOf(section) < 0) return;
     stopAudio();
     visualSection = section;
     renderVisualSection();
@@ -2953,12 +3334,28 @@
 
   function handleMainChange(event) {
     var input = event.target;
+    if (input.matches('[data-action="corpus-filter"]')) {
+      var filter = String(input.dataset.filter || '');
+      if (Object.prototype.hasOwnProperty.call(corpusFilters, filter)) {
+        corpusFilters[filter] = input.value;
+        renderCorpusResults(true);
+      }
+      return;
+    }
     if (input.matches('input[data-action="import-data"]') && input.files && input.files[0]) {
       importData(input.files[0]);
     }
   }
 
   function handleMainInput(event) {
+    if (event.target.matches('[data-action="corpus-search"]')) {
+      corpusQuery = event.target.value;
+      clearTimeout(corpusSearchTimer);
+      corpusSearchTimer = setTimeout(function () {
+        renderCorpusResults(true);
+      }, 90);
+      return;
+    }
     if (!session || currentSkill() !== 'spell' || event.target.id !== 'spellInput') return;
     session.taskState.answerValue = event.target.value;
   }
