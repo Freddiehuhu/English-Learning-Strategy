@@ -1018,6 +1018,39 @@ a {
   margin-top: 12px;
 }
 
+.form-task-actions {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.form-skip-button {
+  border-color: transparent;
+  color: var(--ink-soft);
+  background: transparent;
+}
+
+.form-skip-button:hover {
+  border-color: var(--line);
+  color: var(--navy);
+  background: #f8faf7;
+}
+
+.form-hint-limit {
+  display: inline-grid;
+  min-height: 44px;
+  padding: 0 12px;
+  place-items: center;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.form-skip-row {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0 2px;
+}
+
 .feedback {
   width: min(600px, 100%);
   min-height: 48px;
@@ -2130,8 +2163,21 @@ a {
     grid-template-columns: 1fr 1fr;
   }
 
-  .input-actions .primary-button:last-child:nth-child(3) {
+  .form-task-actions .form-check-button {
     grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .form-task-actions .form-hint-button,
+  .form-task-actions .form-hint-limit {
+    grid-column: 1 / -1;
+    min-width: 0;
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .form-skip-row .form-skip-button {
+    width: min(280px, 100%);
   }
 
   .sentence-step {

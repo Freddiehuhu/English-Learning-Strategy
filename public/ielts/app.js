@@ -1169,6 +1169,7 @@
       '</span><span class="pos-badge">' +
       (exercise.baseVisible ? '提示词：' + esc(word.word) : '词义提示：' + esc(word.zh)) +
       '</span></div>' +
+      formSkipRow(task) +
       '<div class="pos-question">' +
       '<p class="question-lead">第一步：空格需要哪一种词性？</p>' +
       '<blockquote>' +
@@ -1211,11 +1212,11 @@
       ' value="' +
       esc(task.answerValue || '') +
       '" />' +
-      '<div class="input-actions">' +
-      formHintButton(task) +
-      '<button class="primary-button" type="submit"' +
+      '<div class="input-actions form-task-actions">' +
+      '<button class="primary-button form-check-button" type="submit"' +
       (task.completed ? ' disabled' : '') +
       '>检查词形</button>' +
+      formHintButton(task) +
       '</div>' +
       '</form>' +
       renderFormFeedback(task) +
@@ -1236,6 +1237,7 @@
       (exercise.type === 'inflection' ? '拼写规则' : '直接变形') +
       '</span></div>' +
       '<p class="question-lead">不看词族，按指定含义和词性直接写出新形式。</p>' +
+      formSkipRow(task) +
       '<div class="direct-form-prompt">' +
       '<span class="direct-seed"><small>提示词</small><strong>' +
       esc(exercise.base) +
@@ -1254,11 +1256,11 @@
       ' value="' +
       esc(task.answerValue || '') +
       '" />' +
-      '<div class="input-actions">' +
-      formHintButton(task) +
-      '<button class="primary-button" type="submit"' +
+      '<div class="input-actions form-task-actions">' +
+      '<button class="primary-button form-check-button" type="submit"' +
       (task.completed ? ' disabled' : '') +
       '>检查词形</button>' +
+      formHintButton(task) +
       '</div>' +
       '</form>' +
       renderFormFeedback(task) +
@@ -1281,6 +1283,7 @@
       '<p class="question-lead">已给出名词 <strong>' +
       esc(exercise.base) +
       '</strong>，请补全动词、形容词和副词。</p>' +
+      formSkipRow(task) +
       '<form class="family-form" data-skill-form="forms">' +
       '<div class="family-form-grid">' +
       exercise.slots
@@ -1332,13 +1335,13 @@
         })
         .join('') +
       '</div>' +
-      '<div class="input-actions">' +
-      formHintButton(task) +
-      '<button class="primary-button" type="submit"' +
+      '<div class="input-actions form-task-actions">' +
+      '<button class="primary-button form-check-button" type="submit"' +
       (task.completed ? ' disabled' : '') +
       '>检查' +
       answerSlotCount +
       '格</button>' +
+      formHintButton(task) +
       '</div>' +
       '</form>' +
       renderFormFeedback(task) +
@@ -1360,16 +1363,25 @@
   function formHintButton(task) {
     var labels = ['给我提示（不显示答案）', '再降低一点难度', '给我乱序字母', '提示已到最细'];
     var level = Math.min(3, task.formAttempts || 0);
+    if (task.completed) return '';
+    if (level >= 3) {
+      return '<span class="form-hint-limit" role="status">提示已到最细</span>';
+    }
     return (
-      '<button class="secondary-button" type="button" data-action="reveal-form"' +
-      (task.completed || level >= 3 ? ' disabled' : '') +
-      '>' +
+      '<button class="secondary-button form-hint-button" type="button" data-action="reveal-form">' +
       labels[level] +
-      '</button>' +
-      (level >= 3 && !task.completed
-        ? '<button class="secondary-button" type="button" data-action="skip-form">暂时跳过</button>'
-        : '')
+      '</button>'
     );
+  }
+
+  function formSkipButton(task) {
+    if (task.completed) return '';
+    return '<button class="secondary-button form-skip-button" type="button" data-action="skip-form" aria-label="先跳过本题，稍后复习">先跳过（稍后复习）</button>';
+  }
+
+  function formSkipRow(task) {
+    var button = formSkipButton(task);
+    return button ? '<div class="form-skip-row">' + button + '</div>' : '';
   }
 
   function renderCompletedFamily(word, task) {
@@ -2000,8 +2012,17 @@
   function skipFormExercise() {
     if (!session || currentSkill() !== 'forms') return;
     var word = currentWord();
-    recordResult(word, 'forms', false, '完成三层提示后暂时跳过；未显示答案');
-    showToast('已记为待复习；下次词形专项会优先出现。');
+    var task = session.taskState;
+    if (task.completed || task.skipping) return;
+    task.skipping = true;
+    var usedHelp = (task.formAttempts || 0) > 0;
+    recordResult(
+      word,
+      'forms',
+      false,
+      usedHelp ? '尝试或使用提示后主动跳过；未显示答案' : '主动跳过；未显示答案',
+    );
+    showToast('已跳过，不显示答案；这道题已加入待复习。');
     advanceSession();
   }
 

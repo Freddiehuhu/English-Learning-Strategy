@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wordlab-50-v4-form-practice';
+const CACHE_NAME = 'wordlab-50-v5-form-skip';
 const CORE_ASSETS = [
   './',
   './index.html',
