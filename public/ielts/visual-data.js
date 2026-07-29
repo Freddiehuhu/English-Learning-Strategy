@@ -2,7 +2,7 @@
   'use strict';
 
   window.IELTS_VISUAL_LAB = {
-    version: 3,
+    version: 4,
     posScene: {
       id: 'pos-foundation',
       image: './images/semantic-lab/pos-scene.webp',
@@ -192,6 +192,151 @@
             area: 'bottom-right',
             sceneLabel: '徒步者以有风险的方式靠近悬崖边缘',
             prompt: '把 danger 变成副词：The hiker stood ______ close to the cliff edge.',
+          },
+        ],
+      },
+      {
+        id: 'family-atlas-strength',
+        targetWordId: 'foundation-strength',
+        title: 'strength 词族',
+        image: './images/semantic-lab/family-strength-v1.webp',
+        width: 1200,
+        height: 800,
+        alt: '同一科学实验室的四格无文字场景：测量电磁铁吸力、增加线圈、举起多枚金属垫圈和强力吸附铁片。',
+        panels: [
+          {
+            slot: 'n.',
+            area: 'top-left',
+            sceneLabel: '学生用测力计测试电磁铁的吸力强度',
+            prompt: '已知名词',
+          },
+          {
+            slot: 'v.',
+            area: 'top-right',
+            sceneLabel: '学生增加线圈，使磁场得到加强',
+            prompt: '把 strength 变成动词：Adding more coils will ______ the magnetic field.',
+          },
+          {
+            slot: 'adj.',
+            area: 'bottom-left',
+            sceneLabel: '完成后的电磁铁足以举起多枚金属垫圈',
+            prompt:
+              '把 strength 变成形容词：The electromagnet is ______ enough to lift six metal washers.',
+          },
+          {
+            slot: 'adv.',
+            area: 'bottom-right',
+            sceneLabel: '许多铁片受到强力吸引，快速聚向电磁铁',
+            prompt: '把 strength 变成副词：The iron pieces were ______ attracted to the magnet.',
+          },
+        ],
+      },
+      {
+        id: 'family-atlas-difference',
+        targetWordId: 'foundation-difference',
+        title: 'difference 词族',
+        image: './images/semantic-lab/family-difference-v1.webp',
+        width: 1200,
+        height: 800,
+        alt: '同一纸飞机实验的四格无文字场景：比较两架飞机、观察机翼与重量差异、记录不同航线和观察同一阵风下的不同反应。',
+        panels: [
+          {
+            slot: 'n.',
+            area: 'top-left',
+            sceneLabel: '学生并排比较两架纸飞机的明显差异',
+            prompt: '已知名词',
+          },
+          {
+            slot: 'v.',
+            area: 'top-right',
+            sceneLabel: '两架飞机在机翼形状和重量上存在差异',
+            prompt: '把 difference 变成动词：The two paper planes ______ in wing shape and weight.',
+          },
+          {
+            slot: 'adj.',
+            area: 'bottom-left',
+            sceneLabel: '两架飞机分别沿不同的飞行轨迹前进',
+            prompt: '把 difference 变成形容词：Each plane followed a ______ flight path.',
+          },
+          {
+            slot: 'adv.',
+            area: 'bottom-right',
+            sceneLabel: '同一台风扇吹来时，一架上升、一架下坠',
+            prompt:
+              '把 difference 变成副词：The two planes responded ______ to the same gust of wind.',
+          },
+        ],
+      },
+      {
+        id: 'family-atlas-competition',
+        targetWordId: 'foundation-competition',
+        title: 'competition 词族',
+        image: './images/semantic-lab/family-competition-v1.webp',
+        width: 1200,
+        height: 800,
+        alt: '同一校园田径赛的四格无文字场景：比赛开场、预赛争夺决赛席位、势均力敌的决赛和遵守规则全力竞速的朋友。',
+        panels: [
+          {
+            slot: 'n.',
+            area: 'top-left',
+            sceneLabel: '多所学校的选手参加正式田径比赛，场边摆有奖杯',
+            prompt: '已知名词',
+          },
+          {
+            slot: 'v.',
+            area: 'top-right',
+            sceneLabel: '多名选手在预赛中争夺决赛席位',
+            prompt:
+              '把 competition 变成动词：Several runners will ______ for a place in the final.',
+          },
+          {
+            slot: 'adj.',
+            area: 'bottom-left',
+            sceneLabel: '决赛全程势均力敌，选手几乎同时冲线',
+            prompt:
+              '把 competition 变成形容词：The final race was highly ______ from start to finish.',
+          },
+          {
+            slot: 'adv.',
+            area: 'bottom-right',
+            sceneLabel: '两位朋友遵守赛道规则全力竞速，赛后友好握手',
+            prompt: '把 competition 变成副词：The two friends raced fairly and ______.',
+          },
+        ],
+      },
+      {
+        id: 'family-atlas-creation',
+        targetWordId: 'foundation-creation',
+        title: 'creation 词族',
+        image: './images/semantic-lab/family-creation-v1.webp',
+        width: 1200,
+        height: 800,
+        alt: '同一回收材料艺术展的四格无文字场景：欣赏完成作品、用纸箱搭建模型、展示富有新意的设计和巧妙改造废旧材料装饰舞台。',
+        panels: [
+          {
+            slot: 'n.',
+            area: 'top-left',
+            sceneLabel: '学生展示一件已经完成的原创回收材料作品',
+            prompt: '已知名词',
+          },
+          {
+            slot: 'v.',
+            area: 'top-right',
+            sceneLabel: '学生正在用旧纸箱搭建模型城市',
+            prompt: '把 creation 变成动词：The students used old boxes to ______ a model city.',
+          },
+          {
+            slot: 'adj.',
+            area: 'bottom-left',
+            sceneLabel: '评委赞赏一件构思新颖、功能巧妙的设计',
+            prompt: '把 creation 变成形容词：The judges praised her ______ design.',
+          },
+          {
+            slot: 'adv.',
+            area: 'bottom-right',
+            sceneLabel: '团队把瓶子、纸板等废旧物巧妙改造成舞台装饰',
+            prompt:
+              '把 creation 变成副词：The team used recycled materials ______ to decorate the stage.',
           },
         ],
       },

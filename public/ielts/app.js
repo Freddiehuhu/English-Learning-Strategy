@@ -84,7 +84,12 @@
       '差异',
       [
         ['difference', 'n.', '差异', '这是题面给出的名词。'],
-        ['differ', 'v.', '不同', '去掉名词词尾 -ence，并保留双写 r。'],
+        [
+          'differ',
+          'v.',
+          '不同',
+          '去掉名词词尾 -ence，得到 differ；注意保留双写 f，词尾只有一个 r。',
+        ],
         ['different', 'adj.', '不同的', '从动词出发接 -ent，并保留双写 f。'],
         ['differently', 'adv.', '不同地', '先写出形容词，再加 -ly。'],
       ],
@@ -603,7 +608,7 @@
 
   function defaultVisualState() {
     return {
-      version: 2,
+      version: 3,
       tasks: {},
       history: [],
     };
@@ -637,6 +642,7 @@
           mastered: Boolean(task.mastered),
           last: Math.max(0, Number(task.last) || 0),
           step: Math.max(0, Number(task.step) || 0),
+          skipped: Boolean(task.skipped),
         };
       });
     }
@@ -648,7 +654,7 @@
           .slice(-240)
       : [];
     return {
-      version: 2,
+      version: 3,
       tasks: tasks,
       history: history.slice(-240),
     };
@@ -679,6 +685,7 @@
         mastered: false,
         last: 0,
         step: 0,
+        skipped: false,
       };
     }
     return visualState.tasks[taskId];
@@ -702,6 +709,7 @@
 
   function validateVisualLab(wordIds) {
     var ids = visualTaskIds();
+    var safeId = /^[a-z0-9-]+$/;
     var foundationIds = new Set(
       FORM_FOUNDATIONS.map(function (foundation) {
         return foundation.id;
@@ -714,8 +722,18 @@
     if (new Set(ids).size !== ids.length) {
       console.error('WordLab visual vocabulary data contains duplicate task IDs.');
     }
+    if (
+      ids.some(function (taskId) {
+        return !safeId.test(String(taskId || ''));
+      })
+    ) {
+      console.error('WordLab visual vocabulary data contains an unsafe task ID.');
+    }
+    var familyTargets = new Set();
+    var familyImages = new Set();
     (Array.isArray(VISUAL_LAB.familyAtlases) ? VISUAL_LAB.familyAtlases : []).forEach(
       function (task) {
+        task = task || {};
         var foundation = FORM_FOUNDATIONS.find(function (candidate) {
           return candidate.id === task.targetWordId;
         });
@@ -749,9 +767,25 @@
         var leaksAnswer = hiddenAnswers.some(function (answer) {
           return answer && new RegExp('\\b' + answer + '\\b').test(publicCopy);
         });
+        var requiredCopy = [task && task.title, task && task.alt].concat(
+          panels.reduce(function (copy, panel) {
+            return copy.concat([panel && panel.sceneLabel, panel && panel.prompt]);
+          }, []),
+        );
+        var hasRequiredCopy = requiredCopy.every(function (copy) {
+          return typeof copy === 'string' && copy.trim().length > 0;
+        });
+        var duplicateTarget = familyTargets.has(task && task.targetWordId);
+        var duplicateImage = familyImages.has(task && task.image);
+        if (task && task.targetWordId) familyTargets.add(task.targetWordId);
+        if (task && task.image) familyImages.add(task.image);
         if (
           !task.id ||
+          !safeId.test(String(task.id)) ||
           !foundationIds.has(task.targetWordId) ||
+          duplicateTarget ||
+          duplicateImage ||
+          !hasRequiredCopy ||
           slots.length !== 4 ||
           panels.length !== 4 ||
           new Set(panelSlots).size !== 4 ||
@@ -1383,7 +1417,7 @@
     if (!foundation || !foundation.formPractice) return '';
     var taskState = getVisualTaskState(task.id);
     var retrying = Boolean(visualRuntime.unlockedTasks[task.id]);
-    var skipped = Boolean(visualRuntime.skippedTasks[task.id]);
+    var skipped = Boolean(taskState.skipped || visualRuntime.skippedTasks[task.id]);
     var complete = taskState.mastered && !retrying;
     var practiceSlots = visualFamilyPracticeSlots(task);
     var step = Math.min(Number(taskState.step) || 0, practiceSlots.length - 1);
@@ -3403,6 +3437,7 @@
       'is-correct',
     );
     var nextStep = step + 1;
+    taskState.skipped = false;
     if (nextStep >= practiceSlots.length) {
       taskState.mastered = true;
       taskState.last = Date.now();
@@ -3429,6 +3464,7 @@
     recordVisualResult(task.id, false, 'skip');
     var taskState = getVisualTaskState(task.id);
     taskState.step = 0;
+    taskState.skipped = true;
     visualRuntime.skippedTasks[task.id] = true;
     visualRuntime.taskSteps[task.id] = 0;
     saveVisualState();
@@ -3515,6 +3551,7 @@
     if (familyTask) {
       var familyState = getVisualTaskState(taskId);
       familyState.step = 0;
+      familyState.skipped = false;
       visualRuntime.taskSteps[taskId] = 0;
       saveVisualState();
       replaceVisualFamilyCard(familyTask);
