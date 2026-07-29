@@ -22,6 +22,12 @@
     forms: '词形',
     sentence: '句用',
   };
+  var SKILL_CHAIN_LABELS = {
+    sound: '声音与核心义',
+    spell: '无提示拼写',
+    forms: '词形与构词',
+    sentence: '搭配到表达',
+  };
   var POS_LABELS = {
     'n.': '名词',
     'v.': '动词',
@@ -117,6 +123,56 @@
         ['create', 'v.', '创造', '去掉名词词尾 -ion，恢复动词末尾 e。'],
         ['creative', 'adj.', '有创造力的', '从动词出发，去掉末尾 e，再接 -ive。'],
         ['creatively', 'adv.', '创造性地', '先写出形容词，再加 -ly。'],
+      ],
+    ],
+    [
+      'safety',
+      '安全',
+      [
+        ['safety', 'n.', '安全', '这是题面给出的名词。'],
+        [
+          'save',
+          'v.',
+          '挽救；救助',
+          '先从 safety 还原 safe，再把词干中的 f 变为 v；这不是简单添加后缀。',
+        ],
+        ['safe', 'adj.', '安全的', '从名词 safety 去掉词尾 -ty。'],
+        ['safely', 'adv.', '安全地', '在 safe 后加 -ly，并保留末尾 e。'],
+      ],
+    ],
+    [
+      'extension',
+      '延伸；扩建部分',
+      [
+        ['extension', 'n.', '延伸；扩建部分', '这是题面给出的名词。'],
+        ['extend', 'v.', '延伸；扩建', '把名词词尾 -sion 换成动词词尾 -d。'],
+        [
+          'extensive',
+          'adj.',
+          '广泛的；大量的',
+          '把名词词尾 -ion 换成 -ive；注意 extensive 不等于 extended。',
+        ],
+        ['extensively', 'adv.', '广泛地', '先写出形容词 extensive，再加 -ly。'],
+      ],
+    ],
+    [
+      'equality',
+      '平等；相等',
+      [
+        ['equality', 'n.', '平等；相等', '这是题面给出的名词。'],
+        ['equal', 'v.', '等于；比得上', '从名词 equality 去掉词尾 -ity。'],
+        ['equal', 'adj.', '相等的；同等的', '形容词与动词拼写相同，要根据句中位置判断。'],
+        ['equally', 'adv.', '相等地；平均地', '在 equal 后加 -ly，拼写中形成双写 ll。'],
+      ],
+    ],
+    [
+      'completion',
+      '完成；结束',
+      [
+        ['completion', 'n.', '完成；结束', '这是题面给出的名词。'],
+        ['complete', 'v.', '完成', '把名词词尾 -ion 去掉，恢复动词末尾 e。'],
+        ['complete', 'adj.', '完整的；全部的', '形容词与动词拼写相同，要根据句法判断。'],
+        ['completely', 'adv.', '完全地', '在 complete 后加 -ly，并保留末尾 e。'],
       ],
     ],
   ].map(function (group) {
@@ -775,6 +831,30 @@
         var hasRequiredCopy = requiredCopy.every(function (copy) {
           return typeof copy === 'string' && copy.trim().length > 0;
         });
+        var story = task.story || {};
+        var etymology = task.etymology || {};
+        var storyValid = [story.title, story.english, story.chinese, story.retellPrompt].every(
+          function (copy) {
+            return typeof copy === 'string' && copy.trim().length > 0;
+          },
+        );
+        var sources = Array.isArray(etymology.sources) ? etymology.sources : [];
+        var etymologyValid =
+          ['剧情卡', '来源彩蛋'].indexOf(etymology.level) >= 0 &&
+          [etymology.fact, etymology.memoryHook, etymology.modernRule].every(function (copy) {
+            return typeof copy === 'string' && copy.trim().length > 0;
+          }) &&
+          sources.length > 0 &&
+          sources.every(function (source) {
+            return (
+              source &&
+              typeof source.label === 'string' &&
+              source.label.trim().length > 0 &&
+              /^https:\/\/(www\.)?(merriam-webster|oxfordlearnersdictionaries)\.com\//.test(
+                String(source.url || ''),
+              )
+            );
+          });
         var duplicateTarget = familyTargets.has(task && task.targetWordId);
         var duplicateImage = familyImages.has(task && task.image);
         if (task && task.targetWordId) familyTargets.add(task.targetWordId);
@@ -786,6 +866,8 @@
           duplicateTarget ||
           duplicateImage ||
           !hasRequiredCopy ||
+          !storyValid ||
+          !etymologyValid ||
           slots.length !== 4 ||
           panels.length !== 4 ||
           new Set(panelSlots).size !== 4 ||
@@ -797,6 +879,8 @@
             return panelAreas.indexOf(area) >= 0;
           }) ||
           String(task.image || '').indexOf('./images/semantic-lab/') !== 0 ||
+          Number(task.width) !== 1200 ||
+          Number(task.height) !== 800 ||
           leaksAnswer
         ) {
           console.error('Invalid visual word-family atlas:', task && task.id);
@@ -823,8 +907,28 @@
         console.error('Invalid visual game mode:', mode && mode.id);
         return;
       }
+      var modeUsesAudio = mode.tasks.some(function (task) {
+        return Boolean(task && task.audioId);
+      });
+      if (
+        modeUsesAudio &&
+        (!(typeof mode.audioLabel === 'string' && mode.audioLabel.trim()) ||
+          !(typeof mode.audioStatus === 'string' && mode.audioStatus.trim()))
+      ) {
+        console.error('Visual game audio guidance is missing:', mode.id);
+      }
       mode.tasks.forEach(function (task) {
-        var validImage = !task.image || String(task.image).indexOf('./images/semantic-lab/') === 0;
+        var hasImage = Boolean(task.image);
+        var validImage =
+          !hasImage ||
+          (String(task.image).indexOf('./images/semantic-lab/') === 0 &&
+            typeof task.alt === 'string' &&
+            task.alt.trim().length > 0 &&
+            (task.caption === undefined ||
+              (typeof task.caption === 'string' && task.caption.trim().length > 0)) &&
+            Number(task.width) === 1200 &&
+            Number(task.height) > 0 &&
+            ['left', 'right', 'all'].indexOf(task.focus) >= 0);
         if (
           !task.id ||
           !wordIds.has(task.targetWordId) ||
@@ -979,9 +1083,9 @@
     main.innerHTML =
       '<section class="page-heading">' +
       '<div>' +
-      '<p class="eyebrow">TODAY’S PRACTICE</p>' +
-      '<h1>今天先练准确，再练速度</h1>' +
-      '<p>每个词分别训练声音、拼写、词形和句中使用；只认识中文不算掌握。</p>' +
+      '<p class="eyebrow">ONE WORD · ONE LEARNING LOOP</p>' +
+      '<h1>同一个词，走完一条学习闭环</h1>' +
+      '<p>系统让声音、拼写、词形、搭配和造句连续发生；每一关都为下一关留下可用的记忆线索。</p>' +
       '</div>' +
       '<span class="date-chip">' +
       esc(today) +
@@ -991,15 +1095,18 @@
       '<article class="panel start-panel">' +
       '<p class="eyebrow">15–20 MINUTES</p>' +
       '<h2>' +
-      (queue.length ? '今日 ' + queue.length + ' 词，完成四关训练' : '今日到期任务已完成') +
+      (queue.length ? '今日 ' + queue.length + ' 词，每个词连续走完四关' : '今日到期任务已完成') +
       '</h2>' +
       '<p>' +
       (queue.length
-        ? '先听音和跟读，再完成无提示听写、词性判断与词形填写，最后用词块搭出正确句子并仿写。'
+        ? '先听音、跟读并确认核心义；随后遮住拼写，判断词形，再从自然搭配进入完整句子。图片、故事和词源会在需要复盘时出现。'
         : '你可以继续做专项练习，或明天按间隔计划回来复习。') +
       '</p>' +
-      '<ol class="session-steps">' +
-      '<li>01 听音跟读</li><li>02 听写拼词</li><li>03 词形变换</li><li>04 句子迁移</li>' +
+      '<ol class="session-steps integrated-loop" aria-label="每日学习闭环">' +
+      '<li><span>01</span><strong>声音与核心义</strong><small>听辨 · 跟读</small></li>' +
+      '<li><span>02</span><strong>无提示拼写</strong><small>盲听 · 检索</small></li>' +
+      '<li><span>03</span><strong>词形与构词</strong><small>判断 · 变形</small></li>' +
+      '<li><span>04</span><strong>搭配到表达</strong><small>词块 · 造句</small></li>' +
       '</ol>' +
       '<div class="start-actions">' +
       '<button class="primary-button" type="button" data-action="start-daily"' +
@@ -1028,35 +1135,39 @@
       '</article>' +
       '</div>' +
       '</section>' +
+      '<section class="repair-heading" aria-labelledby="repairHeading">' +
+      '<div><p class="eyebrow">ERROR-ADAPTIVE REPAIR</p><h2 id="repairHeading">专项练习是错误修复站</h2></div>' +
+      '<p>哪一关不稳，就回到对应站点做短练；稳定后再回到完整闭环。图像关系游戏只在核心词义建立后使用。</p>' +
+      '</section>' +
       '<section class="module-grid" aria-label="专项训练">' +
       moduleCard(
         '01',
         '声音与跟读',
-        '听英音／美音，拆音节与重音，录下自己的发音做 A/B 对比。',
+        '修复听辨、重音和尾音：听英音／美音，录下自己的发音做 A/B 对比。',
         'sound',
       ) +
       moduleCard(
         '02',
         '听写拼词',
-        '盲听输入，支持暂停与变速重播；需要时获取不直接给答案的提示。',
+        '修复声音到拼写的连接：盲听输入、暂停与变速重播，提示不直接给答案。',
         'spell',
       ) +
       moduleCard(
         '03',
         '词形变换',
-        '混合练习四格词族、直接变形、屈折规则和语境填空；答对前不显示答案。',
+        '修复词性和构词错误：预测后再验证四格词族、直接变形、屈折与语境。',
         'forms',
       ) +
       moduleCard(
         '04',
         '句子工坊',
-        '从词块排序到受控仿写，用范句和检查表修改自己的句子。',
+        '修复搭配、句法和表达：先回忆自然词块，再排序、仿写并修改完整句子。',
         'sentence',
       ) +
       viewModuleCard(
         '05',
         '图像词义实验室',
-        '用手绘场景看懂名、动、形、副，再辨别近义词的细微差别和反义词。',
+        '修复意义混淆：用手绘场景复盘词族，再做近反义、同音同形与语义分类。',
         'visual',
       ) +
       '</section>';
@@ -1554,11 +1665,61 @@
           );
         })
         .join('') +
-      '</div><div class="visual-result-actions"><span>✓ 三个变形全部独立拼对</span>' +
+      '</div>' +
+      renderVisualFamilyMemory(task) +
+      '<div class="visual-result-actions"><span>✓ 三个变形全部独立拼对</span>' +
       '<button class="secondary-button" type="button" data-action="visual-retry" data-task-id="' +
       esc(task.id) +
       '">遮住答案再练一次</button></div></section>'
     );
+  }
+
+  function renderVisualFamilyMemory(task) {
+    var story = task && task.story;
+    var etymology = task && task.etymology;
+    if (!story && !etymology) return '';
+    var storyMarkup = story
+      ? '<details class="visual-family-story" open><summary><span>四格故事链</span><strong>' +
+        esc(story.title || '读一遍，再收起文字复述') +
+        '</strong></summary><div><p class="visual-family-story-en" lang="en">' +
+        esc(story.english) +
+        '</p><p>' +
+        esc(story.chinese) +
+        '</p></div></details><p class="visual-family-retell"><strong>复述挑战</strong>' +
+        esc(story.retellPrompt || '收起故事，只看四格图，用四种词性把事件讲一遍。') +
+        '</p>'
+      : '';
+    var sourceMarkup =
+      etymology && Array.isArray(etymology.sources)
+        ? etymology.sources
+            .map(function (source) {
+              return (
+                '<a href="' +
+                esc(source.url) +
+                '" target="_blank" rel="noreferrer noopener">' +
+                esc(source.label) +
+                '</a>'
+              );
+            })
+            .join('')
+        : '';
+    var etymologyMarkup = etymology
+      ? '<details class="visual-family-etymology"><summary><span>' +
+        esc(etymology.level || '词源卡') +
+        '</span><strong>词源故事与记忆钩子</strong></summary><div class="visual-family-etymology-grid">' +
+        '<article><small>真实词源</small><p>' +
+        esc(etymology.fact) +
+        '</p></article><article><small>想象镜头</small><p>' +
+        esc(etymology.memoryHook) +
+        '</p></article><article><small>今天怎么变</small><p>' +
+        esc(etymology.modernRule) +
+        '</p></article></div>' +
+        (sourceMarkup
+          ? '<p class="visual-family-sources"><span>核实来源</span>' + sourceMarkup + '</p>'
+          : '') +
+        '</details>'
+      : '';
+    return '<div class="visual-family-memory">' + storyMarkup + etymologyMarkup + '</div>';
   }
 
   function renderVisualComparisonCard(task) {
@@ -1768,9 +1929,16 @@
     var task = tasks[index];
     var answered = Boolean(visualRuntime.gameAnswered[task.id]);
     var progress = visualGameModeProgress(mode);
+    var imageFocus = ['left', 'right', 'all'].indexOf(task.focus) >= 0 ? task.focus : 'left';
+    var imageCue =
+      imageFocus === 'all'
+        ? '<span class="visual-side-cue visual-side-cue-all">观察整图</span>'
+        : '<span class="visual-side-cue">只看' +
+          (imageFocus === 'right' ? '右' : '左') +
+          '图</span>';
     var image = task.image
       ? '<figure class="visual-game-figure"><div class="visual-image-frame focus-' +
-        esc(task.focus || 'left') +
+        esc(imageFocus) +
         '"><img src="' +
         esc(task.image) +
         '" data-src="' +
@@ -1780,20 +1948,28 @@
         '" width="' +
         Number(task.width || 1200) +
         '" height="' +
-        Number(task.height || 751) +
-        '" loading="lazy" decoding="async"><span class="visual-side-cue">只看' +
-        (task.focus === 'right' ? '右' : '左') +
-        '图</span><div class="visual-image-error" data-image-error hidden role="status">图片暂时没有载入。' +
+        Number(task.height || 800) +
+        '" loading="lazy" decoding="async">' +
+        imageCue +
+        '<div class="visual-image-error" data-image-error hidden role="status">图片暂时没有载入。' +
         '<button type="button" data-action="visual-retry-image">重新加载图片</button></div></div>' +
         '<figcaption>' +
-        esc(task.alt) +
+        esc(task.caption || '先观察画面，再结合句子判断。') +
         '</figcaption></figure>'
       : '';
+    var audioLabel = task.audioLabel || mode.audioLabel || '单词语音';
+    var audioStatus = task.audioStatus || mode.audioStatus || '先听读音，再结合题目判断。';
     var audio = task.audioId
       ? '<div class="visual-game-listen"><button class="audio-button visual-game-audio" type="button" data-action="visual-game-audio" data-audio-id="' +
         esc(task.audioId) +
-        '" data-audio-label="同音词语音" data-status-target="visualGameAudioStatus" aria-label="播放同音词语音"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">先听声音</span></button>' +
-        '<span id="visualGameAudioStatus" aria-live="polite">同音词要靠句子决定拼写</span></div>'
+        '" data-audio-label="' +
+        esc(audioLabel) +
+        '" data-status-target="visualGameAudioStatus" aria-label="播放' +
+        esc(audioLabel) +
+        '"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">先听声音</span></button>' +
+        '<span id="visualGameAudioStatus" aria-live="polite">' +
+        esc(audioStatus) +
+        '</span></div>'
       : '';
     var word = task.word
       ? '<div class="visual-game-word" aria-label="本题单词">' + esc(task.word) + '</div>'
@@ -2363,18 +2539,33 @@
 
     setActiveNav(skill);
     currentView = skill;
-    var headings = {
+    var focusHeadings = {
       sound: ['听音跟读', '先建立声音，再看拼写。录音只在当前页面内使用。'],
       spell: ['听写拼词', '先盲听拼写，可暂停和变速重播；提示不会直接显示答案。'],
       forms: ['词形变换', '四格词族、直接变形与语境填空交替出现；答案在答对前保持隐藏。'],
-      sentence: ['句子工坊', '先用词块搭好骨架，再完成受控仿写与修改。'],
+      sentence: ['句子工坊', '先回忆自然搭配，再用词块搭好骨架并完成受控仿写。'],
     };
+    var dailyHeadings = {
+      sound: [
+        '第 1 关 · 声音与核心义',
+        '听清、跟读并确认一个核心义，为接下来的无提示拼写留下声音线索。',
+      ],
+      spell: ['第 2 关 · 无提示拼写', '保持同一个词，先盲听检索完整拼写；需要时只获得最小提示。'],
+      forms: [
+        '第 3 关 · 词形与构词',
+        '继续处理同一个词的词性、变形和句中位置；答案在作答前保持隐藏。',
+      ],
+      sentence: ['第 4 关 · 搭配到表达', '先从记忆中提取一个自然词块，再把同一个词带入完整句子。'],
+    };
+    var headings = session.type === 'daily' ? dailyHeadings : focusHeadings;
 
     main.innerHTML =
       '<section class="page-heading">' +
       '<div>' +
       '<p class="eyebrow">' +
-      (session.type === 'daily' ? 'DAILY SESSION' : 'FOCUS PRACTICE') +
+      (session.type === 'daily'
+        ? 'CONTINUOUS LOOP · ' + (session.stageIndex + 1) + ' / ' + session.stages.length
+        : 'FOCUS PRACTICE') +
       '</p>' +
       '<h1>' +
       headings[skill][0] +
@@ -2431,18 +2622,21 @@
           ' / ' +
           session.words.length +
           ' 词 · ' +
-          SKILL_SHORT[currentSkill()]
+          SKILL_CHAIN_LABELS[currentSkill()]
         : '第 ' + wordPosition + ' / ' + session.words.length + ' 题';
     return (
       '<article class="panel queue-panel">' +
-      '<h3>当前队列</h3>' +
+      '<h3>' +
+      (session.type === 'daily' ? '本词学习链' : '当前队列') +
+      '</h3>' +
       '<p>' +
       (session.type === 'daily'
-        ? '同一个词依次通过四关。'
+        ? '同一个词一直保留到第四关；图片和故事只在相应复盘节点解锁。'
         : currentSkill() === 'forms'
           ? '基础词族与薄弱词交替，题型不会连续重复。'
           : '到期和薄弱项目优先。') +
       '</p>' +
+      renderLearningStageTrack() +
       '<div class="queue-progress"><span>' +
       esc(stageText) +
       '</span><button class="quiet-button" type="button" data-action="leave-session">退出</button></div>' +
@@ -2460,6 +2654,33 @@
         .join('') +
       '</div>' +
       '</article>'
+    );
+  }
+
+  function renderLearningStageTrack() {
+    if (!session || session.type !== 'daily') return '';
+    return (
+      '<ol class="learning-stage-track" aria-label="本词四关进度">' +
+      session.stages
+        .map(function (skill, index) {
+          var className =
+            index < session.stageIndex
+              ? 'is-done'
+              : index === session.stageIndex
+                ? 'is-current'
+                : '';
+          return (
+            '<li class="' +
+            className +
+            '"><span>' +
+            String(index + 1).padStart(2, '0') +
+            '</span><strong>' +
+            esc(SKILL_CHAIN_LABELS[skill] || SKILL_LABELS[skill]) +
+            '</strong></li>'
+          );
+        })
+        .join('') +
+      '</ol>'
     );
   }
 
@@ -2888,12 +3109,30 @@
 
   function renderCompletedFamily(word, task) {
     if (!task.completed) return '';
+    var atlas = (Array.isArray(VISUAL_LAB.familyAtlases) ? VISUAL_LAB.familyAtlases : []).find(
+      function (candidate) {
+        return candidate && candidate.targetWordId === word.id;
+      },
+    );
+    var storyReview = atlas
+      ? '<figure class="form-family-atlas"><div class="visual-image-frame"><img src="' +
+        esc(atlas.image) +
+        '" alt="' +
+        esc(atlas.alt) +
+        '" width="' +
+        Number(atlas.width || 1200) +
+        '" height="' +
+        Number(atlas.height || 800) +
+        '" loading="lazy" decoding="async"></div><figcaption>四格场景已解锁：读完故事后收起文字，只看图片复述。</figcaption></figure>' +
+        renderVisualFamilyMemory(atlas)
+      : '';
     return (
       '<div class="reveal-card form-family-review">' +
       '<strong>答对后复盘</strong><span>完整词族只在完成后出现。</span>' +
       '<div class="family-strip">' +
       familyHtml(word) +
       '</div>' +
+      storyReview +
       (task.formExercise && task.formExercise.type === 'family'
         ? '<div class="card-actions"><button class="primary-button" type="button" data-action="advance-form">读完了，下一题 →</button></div>'
         : '') +
@@ -2966,8 +3205,9 @@
       '</span><span class="source-badge">' +
       esc(word.zh) +
       '</span></div>' +
+      renderCollocationRecall(word) +
       '<section class="sentence-step">' +
-      '<div class="sentence-step-header"><span class="step-number">1</span><div><h3>搭出正确句子骨架</h3><p>大小写和句末标点已隐藏；请只根据语法和语义排序。</p></div></div>' +
+      '<div class="sentence-step-header"><span class="step-number">2</span><div><h3>搭出正确句子骨架</h3><p>大小写和句末标点已隐藏；请只根据语法和语义排序。</p></div></div>' +
       (task.chunksCorrect
         ? ''
         : '<div class="chunk-pool" aria-label="待选词块">' +
@@ -3013,15 +3253,28 @@
     );
   }
 
+  function renderCollocationRecall(word) {
+    return (
+      '<section class="sentence-step collocation-recall">' +
+      '<div class="sentence-step-header"><span class="step-number">1</span><div><h3>先从记忆中提取自然搭配</h3>' +
+      '<p>不要先看答案。口头说出或写下一个包含目标词的自然词块，再打开核对。</p></div></div>' +
+      '<details data-collocation-recall><summary>想好后，核对自然搭配</summary>' +
+      '<div class="collocation-answer"><small>本词高频搭配</small><code lang="en">' +
+      esc(word.collocation) +
+      '</code><p>把整个词块连起来朗读两遍，然后带着它进入下一步。</p></div></details>' +
+      '</section>'
+    );
+  }
+
   function renderSentenceWritingStep(word, task) {
     if (!task.chunksCorrect || !task.writingUnlocked) {
       var lockedTitle = task.chunksCorrect ? '遮住骨架后开始仿写' : '完成排序后再仿写';
       var lockedNote = task.chunksCorrect
         ? '先读一遍标准骨架，再点击“遮住骨架，开始仿写”。'
-        : '中文句子和写作检查项将在第一步完成后出现。';
+        : '中文句子和写作检查项将在第二步完成后出现。';
       return (
-        '<section class="sentence-step sentence-step-locked" aria-label="第二步尚未解锁">' +
-        '<div class="sentence-step-header"><span class="step-number">2</span><div><h3>' +
+        '<section class="sentence-step sentence-step-locked" aria-label="第三步尚未解锁">' +
+        '<div class="sentence-step-header"><span class="step-number">3</span><div><h3>' +
         lockedTitle +
         '</h3><p>' +
         lockedNote +
@@ -3031,7 +3284,7 @@
     }
     return (
       '<section class="sentence-step">' +
-      '<div class="sentence-step-header"><span class="step-number">2</span><div><h3>按中文受控仿写</h3><p>必须使用目标词或本卡中的一个词形。</p></div></div>' +
+      '<div class="sentence-step-header"><span class="step-number">3</span><div><h3>按中文受控仿写</h3><p>必须使用目标词或本卡中的一个词形。</p></div></div>' +
       '<p class="model-sentence">' +
       esc(word.exampleCn) +
       '</p>' +

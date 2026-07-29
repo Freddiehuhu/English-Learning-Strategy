@@ -2,7 +2,7 @@
   'use strict';
 
   window.IELTS_VISUAL_LAB = {
-    version: 4,
+    version: 5,
     posScene: {
       id: 'pos-foundation',
       image: './images/semantic-lab/pos-scene.webp',
@@ -89,6 +89,37 @@
             prompt: '把 beauty 变成副词：She arranged the flowers ______.',
           },
         ],
+        story: {
+          title: '把美变成一次行动',
+          english:
+            'Beauty inspired the garden project. The students worked to beautify the courtyard until it became beautiful. They arranged every flower beautifully.',
+          chinese:
+            '美启发了这次花园改造。学生们努力美化庭院，直到它变得美丽；他们还把每一朵花都布置得很漂亮。',
+          retellPrompt:
+            '收起文字，只看四格图复述改造过程，至少使用 beauty、beautify、beautiful、beautifully 这 4 个形式。',
+        },
+        etymology: {
+          level: '来源彩蛋',
+          fact: 'beauty 经盎格鲁-法语进入英语，其来源与法语 bel/beau“美的”及拉丁语 bellus 有关；beautiful 和 beautify 则是在中古英语中以 beauty 加后缀形成的词。',
+          memoryHook:
+            '这是记忆画面，不是真实历史事件：想象一座普通花园被人 beautify，呈现出 beauty，最后成为 beautiful 的花园。',
+          modernRule:
+            '这组词可以按已经核实的固定形式记忆：beauty → beautify / beautiful，beautiful + -ly → beautifully；-fy 虽有“使成为”之意，也不能拿它任意创造新词。',
+          sources: [
+            {
+              label: 'Merriam-Webster: beauty',
+              url: 'https://www.merriam-webster.com/dictionary/beauty',
+            },
+            {
+              label: 'Merriam-Webster: beautiful',
+              url: 'https://www.merriam-webster.com/dictionary/beautiful',
+            },
+            {
+              label: 'Merriam-Webster: beautify',
+              url: 'https://www.merriam-webster.com/dictionary/beautify',
+            },
+          ],
+        },
       },
       {
         id: 'family-atlas-success',
@@ -124,6 +155,33 @@
             prompt: '把 success 变成副词：The robot crossed the bridge ______.',
           },
         ],
+        story: {
+          title: '机器人挑战的成功链',
+          english:
+            'Success was the team’s goal. They hoped to succeed in the challenge, and their robot project was successful. It crossed the bridge successfully.',
+          chinese:
+            '成功是团队的目标。他们希望在挑战中取得成功，机器人项目也取得了成功；它最终顺利地通过了高架桥。',
+          retellPrompt:
+            '收起文字，只看四格图复述挑战过程，至少使用 success、succeed、successful、successfully 这 4 个形式。',
+        },
+        etymology: {
+          level: '剧情卡',
+          fact: 'succeed 来自拉丁语 succedere，历史上有“随后而来、接替、成功”等义；success 来自相关名词 successus，英语早期的 success 也曾表示中性的“结果、结局”。',
+          memoryHook:
+            '这是记忆画面，不是真实历史事件：想象接力赛中后一名选手接上前一名选手的位置并到达目标，把“接上、随后到达”连到“成功”。',
+          modernRule:
+            '现代学习中应把 success 和 succeed 当作历史同源但拼写不同的一组来记，不能总结成 ss ↔ ed；success + -ful → successful，successful + -ly → successfully。',
+          sources: [
+            {
+              label: 'Merriam-Webster: succeed',
+              url: 'https://www.merriam-webster.com/dictionary/succeed',
+            },
+            {
+              label: 'Merriam-Webster: success',
+              url: 'https://www.merriam-webster.com/dictionary/success',
+            },
+          ],
+        },
       },
       {
         id: 'family-atlas-decision',
@@ -159,6 +217,33 @@
             prompt: '把 decision 变成副词：She acted ______ and shut the leaking valve at once.',
           },
         ],
+        story: {
+          title: '剪掉岔路，留下选择',
+          english:
+            'The decision fixed the group’s route. They had to decide which path to take, and their leader was decisive when the storm arrived. She then acted decisively and closed the leaking valve.',
+          chinese:
+            '这个决定确定了小组的路线。他们必须决定走哪一条路；暴风雨来临时，领队表现得很果断，随后果断行动，关上了漏水的阀门。',
+          retellPrompt:
+            '收起文字，只看四格图复述选择与行动，至少使用 decision、decide、decisive、decisively 这 4 个形式。',
+        },
+        etymology: {
+          level: '剧情卡',
+          fact: 'decision 经法语来自拉丁语 dēcīsiō；相关动词 dēcīdere 原有“切断、截去”之意，后来发展出“解决、作出选择”。decide 与 decision 是共享拉丁词源的历史亲属。',
+          memoryHook:
+            '这是记忆画面，不是真实历史事件：想象岔路口的四条丝带被剪掉三条，只留下最终路线——作决定就是结束其他选项。',
+          modernRule:
+            '现代英语里不能把 decide 教成“去 e 再加 -sion”；decide、decision、decisive 应作为同源词组记忆，decisive + -ly → decisively 才是本组清楚可见的后缀变化。',
+          sources: [
+            {
+              label: 'Merriam-Webster: decision',
+              url: 'https://www.merriam-webster.com/dictionary/decision',
+            },
+            {
+              label: 'Merriam-Webster: decide',
+              url: 'https://www.merriam-webster.com/dictionary/decide',
+            },
+          ],
+        },
       },
       {
         id: 'family-atlas-danger',
@@ -194,6 +279,29 @@
             prompt: '把 danger 变成副词：The hiker stood ______ close to the cliff edge.',
           },
         ],
+        story: {
+          title: '从风险出现到危险行动',
+          english:
+            'Danger appeared when rocks began to move. One careless step could endanger the group, because the damaged trail was dangerous. A hiker stood dangerously close to the cliff edge.',
+          chinese:
+            '岩石开始松动时，危险出现了。一个不小心的脚步就可能危及全队，因为受损的山路很危险；还有一名徒步者危险地站得离悬崖边太近。',
+          retellPrompt:
+            '收起文字，只看四格图复述山路风险，至少使用 danger、endanger、dangerous、dangerously 这 4 个形式。',
+        },
+        etymology: {
+          level: '剧情卡',
+          fact: 'danger 经中古法语追溯到与拉丁语 dominium“所有权、支配权”相关的历史形式；英语早期 danger 确有“管辖权、权力范围”的意思，后来才发展成今天的“危险”。',
+          memoryHook:
+            '这是依据词义变迁设计的记忆画面，不是真实历史事件：想象人物跨进领主的管辖边界，从“落入他人的权力范围”感受到可能受伤害的危险。',
+          modernRule:
+            '今天的 danger 不等于“所有权”。在这组已经存在的词中可记 en- + danger → endanger、danger + -ous → dangerous、dangerous + -ly → dangerously，但不要把历史故事当作现代字面义。',
+          sources: [
+            {
+              label: 'Merriam-Webster: danger',
+              url: 'https://www.merriam-webster.com/dictionary/danger',
+            },
+          ],
+        },
       },
       {
         id: 'family-atlas-strength',
@@ -230,6 +338,37 @@
             prompt: '把 strength 变成副词：The iron pieces were ______ attracted to the magnet.',
           },
         ],
+        story: {
+          title: '把磁场一步步加强',
+          english:
+            'Strength was the focus of the magnet test. More coils would strengthen the field and make the electromagnet strong. The iron pieces were then strongly attracted to it.',
+          chinese:
+            '强度是这次磁铁测试的重点。增加线圈会加强磁场，使电磁铁变得强大；随后铁片被它强力吸引。',
+          retellPrompt:
+            '收起文字，只看四格图复述实验，至少使用 strength、strengthen、strong、strongly 这 4 个形式。',
+        },
+        etymology: {
+          level: '来源彩蛋',
+          fact: 'strength 继承自古英语 strengthu，strong 继承自古英语 strang；二者是日耳曼语历史中的亲属形式，并不是现代英语中简单加减字母得到的。',
+          memoryHook:
+            '这是记忆画面，不是真实历史事件：想象铁匠把钢梁锻得 strong，使它具有 strength；继续加固就是 strengthen，桥梁便 strongly 支撑重量。',
+          modernRule:
+            '现代构词中可记 strength + -en → strengthen、strong + -ly → strongly；strong → strength 是历史遗留的不规则关系，绝不能概括成“形容词加 -th 就变名词”。',
+          sources: [
+            {
+              label: 'Merriam-Webster: strength',
+              url: 'https://www.merriam-webster.com/dictionary/strength',
+            },
+            {
+              label: 'Merriam-Webster: strong',
+              url: 'https://www.merriam-webster.com/dictionary/strong',
+            },
+            {
+              label: 'Merriam-Webster: strengthen',
+              url: 'https://www.merriam-webster.com/dictionary/strengthen',
+            },
+          ],
+        },
       },
       {
         id: 'family-atlas-difference',
@@ -266,6 +405,33 @@
               '把 difference 变成副词：The two planes responded ______ to the same gust of wind.',
           },
         ],
+        story: {
+          title: '同一阵风，两条航线',
+          english:
+            'The difference between the two planes was easy to see. They began to differ in shape and weight, so each followed a different path. They responded differently to the same gust.',
+          chinese:
+            '两架飞机之间的差异很容易看出来。它们在形状和重量上开始有所不同，因此各自沿着不同的路线飞行；面对同一阵风，它们的反应也不同。',
+          retellPrompt:
+            '收起文字，只看四格图复述纸飞机实验，至少使用 difference、differ、different、differently 这 4 个形式。',
+        },
+        etymology: {
+          level: '剧情卡',
+          fact: 'differ 来自拉丁语 differre，其中有“向不同方向带走、分散”之意，继而发展出“不相同”；difference 来自拉丁语 differentia，与 differ 同源。',
+          memoryHook:
+            '这是记忆画面，不是真实历史事件：想象两只原本并排的箱子被分别搬向岔路的不同方向，距离拉开后，difference 也变得可见。',
+          modernRule:
+            'differ、difference、different 应作为同源词组学习，不能把 dif- 和 fer 当作可随意拼装的现代词块，也不能推广成 -ence ↔ -ent 的自动替换；different + -ly → differently。',
+          sources: [
+            {
+              label: 'Merriam-Webster: differ',
+              url: 'https://www.merriam-webster.com/dictionary/differ',
+            },
+            {
+              label: 'Merriam-Webster: difference',
+              url: 'https://www.merriam-webster.com/dictionary/difference',
+            },
+          ],
+        },
       },
       {
         id: 'family-atlas-competition',
@@ -303,6 +469,33 @@
             prompt: '把 competition 变成副词：The two friends raced fairly and ______.',
           },
         ],
+        story: {
+          title: '共同奔向同一个目标',
+          english:
+            'The competition drew runners from several schools. They came to compete for a place in the final, which stayed highly competitive. Two friends raced competitively while still following the rules.',
+          chinese:
+            '这场比赛吸引了多所学校的选手。他们前来竞争决赛席位，决赛也始终竞争激烈；两位朋友全力竞赛，同时仍然遵守规则。',
+          retellPrompt:
+            '收起文字，只看四格图复述田径赛，至少使用 competition、compete、competitive、competitively 这 4 个形式。',
+        },
+        etymology: {
+          level: '剧情卡',
+          fact: 'compete 来自拉丁语 competere，历史上有“走到一起、适合、共同寻求”等义，晚期拉丁语发展出“共同争取同一目标”；competition 来自同一拉丁动词的名词形式。',
+          memoryHook:
+            '这是记忆画面，不是真实历史事件：想象两名选手从不同方向同时奔向同一座奖杯——共同追求同一个目标，于是形成竞争。',
+          modernRule:
+            '词源里的“共同”不等于合作，而是多个对手追求同一目标。compete、competition、competitive 要作为已存在的同源词记忆，绝不能把 competition 拆成 come + petition；competitive + -ly → competitively。',
+          sources: [
+            {
+              label: 'Merriam-Webster: compete',
+              url: 'https://www.merriam-webster.com/dictionary/compete',
+            },
+            {
+              label: 'Merriam-Webster: competition',
+              url: 'https://www.merriam-webster.com/dictionary/competition',
+            },
+          ],
+        },
       },
       {
         id: 'family-atlas-creation',
@@ -339,6 +532,332 @@
               '把 creation 变成副词：The team used recycled materials ______ to decorate the stage.',
           },
         ],
+        story: {
+          title: '废旧纸箱长成一座城市',
+          english:
+            'Creation began with a box of recycled materials. The students used them to create a model city with a creative design. They reused every object creatively.',
+          chinese:
+            '创造从一箱回收材料开始。学生们用这些材料创造了一座设计富有创意的模型城市，并且创造性地重新利用了每一件物品。',
+          retellPrompt:
+            '收起文字，只看四格图复述作品诞生过程，至少使用 creation、create、creative、creatively 这 4 个形式。',
+        },
+        etymology: {
+          level: '来源彩蛋',
+          fact: 'create 来自拉丁语 creāre“使产生、使诞生、使成长”，并与表示“生长”的 crēscere 有历史关系；creation 与 creative 分别经拉丁语派生形式进入英语。',
+          memoryHook:
+            '这是记忆画面，不是真实历史事件：想象一颗种子先萌芽，枝叶逐渐长成一件艺术作品，用“产生并成长”连接“创造”。',
+          modernRule:
+            '现代 create 不等于“种植或生长”。create、creation、creative 是已经形成的词族，不能靠自由互换词尾造词；creative + -ly → creatively。',
+          sources: [
+            {
+              label: 'Merriam-Webster: create',
+              url: 'https://www.merriam-webster.com/dictionary/create',
+            },
+            {
+              label: 'Merriam-Webster: creation',
+              url: 'https://www.merriam-webster.com/dictionary/creation',
+            },
+            {
+              label: 'Merriam-Webster: creative',
+              url: 'https://www.merriam-webster.com/dictionary/creative',
+            },
+          ],
+        },
+      },
+      {
+        id: 'family-atlas-safety',
+        targetWordId: 'foundation-safety',
+        title: 'safety 词族',
+        image: './images/semantic-lab/family-safety-v1.webp',
+        width: 1200,
+        height: 800,
+        alt: '同一海滩救援的四格无文字场景：救生设施齐备、救生员冲向水中、获救者回到岸边和救援艇平稳返航。',
+        caption: '观察高亮画格，用词性、句法和构词线索独立完成。',
+        learnNote: '这个词族包含词干内部的字母变化；先判断词性位置，不要把每一步都当成简单加后缀。',
+        panels: [
+          {
+            slot: 'n.',
+            area: 'top-left',
+            sceneLabel: '海滩入口配备救生圈、警示旗和救生员',
+            prompt: '已知名词',
+          },
+          {
+            slot: 'v.',
+            area: 'top-right',
+            sceneLabel: '救生员冲入水中帮助一名遇险泳者',
+            prompt:
+              '把 safety 变成动词：A lifeguard rushed into the water to ______ the struggling swimmer.',
+            hint: 'to 后需要动词原形；注意词干里的 f 会发生变化。',
+            feedback: 'save 是动词，表示把人从危险中救出。',
+          },
+          {
+            slot: 'adj.',
+            area: 'bottom-left',
+            sceneLabel: '获救者披着毛毯坐在岸边，已经脱离危险',
+            prompt: '把 safety 变成形容词：After the rescue, the swimmer was ______ on the shore.',
+            hint: 'was 后需要形容词作表语；从名词去掉 -ty。',
+            feedback: 'safe 是形容词，在句中说明获救者已经没有危险。',
+          },
+          {
+            slot: 'adv.',
+            area: 'bottom-right',
+            sceneLabel: '救援艇载着所有人平稳返回岸边',
+            prompt: '把 safety 变成副词：The rescue team brought the swimmer back ______.',
+            hint: '空格修饰 brought back 的方式；先写出形容词，再加 -ly。',
+            feedback: 'safely 是副词，说明返回这一动作以没有危险的方式完成。',
+          },
+        ],
+        story: {
+          title: '一场完整的海滩救援',
+          english:
+            'Safety was the lifeguard’s first concern. She rushed to save the swimmer, who was soon safe on the shore. The rescue boat returned safely.',
+          chinese:
+            '安全是救生员最先考虑的事。她冲过去营救泳者，泳者很快安全地回到岸边；救援艇也平安返航。',
+          retellPrompt:
+            '收起文字，只看四格图复述救援过程，至少使用 safety、save、safe、safely 这 4 个形式。',
+        },
+        etymology: {
+          level: '剧情卡',
+          fact: 'safe 经法语来自拉丁语 salvus“安全、健康”；save 经法语和晚期拉丁语 salvāre，也追溯到 salvus；safety 则经法语 salveté/saufté 进入英语。三者是沿不同历史路径进入英语的亲属。',
+          memoryHook:
+            '这是记忆画面，不是真实历史事件：救生员先去 save 落水者，落水者随后 safe，海滩恢复 safety，两人再 safely 返回岸边。',
+          modernRule:
+            '绝不能把这组概括成“f 变 v 就把形容词变成动词”；safe、save、safety 是历史亲属，需要成组记忆。现代常规变化是 safe + -ly → safely。',
+          sources: [
+            {
+              label: 'Merriam-Webster: safe',
+              url: 'https://www.merriam-webster.com/dictionary/safe',
+            },
+            {
+              label: 'Merriam-Webster: save',
+              url: 'https://www.merriam-webster.com/dictionary/save',
+            },
+            {
+              label: 'Merriam-Webster: safety',
+              url: 'https://www.merriam-webster.com/dictionary/safety',
+            },
+          ],
+        },
+      },
+      {
+        id: 'family-atlas-extension',
+        targetWordId: 'foundation-extension',
+        title: 'extension 词族',
+        image: './images/semantic-lab/family-extension-v1.webp',
+        width: 1200,
+        height: 800,
+        alt: '同一学校温室的四格无文字场景：新增空间已经建成、工人继续搭建、温室收藏大量植物，以及多组学生开展生态项目。',
+        caption: '观察高亮画格，用词性、句法和构词线索独立完成。',
+        learnNote: '表示“范围广”的形容词与表示“被延长的”不是同一个词；要结合名词和句意判断。',
+        panels: [
+          {
+            slot: 'n.',
+            area: 'top-left',
+            sceneLabel: '学校温室向庭院新增了一段连通空间',
+            prompt: '已知名词',
+          },
+          {
+            slot: 'v.',
+            area: 'top-right',
+            sceneLabel: '工人正在把温室结构继续搭向庭院',
+            prompt:
+              '把 extension 变成动词：The school plans to ______ the greenhouse into the courtyard.',
+            hint: 'plans to 后需要动词原形；名词词尾 -sion 对应的动词以 -d 结尾。',
+            feedback: 'extend 是动词，表示把温室的范围向外扩大。',
+          },
+          {
+            slot: 'adj.',
+            area: 'bottom-left',
+            sceneLabel: '扩大后的温室里陈列着数量多、种类广的本地植物',
+            prompt:
+              '把 extension 变成形容词：The enlarged greenhouse now holds an ______ collection of native plants.',
+            hint: 'an 和 collection 之间需要形容词；这里强调收藏范围广，而不是被延长。',
+            feedback: 'extensive 表示范围广或数量大，准确修饰 collection。',
+          },
+          {
+            slot: 'adv.',
+            area: 'bottom-right',
+            sceneLabel: '不同小组在温室各处持续开展生态观察',
+            prompt:
+              '把 extension 变成副词：Students used the greenhouse ______ for their ecology projects.',
+            hint: '空格修饰 used；先写出表示“广泛的”形容词，再加 -ly。',
+            feedback: 'extensively 是副词，说明学生在许多项目和场景中充分使用温室。',
+          },
+        ],
+        story: {
+          title: '温室向外伸展开来',
+          english:
+            'The extension added space to the school greenhouse. Workers planned to extend it into the courtyard, creating an extensive plant collection. Students then used the greenhouse extensively.',
+          chinese:
+            '扩建部分为学校温室增加了空间。工人计划把它延伸到庭院，建成规模很大的植物收藏区；此后学生们广泛使用这座温室。',
+          retellPrompt:
+            '收起文字，只看四格图复述温室扩建，至少使用 extension、extend、extensive、extensively 这 4 个形式。',
+        },
+        etymology: {
+          level: '剧情卡',
+          fact: 'extend 来自拉丁语 extendere，由 ex-“向外”和 tendere“伸展”构成；extension 来自拉丁语 extensio，extensive 经法语或晚期拉丁语 extensivus，也来自“向外伸展”的词干。',
+          memoryHook:
+            '这是记忆画面，不是真实历史事件：想象温室的一面折叠墙向外拉长，形成扩建部分；扩建后，里面出现范围很广的植物收藏。',
+          modernRule:
+            'extensive 表示“广泛、规模大”，不等于 extended“被延长的”。extend、extension、extensive 应作为同源词组记忆，不能用删除 -on、换 -ive 的方式任意造词；extensive + -ly → extensively。',
+          sources: [
+            {
+              label: 'Merriam-Webster: extend',
+              url: 'https://www.merriam-webster.com/dictionary/extend',
+            },
+            {
+              label: 'Merriam-Webster: extension',
+              url: 'https://www.merriam-webster.com/dictionary/extension',
+            },
+            {
+              label: 'Oxford Learner’s Dictionaries: extensive',
+              url: 'https://www.oxfordlearnersdictionaries.com/us/definition/english/extensive',
+            },
+          ],
+        },
+      },
+      {
+        id: 'family-atlas-equality',
+        targetWordId: 'foundation-equality',
+        title: 'equality 词族',
+        image: './images/semantic-lab/family-equality-v1.webp',
+        width: 1200,
+        height: 800,
+        alt: '同一社区食物分享活动的四格无文字场景：说明分配原则、用天平比较重量、给每户同样份量，以及把水果分进四个篮子。',
+        caption: '观察高亮画格，用词性、句法和构词线索独立完成。',
+        learnNote: '这个词族的动词和形容词拼写相同，真正的区别来自它们在句中的位置和作用。',
+        panels: [
+          {
+            slot: 'n.',
+            area: 'top-left',
+            sceneLabel: '志愿者向不同家庭说明不偏不倚的分配原则',
+            prompt: '已知名词',
+          },
+          {
+            slot: 'v.',
+            area: 'top-right',
+            sceneLabel: '天平两端由四个小袋和一个大袋保持平衡',
+            prompt: '把 equality 变成动词：Four small bags ______ the weight of the large bag.',
+            hint: '主语 Four small bags 后需要动词原形；从名词去掉 -ity。',
+            feedback: 'equal 在这里是动词，表示四个小袋的重量与大袋相同。',
+          },
+          {
+            slot: 'adj.',
+            area: 'bottom-left',
+            sceneLabel: '每个家庭领到份量相同的一袋大米',
+            prompt: '把 equality 变成形容词：Each family received an ______ share of rice.',
+            hint: 'an 和 share 之间需要形容词；这个形式与动词拼写相同。',
+            feedback: 'equal 在这里是形容词，说明每一份大米在数量上相同。',
+          },
+          {
+            slot: 'adv.',
+            area: 'bottom-right',
+            sceneLabel: '志愿者把水果按相同份量放入四个篮子',
+            prompt:
+              '把 equality 变成副词：The volunteers divided the fruit ______ among the four baskets.',
+            hint: '空格修饰 divided；在形容词后加 -ly 时会出现双写 l。',
+            feedback: 'equally 是副词，说明水果以相同份量被分到四个篮子。',
+          },
+        ],
+        story: {
+          title: '从水平天平到等量分享',
+          english:
+            'Equality guided the food-sharing event. Four small bags could equal the weight of one large bag, so every family received an equal share. Volunteers divided the fruit equally.',
+          chinese:
+            '平等原则指导着这次食物分享活动。四个小袋的重量可以等于一个大袋，因此每个家庭都得到相等的一份；志愿者也把水果平均分配。',
+          retellPrompt:
+            '收起文字，只看四格图复述分配过程，至少使用 equality、动词 equal、形容词 equal、equally 这 4 个词性形式。',
+        },
+        etymology: {
+          level: '来源彩蛋',
+          fact: 'equal 来自拉丁语 aequalis，并可再追溯到 aequus“平的、相等的”；equality 经中古法语 equalité，来自拉丁语 aequalitas。形容词 equal 先进入英语，名词和动词用法出现得更晚。',
+          memoryHook:
+            '这是记忆画面，不是真实历史事件：先看一架完全水平的天平，再把水果等量分进四只篮子，用“水平、同量”串起整个词族。',
+          modernRule:
+            '动词 equal 与形容词 equal 拼写相同，要靠句法位置判断；equal + -ly → equally。equality 是经法语整体进入英语的既有名词，不能把 -ity 当作适用于任何形容词的规则，也不要把 equality 与 equity 混同。',
+          sources: [
+            {
+              label: 'Merriam-Webster: equal',
+              url: 'https://www.merriam-webster.com/dictionary/equal',
+            },
+            {
+              label: 'Merriam-Webster: equality 与 equity',
+              url: 'https://www.merriam-webster.com/grammar/equality-vs-equity-difference',
+            },
+          ],
+        },
+      },
+      {
+        id: 'family-atlas-completion',
+        targetWordId: 'foundation-completion',
+        title: 'completion 词族',
+        image: './images/semantic-lab/family-completion-v1.webp',
+        width: 1200,
+        height: 800,
+        alt: '同一学校马赛克壁画的四格无文字场景：师生庆祝工程结束、安装最后一块瓷砖、检查图案没有缺口，以及新瓷砖覆盖受损墙面。',
+        caption: '观察高亮画格，用词性、句法和构词线索独立完成。',
+        learnNote: '这个词族的动词和形容词拼写相同；用宾语、系动词和修饰对象判断词性。',
+        panels: [
+          {
+            slot: 'n.',
+            area: 'top-left',
+            sceneLabel: '师生在已经完成的壁画前庆祝整个工程结束',
+            prompt: '已知名词',
+          },
+          {
+            slot: 'v.',
+            area: 'top-right',
+            sceneLabel: '学生把最后一块瓷砖安装到墙面空缺处',
+            prompt:
+              '把 completion 变成动词：The students worked together to ______ the wall mosaic before the exhibition.',
+            hint: 'to 后需要动词原形；名词去掉 -ion 后恢复末尾 e。',
+            feedback: 'complete 在这里是动词，表示把壁画做完。',
+          },
+          {
+            slot: 'adj.',
+            area: 'bottom-left',
+            sceneLabel: '评审查看整幅图案，确认各个区域都没有缺失',
+            prompt:
+              '把 completion 变成形容词：The judges checked that the design was ______, with no section missing.',
+            hint: 'was 后需要形容词作表语；这个形式与动词拼写相同。',
+            feedback: 'complete 在这里是形容词，表示设计完整、没有缺失。',
+          },
+          {
+            slot: 'adv.',
+            area: 'bottom-right',
+            sceneLabel: '新瓷砖把原先破损的墙面全部遮住',
+            prompt: '把 completion 变成副词：The new tiles ______ covered the damaged wall.',
+            hint: '空格修饰 covered；保留形容词末尾 e，再加 -ly。',
+            feedback: 'completely 是副词，说明受损墙面被全部覆盖。',
+          },
+        ],
+        story: {
+          title: '最后一块瓷砖填满缺口',
+          english:
+            'Completion of the mural brought cheers. The students worked to complete it, and the final design was complete. New tiles completely covered the damaged wall.',
+          chinese:
+            '壁画的完成带来了欢呼。学生们努力把它做完，最后的设计完整无缺；新瓷砖也完全覆盖了受损墙面。',
+          retellPrompt:
+            '收起文字，只看四格图复述壁画完工，至少使用 completion、动词 complete、形容词 complete、completely 这 4 个词性形式。',
+        },
+        etymology: {
+          level: '剧情卡',
+          fact: 'completion 来自拉丁语 complētiō，其核心动词 complēre 有“填满、补足、完成”之意；形容词 complete 来自过去分词 complētus，英语中的动词 complete 后来由形容词转用而来。',
+          memoryHook:
+            '这是记忆画面，不是真实历史事件：想象学生把最后一块瓷砖嵌进唯一的缺口；缺口被“填满”的瞬间，作品也“完成”。',
+          modernRule:
+            '这里的 com- 不宜机械译成“一起”，plete 也不是可独立使用的现代英语词根。complete 与 completion 要作为既有词族记忆，不能推广成所有 -tion ↔ -te 都能互换；complete + -ly → completely。',
+          sources: [
+            {
+              label: 'Merriam-Webster: completion',
+              url: 'https://www.merriam-webster.com/dictionary/completion',
+            },
+            {
+              label: 'Merriam-Webster: complete',
+              url: 'https://www.merriam-webster.com/dictionary/complete',
+            },
+          ],
+        },
       },
     ],
     gameModes: [
@@ -418,6 +937,8 @@
         shortLabel: '同音',
         icon: '♫',
         description: '声音相同，拼写和意思不同；听音后必须借助句子选对写法。',
+        audioLabel: '同音词语音',
+        audioStatus: '先听声音，再用句意选择拼写。',
         tasks: [
           {
             id: 'game-homophone-fir',
@@ -429,6 +950,12 @@
             audioId: 'fir',
             hint: '句中说的是一种常绿树。',
             feedback: 'fir 是“冷杉”；fur 是动物的“软毛、毛皮”。两词同音。',
+            image: './images/semantic-lab/homophone-fir-fur-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'left',
+            alt: '左右对照插画：左侧是雪地里的常绿针叶树，右侧是兔子柔软皮毛的特写。',
+            caption: '先观察对应画面，再结合句子选择正确拼写。',
           },
           {
             id: 'game-homophone-fur',
@@ -440,6 +967,12 @@
             audioId: 'fir',
             hint: 'rabbit’s 后面要填动物身上的软毛。',
             feedback: 'fur 是“动物的软毛、毛皮”；fir 是“冷杉”。',
+            image: './images/semantic-lab/homophone-fir-fur-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'right',
+            alt: '左右对照插画：左侧是雪地里的常绿针叶树，右侧是兔子柔软皮毛的特写。',
+            caption: '先观察对应画面，再结合句子选择正确拼写。',
           },
           {
             id: 'game-homophone-prey',
@@ -451,6 +984,12 @@
             audioId: 'prey',
             hint: '鹰俯冲前盯着要捕食的动物。',
             feedback: 'prey 是“猎物”；pray 是“祈祷”。两词同音。',
+            image: './images/semantic-lab/homophone-prey-pray-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'left',
+            alt: '左右对照插画：左侧鹰在兔子上空盘旋，右侧一家人在灯塔旁双手合十。',
+            caption: '先观察对应画面，再结合句子选择正确拼写。',
           },
           {
             id: 'game-homophone-pray',
@@ -462,6 +1001,12 @@
             audioId: 'prey',
             hint: 'to 后需要一个表示祈求的动词。',
             feedback: 'pray 是动词“祈祷”；prey 通常是名词“猎物”。',
+            image: './images/semantic-lab/homophone-prey-pray-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'right',
+            alt: '左右对照插画：左侧鹰在兔子上空盘旋，右侧一家人在灯塔旁双手合十。',
+            caption: '先观察对应画面，再结合句子选择正确拼写。',
           },
           {
             id: 'game-homophone-teem',
@@ -473,6 +1018,12 @@
             audioId: 'teem',
             hint: '固定搭配是 ______ with，表示“充满”。',
             feedback: 'teem with 表示“充满”；team 是“团队”。',
+            image: './images/semantic-lab/homophone-teem-team-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'left',
+            alt: '左右对照插画：左侧珊瑚礁中有大量海洋生物，右侧校园足球队正在庆祝胜利。',
+            caption: '先观察对应画面，再结合句子选择正确拼写。',
           },
           {
             id: 'game-homophone-team',
@@ -484,6 +1035,12 @@
             audioId: 'teem',
             hint: '赢得比赛的是一群共同参赛的人。',
             feedback: 'team 是“团队”；teem 是动词，常用于 teem with。',
+            image: './images/semantic-lab/homophone-teem-team-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'right',
+            alt: '左右对照插画：左侧珊瑚礁中有大量海洋生物，右侧校园足球队正在庆祝胜利。',
+            caption: '先观察对应画面，再结合句子选择正确拼写。',
           },
         ],
       },
@@ -493,6 +1050,8 @@
         shortLabel: '同形',
         icon: '◇',
         description: '拼写看起来相同，要用词性、搭配和句法判断它在句中的具体身份。',
+        audioLabel: '听这个词的读音',
+        audioStatus: '结合读音、词性和句法判断本句词义。',
         tasks: [
           {
             id: 'game-homograph-hide-noun',
@@ -505,6 +1064,12 @@
             answer: '名词 · 兽皮',
             hint: 'a thick 后面需要可数名词；that 指回这个东西。',
             feedback: '这里的 hide 是名词“兽皮、毛皮”。',
+            image: './images/semantic-lab/homograph-hide-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'left',
+            alt: '左右对照插画：左侧是海象厚实皮肤的特写，右侧是躲在大树后的孩子。',
+            caption: '先观察对应画面，再结合词性和句法判断。',
           },
           {
             id: 'game-homograph-hide-verb',
@@ -517,6 +1082,12 @@
             answer: '动词 · 隐藏',
             hint: 'try to 后面需要动词原形。',
             feedback: '这里的 hide 是动词“隐藏”；三态是 hide–hid–hidden。',
+            image: './images/semantic-lab/homograph-hide-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'right',
+            alt: '左右对照插画：左侧是海象厚实皮肤的特写，右侧是躲在大树后的孩子。',
+            caption: '先观察对应画面，再结合词性和句法判断。',
           },
           {
             id: 'game-homograph-beam-noun',
@@ -529,6 +1100,12 @@
             answer: '名词 · 光束',
             hint: 'a narrow 后面需要名词，of light 说明它是什么。',
             feedback: 'a beam of light 是“一束光”。',
+            image: './images/semantic-lab/homograph-beam-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'left',
+            alt: '左右对照插画：左侧月光穿过黑暗的天文台，右侧卫星向地面站传送影像。',
+            caption: '先观察对应画面，再结合词性和句法判断。',
           },
           {
             id: 'game-homograph-beam-verb',
@@ -541,6 +1118,12 @@
             answer: '动词 · 发送',
             hint: 'will 后需要动词原形，后面还有宾语 the images。',
             feedback: 'beam something back/to 表示“把信号或影像传送回／到……”。',
+            image: './images/semantic-lab/homograph-beam-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'right',
+            alt: '左右对照插画：左侧月光穿过黑暗的天文台，右侧卫星向地面站传送影像。',
+            caption: '先观察对应画面，再结合词性和句法判断。',
           },
           {
             id: 'game-homograph-broadcast-noun',
@@ -553,6 +1136,12 @@
             answer: '名词 · 广播节目',
             hint: 'a live 后面需要名词。',
             feedback: '这里 broadcast 是可数名词，指一次广播节目。',
+            image: './images/semantic-lab/homograph-broadcast-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'left',
+            alt: '左右对照插画：左侧一家人观看海上救援直播，右侧演播室正在向外发布紧急警报。',
+            caption: '先观察对应画面，再结合词性和句法判断。',
           },
           {
             id: 'game-homograph-broadcast-verb',
@@ -565,6 +1154,12 @@
             answer: '动词 · 播送',
             hint: 'will 后需要动词原形，warning 是它的宾语。',
             feedback: '这里 broadcast 是动词；常用三态都是 broadcast。',
+            image: './images/semantic-lab/homograph-broadcast-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'right',
+            alt: '左右对照插画：左侧一家人观看海上救援直播，右侧演播室正在向外发布紧急警报。',
+            caption: '先观察对应画面，再结合词性和句法判断。',
           },
         ],
       },
@@ -633,6 +1228,12 @@
             answer: 'tree',
             hint: '上义词要能回答“它们都是什么”，而不是“它们在哪里”。',
             feedback: 'birch、spruce、cedar 都是 tree 的具体种类，也就是它的下义词。',
+            image: './images/semantic-lab/taxonomy-tree-odd-one-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'all',
+            alt: '四格无文字插画：白色树皮的树、结有球果的针叶树、枝叶层叠的常绿树，以及一只驯鹿。',
+            caption: '观察整幅图，再按共同类别判断。',
           },
           {
             id: 'game-taxonomy-odd-one',
@@ -643,6 +1244,12 @@
             answer: 'caribou',
             hint: '其中三个是树，一个是动物。',
             feedback: 'caribou 是驯鹿；maple、willow、hemlock 都是树。',
+            image: './images/semantic-lab/taxonomy-tree-odd-one-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'all',
+            alt: '四格无文字插画：白色树皮的树、结有球果的针叶树、枝叶层叠的常绿树，以及一只驯鹿。',
+            caption: '观察整幅图，再找出类别不同的一项。',
           },
           {
             id: 'game-taxonomy-conifer',
@@ -653,6 +1260,12 @@
             answer: 'spruce · pine · fir',
             hint: '想想针形叶、球果和常绿树。',
             feedback: 'spruce、pine、fir 都是典型针叶树；birch、willow、maple 是阔叶树。',
+            image: './images/semantic-lab/taxonomy-conifers-broadleaf-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'all',
+            alt: '左右对照插画：左侧是三种针形叶并结球果的树，右侧是三种宽叶树。',
+            caption: '观察整幅对照图，再找出属于同一小类的一组。',
           },
           {
             id: 'game-taxonomy-mammal',
@@ -663,6 +1276,12 @@
             answer: 'mammal',
             hint: '一个生活在海边，一个生活在陆地；上义词要同时包含两者。',
             feedback: 'walrus 和 caribou 都是 mammal；marine animal 不能包含 caribou。',
+            image: './images/semantic-lab/taxonomy-mammals-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'all',
+            alt: '左右对照插画：左侧是冰岸边的海象，右侧是苔原上的驯鹿。',
+            caption: '观察两种动物，再选择能同时包含它们的更大类别。',
           },
           {
             id: 'game-taxonomy-direction',
@@ -673,6 +1292,12 @@
             answer: 'birch → tree',
             hint: '先放具体成员，再放更大的类别。',
             feedback: 'birch 是具体树种，tree 是更大的类别，所以 birch → tree。',
+            image: './images/semantic-lab/taxonomy-tree-odd-one-v1.webp',
+            width: 1200,
+            height: 800,
+            focus: 'all',
+            alt: '四格无文字插画：白色树皮的树、结有球果的针叶树、枝叶层叠的常绿树，以及一只驯鹿。',
+            caption: '观察整幅图，再判断具体成员与更大类别的方向。',
           },
         ],
       },

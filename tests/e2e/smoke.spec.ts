@@ -86,6 +86,80 @@ test('lets learners skip word-form questions before using hints', async ({ page 
   await expect(page.locator('.training-count')).toHaveText('3 / 12');
 });
 
+test('presents daily practice as one connected learning loop with secondary repair stations', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+
+  await expect(page.getByRole('heading', { name: '同一个词，走完一条学习闭环' })).toBeVisible();
+  await expect(page.locator('.integrated-loop li')).toHaveText([
+    '01声音与核心义听辨 · 跟读',
+    '02无提示拼写盲听 · 检索',
+    '03词形与构词判断 · 变形',
+    '04搭配到表达词块 · 造句',
+  ]);
+  await expect(page.getByRole('heading', { name: '专项练习是错误修复站' })).toBeVisible();
+
+  await page.getByRole('button', { name: '开始今日训练 →' }).click();
+  await expect(page.getByRole('heading', { name: '第 1 关 · 声音与核心义' })).toBeVisible();
+  const stages = page.locator('.learning-stage-track li');
+  await expect(stages).toHaveCount(4);
+  await expect(stages.filter({ hasText: '声音与核心义' })).toHaveClass(/is-current/);
+
+  await page.getByRole('button', { name: '跟读清楚了 →' }).click();
+  await expect(page.getByRole('heading', { name: '第 2 关 · 无提示拼写' })).toBeVisible();
+  await expect(stages.filter({ hasText: '声音与核心义' })).toHaveClass(/is-done/);
+  await expect(stages.filter({ hasText: '无提示拼写' })).toHaveClass(/is-current/);
+});
+
+test('unlocks the atlas and story only after completing a pictured core word family', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await page.getByRole('button', { name: /03 词形变换/ }).click();
+
+  const familyTask = page.locator('[data-form-task-type="family"]');
+  await expect(familyTask).toContainText('beauty');
+  await expect(page.locator('.form-family-atlas')).toHaveCount(0);
+  await expect(page.locator('.visual-family-story')).toHaveCount(0);
+
+  const hiddenAnswers = ['beautify', 'beautiful', 'beautifully'];
+  const incompleteHtml = (await familyTask.evaluate((element) => element.outerHTML)).toLowerCase();
+  for (const answer of hiddenAnswers) {
+    expect(incompleteHtml).not.toContain(answer);
+  }
+
+  await familyTask.locator('input[name="v."]').fill('beautify');
+  await familyTask.locator('input[name="adj."]').fill('beautiful');
+  await familyTask.locator('input[name="adv."]').fill('beautifully');
+  await familyTask.getByRole('button', { name: '检查3格' }).click();
+
+  const atlas = page.locator('.form-family-atlas');
+  const image = atlas.locator('img');
+  await expect(atlas).toBeVisible();
+  await expect(image).toHaveAttribute('alt', /校园花园的四格无文字场景/);
+  await expect
+    .poll(() =>
+      image.evaluate((element: HTMLImageElement) => ({
+        width: element.naturalWidth,
+        height: element.naturalHeight,
+      })),
+    )
+    .toEqual({ width: 1200, height: 800 });
+
+  const story = page.locator('.visual-family-story');
+  await expect(story).toBeVisible();
+  await expect(story).toHaveAttribute('open', '');
+  await expect(story).toContainText('四格故事链');
+  await expect(story.locator('.visual-family-story-en')).toContainText(
+    'Beauty inspired the garden project.',
+  );
+  for (const answer of hiddenAnswers) {
+    await expect(page.getByText(answer, { exact: true })).toBeVisible();
+  }
+  await expect(page.getByRole('button', { name: '读完了，下一题 →' })).toBeVisible();
+});
+
 test('dictation audio pauses, resumes, and ignores stale playback events', async ({ page }) => {
   await installControllableAudio(page);
   await page.goto('/ielts/index.html');
@@ -304,6 +378,39 @@ test('dictation waits for the learner after a correct spelling', async ({ page }
 
   await page.getByRole('button', { name: '下一题 →' }).click();
   await expect(page.locator('.training-count')).toHaveText('2 / 10');
+});
+
+test('keeps collocation recall unprompted until the learner opens the three-step workshop detail', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await page.getByRole('button', { name: /04 句子工坊/ }).click();
+
+  const stepNumbers = page.locator('.sentence-step > .sentence-step-header .step-number');
+  await expect(stepNumbers).toHaveText(['1', '2', '3']);
+  await expect(page.getByRole('heading', { name: '先从记忆中提取自然搭配' })).toBeVisible();
+  await expect(page.getByText(/不要先看答案。口头说出或写下一个/)).toBeVisible();
+
+  const targetWord = await page
+    .locator('.sentence-steps .word-meta .pos-badge')
+    .evaluate((element) => (element.textContent || '').split('·')[0]!.trim());
+  const collocation = await page.evaluate((word) => {
+    const entry = window.IELTS_VOCABULARY.find(
+      (candidate: { word: string; collocation: string }) => candidate.word === word,
+    );
+    return entry?.collocation || '';
+  }, targetWord);
+  expect(collocation).not.toBe('');
+
+  const detail = page.locator('[data-collocation-recall]');
+  const answer = page.getByText(collocation, { exact: true });
+  await expect(detail).not.toHaveAttribute('open', '');
+  await expect(answer).toHaveCount(1);
+  await expect(answer).toBeHidden();
+
+  await detail.locator('summary').click();
+  await expect(detail).toHaveAttribute('open', '');
+  await expect(answer).toBeVisible();
 });
 
 test('hides sentence-order capitalization and punctuation until reveal', async ({ page }) => {
