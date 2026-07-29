@@ -135,7 +135,8 @@ class IeltsAudioManifestTests(unittest.TestCase):
         "ffprobe and ffmpeg are required for the full drift gate",
     )
     def test_committed_manifest_has_no_drift(self) -> None:
-        self.assertEqual(audio_manifest.compare_manifest(), [])
+        messages = audio_manifest.compare_manifest()
+        self.assertFalse(messages, "\n".join(messages[:6]))
 
     def test_reuse_requires_binding_and_audio_hash_match(self) -> None:
         spec = self.specs_by_path["uk/ecologist.mp3"]

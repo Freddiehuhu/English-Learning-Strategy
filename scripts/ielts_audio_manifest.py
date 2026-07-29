@@ -483,7 +483,14 @@ def manifest_drift_messages(
                 changed.add("integrated_lufs")
 
             if changed:
-                messages.append(f"{path} changed fields: {', '.join(sorted(changed))}")
+                observed = ", ".join(
+                    f"{field}={old.get(field)!r}->{new.get(field)!r}"
+                    for field in sorted(changed)
+                )
+                messages.append(
+                    f"{path} changed fields: {', '.join(sorted(changed))} "
+                    f"({observed})"
+                )
 
     if messages:
         messages.insert(
