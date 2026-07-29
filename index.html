@@ -1,5 +1,6 @@
 <!doctype html><html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="./ielts/icon.svg" type="image/svg+xml">
 <title>沪教版八上 单词卡片 · 智能练习</title>
 <style>
 :root{--bg:#f5f6fa;--card:#fff;--line:#e6e8ef;--blue:#2f5496;--brown:#b3541e;--ink:#232733;--mut:#7a8194;
@@ -8,6 +9,10 @@
 body{margin:0;font-family:-apple-system,"PingFang SC","Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
 header{background:linear-gradient(120deg,#2f5496,#3f6fc0);color:#fff;padding:14px 18px}
 header h1{margin:0;font-size:17px} header p{margin:4px 0 0;font-size:12.5px;opacity:.9}
+.ielts-entry{display:flex;align-items:center;gap:16px;justify-content:space-between;padding:11px 18px;background:#fff8e9;border-bottom:1px solid #eed9aa;color:#553f18}
+.ielts-entry div{min-width:0}.ielts-entry strong{display:block;font-size:14px}.ielts-entry span{display:block;margin-top:2px;color:#796642;font-size:12px}
+.ielts-entry a{flex:0 0 auto;border-radius:9px;padding:8px 13px;background:#8a5b16;color:#fff;font-size:13px;font-weight:700;text-decoration:none}
+.ielts-entry a:hover,.ielts-entry a:focus-visible{background:#67400a;outline:2px solid #c99037;outline-offset:2px}
 .bar{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid var(--line);box-shadow:var(--sh)}
 .tabs{display:flex;gap:6px;overflow-x:auto;padding:8px 10px}
 .tab{flex:0 0 auto;border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 13px;cursor:pointer;font-size:13px;white-space:nowrap}
@@ -128,11 +133,19 @@ audio{display:none}
 .weakpill{background:#fdeaea;color:#a21414;border-radius:20px;padding:4px 12px;font-size:13px}
 .rowbtns{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
 @media (max-width:520px){.cardword{font-size:23px}.grid{grid-template-columns:1fr}.qstem{font-size:16px}}
+@media (max-width:520px){.ielts-entry{align-items:flex-start;padding:10px 12px}.ielts-entry span{max-width:24ch}.ielts-entry a{padding:8px 10px}}
 </style></head><body>
 <header>
  <h1>沪教版 英语 · 八年级上册 — 单词学习 & 智能练习</h1>
  <p>267 条 · 英美自然语音 · 中英例句 · Anki式卡片 · 掌握度驱动的中考题型练习</p>
 </header>
+<aside class="ielts-entry" aria-label="雅思综合词汇实验室">
+ <div>
+  <strong>雅思综合词汇实验室 · WordLab 50</strong>
+  <span>从辨音、拼写、词形到标准句复现，另有图像词义游戏</span>
+ </div>
+ <a href="./ielts/index.html">进入学习 →</a>
+</aside>
 <div class="bar">
  <div class="tabs" id="tabs"></div>
  <div class="ctrls">

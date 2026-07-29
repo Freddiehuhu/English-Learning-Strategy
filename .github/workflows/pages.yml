@@ -23,9 +23,39 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - run: npm ci
+      - name: Install audio inspection tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
       - run: npx playwright install --with-deps chromium webkit
       - run: npm test
+      - run: python3 -m unittest discover -s tests/corpus -p "test_*.py" -v
+      - name: Verify IELTS audio bindings and media properties
+        run: python3 -m unittest discover -s tests/audio -p "test_*.py" -v
+      - name: Verify supplementary review ledger is current
+        run: |
+          python3 scripts/corpus/build_supplementary_review_status.py \
+            --audit data/ielts-corpus/supplementary-audits/curated-native-batch.json \
+            --audit data/ielts-corpus/supplementary-audits/edge-docx-batch.json \
+            --audit data/ielts-corpus/supplementary-audits/edge-pdf-batch.json \
+            --audit data/ielts-corpus/supplementary-audits/scholastic-240-batch.json \
+            --audit data/ielts-corpus/supplementary-audits/scholastic-success-batch.json \
+            --audit data/ielts-corpus/supplementary-audits/vocabulary-in-use-batch.json \
+            --evidence data/ielts-corpus/supplementary-input/curated-native-candidates.tsv \
+            --evidence data/ielts-corpus/supplementary-input/edge-pdf-candidates.tsv \
+            --evidence data/ielts-corpus/supplementary-input/edge-unit7-candidates.tsv \
+            --evidence data/ielts-corpus/supplementary-input/scholastic-240-candidates.tsv \
+            --evidence data/ielts-corpus/supplementary-input/scholastic-success-candidates.tsv \
+            --evidence data/ielts-corpus/supplementary-input/vocabulary-in-use-candidates.tsv \
+            --render-evidence data/ielts-corpus/supplementary-render-evidence/js-vocabulary-starter-pack.json \
+            --output /tmp/supplementary-review-status.json \
+            --markdown-output /tmp/supplementary-review-status.md
+          diff -u data/ielts-corpus/supplementary-review-status.json /tmp/supplementary-review-status.json
+          diff -u data/ielts-corpus/supplementary-review-status.md /tmp/supplementary-review-status.md
       - run: npm run lint
       - run: npm run test:e2e
       - run: npm run build

@@ -348,8 +348,24 @@ test('persists strength progress and prevents a double submit from scoring twice
   await expect(card.getByText(/The electromagnet is/)).toBeVisible();
   await expectFamilyAnswersHidden(card, atlas.answers);
 
-  await card.getByLabel('直接输入英文变形').fill('strong');
-  await card.getByRole('button', { name: '检查拼写' }).click();
+  const familyInput = card.getByLabel('直接输入英文变形');
+  const familyCheck = card.getByRole('button', { name: '检查拼写' });
+  await expect(async () => {
+    const step = await page.evaluate(() => {
+      const visual = JSON.parse(localStorage.getItem('els-ielts-visual-lab-v1') || '{}');
+      return Number(visual.tasks?.['family-atlas-strength']?.step || 0);
+    });
+    if (step < 2) {
+      await familyInput.fill('strong');
+      await familyCheck.click();
+    }
+    expect(
+      await page.evaluate(() => {
+        const visual = JSON.parse(localStorage.getItem('els-ielts-visual-lab-v1') || '{}');
+        return Number(visual.tasks?.['family-atlas-strength']?.step || 0);
+      }),
+    ).toBe(2);
+  }).toPass({ timeout: 5_000 });
   await expect(card.locator('.visual-question-meta')).toContainText('变形 3 / 3');
   await card.getByLabel('直接输入英文变形').fill('strongly');
   await card.locator('[data-visual-family-form]').evaluate((form) => {
@@ -652,6 +668,7 @@ test('supports homophone, homograph, analogy and taxonomy games without revealin
       ),
       repairHistory: core.history?.filter((item: { source?: string }) => item.source === 'visual'),
       spellState: core.words?.fir?.skills?.spell,
+      visualRepairPending: core.words?.fir?.visualRepairPending,
     };
   });
   expect(saved.first).toMatchObject({
@@ -684,18 +701,21 @@ test('supports homophone, homograph, analogy and taxonomy games without revealin
       expect.objectContaining({
         wordId: 'fir',
         skill: 'spell',
+        coreAttempt: false,
         visualTaskId: 'game-homophone-fir',
         visualGameType: 'homophone',
       }),
       expect.objectContaining({
         wordId: 'fir',
         skill: 'spell',
+        coreAttempt: false,
         visualTaskId: 'game-homophone-fur',
         visualGameType: 'homophone',
       }),
     ]),
   );
-  expect(saved.spellState).toMatchObject({ attempts: 2, correct: 0 });
+  expect(saved.spellState).toBeUndefined();
+  expect(saved.visualRepairPending).toMatchObject({ spell: true });
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );

@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "source_id": "js-vocabulary-starter-pack",
+  "source_format": "pdf",
+  "source_sha256": "6cdc57c858864c62dae53bf425d7bbd427d701a74522b4cb1c554a27e30136b4",
+  "source_page_count": 1,
+  "renderer": {
+    "name": "pdftoppm",
+    "version": "26.07.0"
+  },
+  "render_settings": {
+    "format": "png",
+    "dpi": 144,
+    "single_file_per_page": true
+  },
+  "rendered_pages": [
+    {
+      "page": 1,
+      "sha256": "8fe5ff06bb3e23fa963eca486a4803c15cdd67c92a48024ff3cddf947b143ff5",
+      "byte_size": 213116,
+      "width_px": 1191,
+      "height_px": 1684
+    }
+  ]
+}

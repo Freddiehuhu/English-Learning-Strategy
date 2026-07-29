@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "scope": {
+    "source_ids": [
+      "edge-vocabulary-3b",
+      "edge-vocabulary-booster-3a",
+      "edge-vocabulary-book-1a",
+      "edge-vocabulary-book-1b",
+      "edge-vocabulary-booster-2a",
+      "edge-vocabulary-booster-2b"
+    ],
+    "output": "data/ielts-corpus/supplementary-input/edge-pdf-candidates.tsv",
+    "source_limitation": "visible-even-pages-only; source-missing-alternate-pages",
+    "promotion_policy": "candidate_only"
+  },
+  "sources": [
+    {
+      "id": "edge-vocabulary-3b",
+      "status": "candidate_extracted_source_pages_missing",
+      "extracted_row_count": 162,
+      "unique_normalized_term_count": 162,
+      "duplicate_evidence_row_count": 0,
+      "extraction_method": "ocr-assisted-manual-transcription-from-visible-explicit-glossary-and-target-word-lists",
+      "pages_parsed": [
+        51,
+        53,
+        55,
+        57,
+        59
+      ],
+      "visual_sample_pages": [
+        51,
+        55,
+        57
+      ],
+      "rights_boundary": "Terms and printed parts of speech only; no definitions, translations, example sentences, exercise text or artwork."
+    },
+    {
+      "id": "edge-vocabulary-booster-3a",
+      "status": "candidate_extracted_source_pages_missing",
+      "extracted_row_count": 179,
+      "unique_normalized_term_count": 179,
+      "duplicate_evidence_row_count": 0,
+      "extraction_method": "ocr-assisted-manual-transcription-from-visible-explicit-glossary-and-target-word-lists",
+      "pages_parsed": [
+        55,
+        57,
+        59,
+        61,
+        63
+      ],
+      "visual_sample_pages": [
+        55,
+        59,
+        61
+      ],
+      "rights_boundary": "Terms and printed parts of speech only; no definitions, translations, example sentences, exercise text or artwork."
+    },
+    {
+      "id": "edge-vocabulary-book-1a",
+      "status": "candidate_extracted_source_pages_missing",
+      "extracted_row_count": 140,
+      "unique_normalized_term_count": 139,
+      "duplicate_evidence_row_count": 1,
+      "extraction_method": "ocr-assisted-manual-transcription-from-visible-explicit-glossary-and-target-word-lists",
+      "pages_parsed": [
+        49,
+        51,
+        53,
+        55
+      ],
+      "visual_sample_pages": [
+        49,
+        53,
+        55
+      ],
+      "rights_boundary": "Terms and printed parts of speech only; no definitions, translations, example sentences, exercise text or artwork."
+    },
+    {
+      "id": "edge-vocabulary-book-1b",
+      "status": "candidate_extracted_source_pages_missing",
+      "extracted_row_count": 177,
+      "unique_normalized_term_count": 175,
+      "duplicate_evidence_row_count": 2,
+      "extraction_method": "ocr-assisted-manual-transcription-from-visible-explicit-glossary-and-target-word-lists",
+      "pages_parsed": [
+        51,
+        53,
+        55,
+        57
+      ],
+      "visual_sample_pages": [
+        51,
+        53,
+        57
+      ],
+      "rights_boundary": "Terms and printed parts of speech only; no definitions, translations, example sentences, exercise text or artwork."
+    },
+    {
+      "id": "edge-vocabulary-booster-2a",
+      "status": "candidate_extracted_source_pages_missing",
+      "extracted_row_count": 134,
+      "unique_normalized_term_count": 134,
+      "duplicate_evidence_row_count": 0,
+      "extraction_method": "ocr-assisted-manual-transcription-from-visible-explicit-glossary-and-target-word-lists",
+      "pages_parsed": [
+        51,
+        53,
+        55,
+        57
+      ],
+      "visual_sample_pages": [
+        51,
+        55,
+        57
+      ],
+      "rights_boundary": "Terms and printed parts of speech only; no definitions, translations, example sentences, exercise text or artwork."
+    },
+    {
+      "id": "edge-vocabulary-booster-2b",
+      "status": "candidate_extracted_source_pages_missing",
+      "extracted_row_count": 168,
+      "unique_normalized_term_count": 168,
+      "duplicate_evidence_row_count": 0,
+      "extraction_method": "ocr-assisted-manual-transcription-from-visible-explicit-glossary-and-target-word-lists",
+      "pages_parsed": [
+        51,
+        53,
+        55,
+        57
+      ],
+      "visual_sample_pages": [
+        51,
+        53,
+        57
+      ],
+      "rights_boundary": "Terms and printed parts of speech only; no definitions, translations, example sentences, exercise text or artwork."
+    }
+  ]
+}

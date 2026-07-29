@@ -13,55 +13,45 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import json
+import importlib
+import importlib.metadata
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from types import ModuleType
 
-import edge_tts
+from ielts_audio_manifest import (
+    AUDIO_ROOT,
+    MANIFEST_FILE,
+    PIPELINE_VERSION,
+    PROFILE_PARAMETERS,
+    SYNTHESIS_ENGINE_VERSION,
+    build_manifest,
+    compare_manifest,
+    expected_assets,
+    load_manifest,
+    manifest_entry_index,
+    reusable_asset,
+    write_manifest,
+)
 
 
-ROOT = Path(__file__).resolve().parents[1]
-VOCABULARY_FILE = ROOT / "public" / "ielts" / "vocabulary.js"
-AUDIO_ROOT = ROOT / "public" / "ielts" / "audio"
-VOICES = {
-    "uk": "en-GB-SoniaNeural",
-    "us": "en-US-AvaNeural",
-}
-SAMPLE_RATE = 24_000
-OPENING_SILENCE_SECONDS = 0.7
-BETWEEN_WORDS_SECONDS = 0.55
-CLOSING_SILENCE_SECONDS = 0.3
-
-
-def read_vocabulary() -> list[dict[str, str]]:
-    extractor = r"""
-const fs = require('node:fs');
-const vm = require('node:vm');
-const context = { window: {} };
-vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), context);
-const entries = context.window.IELTS_VOCABULARY.map((entry) => ({
-  id: entry.id,
-  word: entry.word,
-  sentence: entry.chunks.join(' ').replace(/\s+([,.;!?])/g, '$1'),
-}));
-process.stdout.write(JSON.stringify(entries));
-"""
-    result = subprocess.run(
-        ["node", "-e", extractor, str(VOCABULARY_FILE)],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    entries = json.loads(result.stdout)
-    if len(entries) != 50:
-        raise RuntimeError(f"Expected 50 vocabulary entries, found {len(entries)}")
-    if len({entry["id"] for entry in entries}) != len(entries):
-        raise RuntimeError("Vocabulary IDs must be unique")
-    if any(not entry.get("word") or not entry.get("sentence") for entry in entries):
-        raise RuntimeError("Every vocabulary entry needs a word and an example sentence")
-    return entries
+SAMPLE_RATE = PROFILE_PARAMETERS["word"]["sample_rate_hz"]
+OPENING_SILENCE_SECONDS = PROFILE_PARAMETERS["word"][
+    "opening_silence_seconds"
+]
+BETWEEN_WORDS_SECONDS = PROFILE_PARAMETERS["word"][
+    "between_repetitions_seconds"
+]
+CLOSING_SILENCE_SECONDS = PROFILE_PARAMETERS["word"][
+    "closing_silence_seconds"
+]
+CHANNELS = PROFILE_PARAMETERS["word"]["channels"]
+FFMPEG_QUALITY = PROFILE_PARAMETERS["word"]["ffmpeg_quality"]
+EDGE_TTS_RATE = PROFILE_PARAMETERS["word"]["edge_tts_rate"]
+EDGE_TTS_VOLUME = PROFILE_PARAMETERS["word"]["edge_tts_volume"]
+EDGE_TTS_PITCH = PROFILE_PARAMETERS["word"]["edge_tts_pitch"]
 
 
 def assemble_audio(source: Path, output: Path, repeat_word: bool) -> None:
@@ -98,9 +88,9 @@ def assemble_audio(source: Path, output: Path, repeat_word: bool) -> None:
             "-ar",
             str(SAMPLE_RATE),
             "-ac",
-            "1",
+            str(CHANNELS),
             "-q:a",
-            "2",
+            str(FFMPEG_QUALITY),
             str(output),
         ],
         check=True,
@@ -109,24 +99,29 @@ def assemble_audio(source: Path, output: Path, repeat_word: bool) -> None:
 
 async def generate_one(
     semaphore: asyncio.Semaphore,
-    accent: str,
-    voice: str,
-    entry_id: str,
-    text: str,
-    kind: str,
+    edge_tts_module: ModuleType,
+    spec: dict[str, object],
     build_root: Path,
-    overwrite: bool,
 ) -> str:
+    accent = str(spec["accent"])
+    voice = str(spec["voice"])
+    entry_id = str(spec["word_id"])
+    text = str(spec["text"])
+    kind = str(spec["kind"])
     suffix = "_sentence" if kind == "sentence" else ""
     output = AUDIO_ROOT / accent / f"{entry_id}{suffix}.mp3"
     output.parent.mkdir(parents=True, exist_ok=True)
-    if output.exists() and output.stat().st_size > 1_000 and not overwrite:
-        return f"skip {accent}/{entry_id}/{kind}"
 
     async with semaphore:
         raw = build_root / f"{accent}-{entry_id}-{kind}-raw.mp3"
         assembled = build_root / f"{accent}-{entry_id}-{kind}-assembled.mp3"
-        communicator = edge_tts.Communicate(text=text, voice=voice)
+        communicator = edge_tts_module.Communicate(
+            text=text,
+            voice=voice,
+            rate=EDGE_TTS_RATE,
+            volume=EDGE_TTS_VOLUME,
+            pitch=EDGE_TTS_PITCH,
+        )
         await communicator.save(str(raw))
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, assemble_audio, raw, assembled, kind == "word")
@@ -139,10 +134,43 @@ async def generate_one(
 async def run(overwrite: bool, concurrency: int) -> None:
     if not shutil.which("node"):
         raise RuntimeError("Node.js is required to read vocabulary.js")
-    if not shutil.which("ffmpeg"):
+
+    specs = expected_assets()
+    try:
+        manifest_entries = manifest_entry_index(load_manifest())
+    except RuntimeError:
+        manifest_entries = {}
+    stale_specs = [
+        spec
+        for spec in specs
+        if overwrite
+        or not reusable_asset(
+            spec,
+            manifest_entries.get(str(spec["path"])),
+            AUDIO_ROOT / str(spec["path"]),
+        )
+    ]
+
+    if stale_specs and not shutil.which("ffmpeg"):
         raise RuntimeError("ffmpeg is required to assemble the learning cadence")
 
-    entries = read_vocabulary()
+    edge_tts_module = None
+    if stale_specs:
+        try:
+            installed_version = importlib.metadata.version("edge-tts")
+        except importlib.metadata.PackageNotFoundError as error:
+            raise RuntimeError(
+                "edge-tts is required to synthesize stale audio assets"
+            ) from error
+        if installed_version != SYNTHESIS_ENGINE_VERSION:
+            raise RuntimeError(
+                "Refusing to generate audio with edge-tts "
+                f"{installed_version}; this profile requires "
+                f"{SYNTHESIS_ENGINE_VERSION}. Update the declared profile and "
+                "regenerate intentionally if the engine version changes."
+            )
+        edge_tts_module = importlib.import_module("edge_tts")
+
     semaphore = asyncio.Semaphore(concurrency)
     AUDIO_ROOT.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".ielts-audio-build-", dir=AUDIO_ROOT) as build:
@@ -151,18 +179,12 @@ async def run(overwrite: bool, concurrency: int) -> None:
             asyncio.create_task(
                 generate_one(
                     semaphore,
-                    accent,
-                    voice,
-                    entry["id"],
-                    entry[text_key],
-                    kind,
+                    edge_tts_module,
+                    spec,
                     build_root,
-                    overwrite,
                 )
             )
-            for accent, voice in VOICES.items()
-            for entry in entries
-            for kind, text_key in (("word", "word"), ("sentence", "sentence"))
+            for spec in stale_specs
         ]
         results = []
         for index, task in enumerate(asyncio.as_completed(tasks), start=1):
@@ -170,16 +192,44 @@ async def run(overwrite: bool, concurrency: int) -> None:
             if index % 20 == 0 or index == len(tasks):
                 print(f"Progress: {index}/{len(tasks)}", flush=True)
 
-    made = sum(result.startswith("made") for result in results)
-    skipped = len(results) - made
-    print(f"Audio ready: {made} generated, {skipped} reused, {len(results)} total")
+    manifest = build_manifest()
+    write_manifest(manifest)
+    made = len(results)
+    reused = len(specs) - made
+    print(
+        "Audio ready: "
+        f"{made} generated, {reused} manifest-verified and reused, "
+        f"{len(specs)} total; profile {PIPELINE_VERSION}"
+    )
+    print(f"Updated {MANIFEST_FILE}")
+
+
+def check() -> None:
+    """Offline integrity gate; never imports edge-tts or contacts its service."""
+
+    messages = compare_manifest()
+    if messages:
+        for message in messages:
+            print(f"ERROR: {message}")
+        raise SystemExit(1)
+    print("IELTS audio manifest is current: 200/200 assets verified")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="verify all audio/text/profile bindings without synthesis or writes",
+    )
     parser.add_argument("--concurrency", type=int, default=6)
     args = parser.parse_args()
+    if args.check:
+        if args.overwrite:
+            parser.error("--check and --overwrite cannot be used together")
+        check()
+        return
     asyncio.run(run(args.overwrite, max(1, min(args.concurrency, 10))))
 
 

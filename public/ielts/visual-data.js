@@ -466,15 +466,16 @@
             slot: 'adv.',
             area: 'bottom-right',
             sceneLabel: '两位朋友遵守赛道规则全力竞速，赛后友好握手',
-            prompt: '把 competition 变成副词：The two friends raced fairly and ______.',
+            prompt:
+              '把 competition 变成副词：After years of training together, the two friends began running ______ for their schools.',
           },
         ],
         story: {
           title: '共同奔向同一个目标',
           english:
-            'The competition drew runners from several schools. They came to compete for a place in the final, which stayed highly competitive. Two friends raced competitively while still following the rules.',
+            'Runners from several schools entered the competition. Each athlete hoped to compete in the final. The field was highly competitive. Two friends who had trained together were now running competitively for different schools, yet they still encouraged each other after the race.',
           chinese:
-            '这场比赛吸引了多所学校的选手。他们前来竞争决赛席位，决赛也始终竞争激烈；两位朋友全力竞赛，同时仍然遵守规则。',
+            '多所学校的选手参加了这场比赛。每位运动员都希望进入决赛。参赛阵容竞争力很强。两位一起训练过的朋友如今代表不同学校参加竞技跑，但赛后仍然互相鼓励。',
           retellPrompt:
             '收起文字，只看四格图复述田径赛，至少使用 competition、compete、competitive、competitively 这 4 个形式。',
         },
@@ -873,7 +874,7 @@
             targetWordId: 'fascinate',
             title: '注意力被牢牢吸住',
             prompt:
-              'The jellyfish held the student’s attention so completely that they ______ him.',
+              'The glowing jellyfish held the student’s attention for nearly an hour; he could hardly look away. They ______ him.',
             choices: ['fascinated', 'interested', 'teased', 'dominated'],
             answer: 'fascinated',
             hint: '注意图中人物前倾、凝视，几乎移不开目光。',
@@ -1474,7 +1475,7 @@
             targetWordId: 'fascinate',
             title: '被什么深深吸引',
             prompt: 'The student was fascinated ______ marine life.',
-            choices: ['by', 'from', 'with', 'across'],
+            choices: ['by', 'from', 'to', 'across'],
             answer: 'by',
             hint: '被动结构 be fascinated ______ something。',
             feedback: 'be fascinated by 表示“被……深深吸引”。',

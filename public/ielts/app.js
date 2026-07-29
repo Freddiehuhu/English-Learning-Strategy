@@ -10,23 +10,31 @@
   var VISUAL_STORAGE_KEY = 'els-ielts-visual-lab-v1';
   var AUDIO_ASSET_VERSION = 'natural-20260728';
   var SKILLS = ['sound', 'spell', 'forms', 'sentence'];
+  var DAILY_NEW_LIMIT = 2;
+  var DAILY_MAX_SECONDS = 720;
+  var STAGE_SECONDS = {
+    sound: 45,
+    spell: 75,
+    forms: 90,
+    sentence: 135,
+  };
   var SKILL_LABELS = {
-    sound: '听音跟读',
+    sound: '音节听辨',
     spell: '听写拼词',
     forms: '词形变换',
-    sentence: '句子运用',
+    sentence: '标准句复现',
   };
   var SKILL_SHORT = {
-    sound: '跟读',
+    sound: '辨音',
     spell: '拼写',
     forms: '词形',
-    sentence: '句用',
+    sentence: '句架',
   };
   var SKILL_CHAIN_LABELS = {
     sound: '声音与核心义',
     spell: '无提示拼写',
     forms: '词形与构词',
-    sentence: '搭配到表达',
+    sentence: '搭配到标准句复现',
   };
   // Visual tasks feed the same word × skill repair queue as the four core gates.
   // Meaning/context relations return to sentence use; sound–spelling relations
@@ -593,6 +601,10 @@
 
     document.querySelectorAll('[data-view-link]').forEach(function (button) {
       button.addEventListener('click', function () {
+        if (session && button.dataset.viewLink === 'today') {
+          leaveSessionToToday();
+          return;
+        }
         navigate(button.dataset.viewLink);
       });
     });
@@ -624,6 +636,18 @@
     main.addEventListener('load', handleVisualImageLoad, true);
 
     if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+    if (history.replaceState) {
+      var initialHistoryState = Object.assign({}, history.state || {});
+      delete initialHistoryState.wordlabSession;
+      history.replaceState(
+        Object.assign({}, initialHistoryState, { wordlabView: 'today' }),
+        '',
+        location.href,
+      );
+      window.addEventListener('popstate', function (event) {
+        navigate((event.state && event.state.wordlabView) || 'today', { fromPopState: true });
+      });
+    }
     renderToday();
     scrollToTop();
 
@@ -638,14 +662,17 @@
 
   function defaultState() {
     return {
-      version: 1,
+      version: 3,
       settings: {
         accent: 'uk',
-        dailyNew: 6,
+        dailyNew: DAILY_NEW_LIMIT,
       },
       daily: {
         date: '',
         newIds: [],
+        carryoverIds: [],
+        newSelectionDone: false,
+        completedAt: 0,
       },
       words: {},
       history: [],
@@ -879,19 +906,38 @@
     });
     if (!word) return;
     visualRuntime.repairRecorded[taskId] = true;
-    recordResult(
+    recordVisualRepairNeed(
       word,
       metadata.repairSkill,
-      false,
       '图像错因 · ' +
         metadata.gameType +
         (String(choice || '') === 'skip' ? ' · 主动跳过' : ' · 判断错误'),
-      {
-        source: 'visual',
-        visualTaskId: String(taskId),
-        visualGameType: metadata.gameType,
-      },
+      taskId,
+      metadata.gameType,
     );
+  }
+
+  function recordVisualRepairNeed(word, skill, detail, taskId, gameType) {
+    var wordState = getWordState(word.id);
+    if (!wordState.visualRepairPending || typeof wordState.visualRepairPending !== 'object') {
+      wordState.visualRepairPending = {};
+    }
+    wordState.visualRepairPending[skill] = true;
+    var now = Date.now();
+    state.history.push({
+      wordId: word.id,
+      word: word.word,
+      skill: skill,
+      correct: false,
+      detail: detail,
+      at: now,
+      source: 'visual',
+      visualTaskId: String(taskId || ''),
+      visualGameType: String(gameType || ''),
+      coreAttempt: false,
+    });
+    state.history = state.history.slice(-240);
+    saveState();
   }
 
   function completeVisualTask(taskId) {
@@ -1085,28 +1131,214 @@
   }
 
   function loadState() {
-    var base = defaultState();
     try {
       var saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-      if (!saved || typeof saved !== 'object') return base;
-      return {
-        version: 1,
-        settings: Object.assign({}, base.settings, saved.settings || {}),
-        daily:
-          saved.daily && typeof saved.daily === 'object'
-            ? {
-                date: String(saved.daily.date || ''),
-                newIds: Array.isArray(saved.daily.newIds) ? saved.daily.newIds.slice(0, 10) : [],
-              }
-            : base.daily,
-        words: saved.words && typeof saved.words === 'object' ? saved.words : {},
-        history: Array.isArray(saved.history) ? saved.history.slice(-240) : [],
-        journal: Array.isArray(saved.journal) ? saved.journal.slice(-120) : [],
-      };
+      return normaliseState(saved);
     } catch (error) {
       console.warn('Could not read saved WordLab progress.', error);
-      return base;
+      return defaultState();
     }
+  }
+
+  function normaliseState(saved) {
+    var base = defaultState();
+    if (!saved || typeof saved !== 'object') return base;
+    var validWordIds = new Set(
+      WORDS.map(function (word) {
+        return word.id;
+      }),
+    );
+    var validProgressIds = new Set(validWordIds);
+    FORM_FOUNDATIONS.forEach(function (word) {
+      validProgressIds.add(word.id);
+    });
+    var settings = Object.assign({}, base.settings, saved.settings || {});
+    settings.dailyNew = normaliseDailyNew(settings.dailyNew);
+    var savedDaily = saved.daily && typeof saved.daily === 'object' ? saved.daily : base.daily;
+    var words = saved.words && typeof saved.words === 'object' ? saved.words : {};
+    Object.keys(words).forEach(function (wordId) {
+      if (!validProgressIds.has(wordId)) delete words[wordId];
+    });
+    var allNewIds = normaliseDailyIds(savedDaily.newIds, validWordIds);
+    var newIds = allNewIds.slice(0, DAILY_NEW_LIMIT);
+    var overflowCarryoverIds = allNewIds.slice(DAILY_NEW_LIMIT).filter(function (id) {
+      return savedWordHasActivity(words, id) && savedWordHasUnattemptedSkill(words, id);
+    });
+    var carryoverIds = normaliseDailyIds(
+      (Array.isArray(savedDaily.carryoverIds) ? savedDaily.carryoverIds : []).concat(
+        overflowCarryoverIds,
+      ),
+      validWordIds,
+    ).filter(
+      function (id) {
+        return newIds.indexOf(id) < 0;
+      },
+    );
+    var history = Array.isArray(saved.history)
+      ? saved.history
+          .filter(function (item) {
+            return item && validProgressIds.has(item.wordId);
+          })
+          .slice(-240)
+      : [];
+    var journal = Array.isArray(saved.journal)
+      ? saved.journal
+          .filter(function (item) {
+            return item && validWordIds.has(item.wordId);
+          })
+          .slice(-120)
+      : [];
+    if (Number(saved.version || 1) < 3) {
+      archiveLegacySentenceEvidence(words);
+      history = history.map(function (item) {
+        if (!item || item.skill !== 'sentence') return item;
+        return Object.assign({}, item, {
+          correct: null,
+          legacyUnverified: true,
+          detail: '旧版句子自评记录（未作语言正确性证据）',
+        });
+      });
+      journal = journal.map(function (item) {
+        return Object.assign({}, item, {
+          status: 'legacy_unverified',
+          teacherVerified: false,
+        });
+      });
+    }
+    normaliseSkillReviewFlags(words, history);
+    return {
+      version: 3,
+      settings: settings,
+      daily: {
+        date: String(savedDaily.date || ''),
+        newIds: newIds,
+        carryoverIds: carryoverIds,
+        newSelectionDone:
+          typeof savedDaily.newSelectionDone === 'boolean'
+            ? savedDaily.newSelectionDone &&
+              (newIds.length > 0 ||
+                settings.dailyNew === 0 ||
+                Number(savedDaily.completedAt || 0) > 0)
+            : newIds.length > 0,
+        completedAt: Math.max(0, Number(savedDaily.completedAt || 0)),
+      },
+      words: words,
+      history: history,
+      journal: journal,
+    };
+  }
+
+  function archiveLegacySentenceEvidence(words) {
+    Object.keys(words).forEach(function (wordId) {
+      var wordState = words[wordId];
+      if (!wordState || !wordState.skills || !wordState.skills.sentence) return;
+      wordState.legacySentencePractice = Object.assign({}, wordState.skills.sentence);
+      wordState.skills.sentence = {
+        attempts: 0,
+        correct: 0,
+        pending: 0,
+        level: 0,
+        due: 0,
+        last: 0,
+        needsReview: true,
+        relearnRequired: true,
+      };
+    });
+  }
+
+  function savedWordHasActivity(words, wordId) {
+    var wordState = words[wordId];
+    if (!wordState || !wordState.skills) return false;
+    return SKILLS.some(function (skill) {
+      var skillState = wordState.skills[skill] || {};
+      return Number(skillState.attempts || 0) > 0 || Number(skillState.pending || 0) > 0;
+    });
+  }
+
+  function savedWordHasUnattemptedSkill(words, wordId) {
+    var wordState = words[wordId];
+    if (!wordState || !wordState.skills) return true;
+    return SKILLS.some(function (skill) {
+      var skillState = wordState.skills[skill] || {};
+      return Number(skillState.attempts || 0) === 0 && Number(skillState.pending || 0) === 0;
+    });
+  }
+
+  function normaliseDailyNew(value) {
+    if (value === null || value === undefined || String(value).trim() === '') {
+      return DAILY_NEW_LIMIT;
+    }
+    var parsed = Math.round(Number(value));
+    if (!Number.isFinite(parsed)) return DAILY_NEW_LIMIT;
+    return Math.max(0, Math.min(DAILY_NEW_LIMIT, parsed));
+  }
+
+  function normaliseDailyIds(value, validWordIds) {
+    if (!Array.isArray(value)) return [];
+    var seen = new Set();
+    return value.filter(function (id) {
+      if (!validWordIds.has(id) || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }
+
+  function normaliseSkillReviewFlags(words, history) {
+    var latestResults = {};
+    history.forEach(function (item) {
+      if (
+        !item ||
+        SKILLS.indexOf(item.skill) < 0 ||
+        !item.wordId ||
+        item.coreAttempt === false
+      )
+        return;
+      var key = item.wordId + '::' + item.skill;
+      if (!latestResults[key] || Number(item.at || 0) >= Number(latestResults[key].at || 0)) {
+        latestResults[key] = item;
+      }
+    });
+    Object.keys(words).forEach(function (wordId) {
+      var wordState = words[wordId];
+      if (!wordState || typeof wordState !== 'object') return;
+      if (!wordState.skills || typeof wordState.skills !== 'object') {
+        wordState.skills = {};
+        return;
+      }
+      SKILLS.forEach(function (skill) {
+        var skillState = wordState.skills[skill];
+        if (!skillState || typeof skillState !== 'object' || Array.isArray(skillState)) {
+          delete wordState.skills[skill];
+          return;
+        }
+        skillState.attempts = normaliseNonnegativeNumber(skillState.attempts);
+        skillState.correct = Math.min(
+          skillState.attempts,
+          normaliseNonnegativeNumber(skillState.correct),
+        );
+        skillState.pending = normaliseNonnegativeNumber(skillState.pending);
+        skillState.level = Math.min(
+          5,
+          skillState.attempts,
+          skillState.correct,
+          normaliseNonnegativeNumber(skillState.level),
+        );
+        skillState.due = normaliseNonnegativeNumber(skillState.due);
+        skillState.last = normaliseNonnegativeNumber(skillState.last);
+        skillState.relearnRequired = Boolean(skillState.relearnRequired);
+        var latest = latestResults[wordId + '::' + skill];
+        skillState.needsReview = skillState.relearnRequired
+          ? true
+          : latest
+            ? latest.correct !== true
+            : Boolean(skillState.needsReview);
+      });
+    });
+  }
+
+  function normaliseNonnegativeNumber(value) {
+    var number = Number(value);
+    return Number.isFinite(number) ? Math.max(0, number) : 0;
   }
 
   function saveState() {
@@ -1133,9 +1365,12 @@
       wordState.skills[skill] = {
         attempts: 0,
         correct: 0,
+        pending: 0,
         level: 0,
         due: 0,
         last: 0,
+        needsReview: false,
+        relearnRequired: false,
       };
     }
     return wordState.skills[skill];
@@ -1144,22 +1379,35 @@
   function peekSkillState(wordId, skill) {
     var wordState = state.words[wordId];
     if (!wordState || !wordState.skills || !wordState.skills[skill]) {
-      return { attempts: 0, correct: 0, level: 0, due: 0, last: 0 };
+      return {
+        attempts: 0,
+        correct: 0,
+        pending: 0,
+        level: 0,
+        due: 0,
+        last: 0,
+        needsReview: false,
+        relearnRequired: false,
+      };
     }
     return wordState.skills[skill];
   }
 
   function recordResult(word, skill, correct, detail, source) {
     var skillState = getSkillState(word.id, skill);
+    clearVisualRepairNeed(word.id, skill);
+    skillState.relearnRequired = false;
     var now = Date.now();
     skillState.attempts += 1;
     if (correct) {
       skillState.correct += 1;
       skillState.level = Math.min(5, skillState.level + 1);
-      skillState.due = startOfToday() + INTERVAL_DAYS[skillState.level] * 86400000;
+      skillState.due = addCalendarDays(startOfToday(), INTERVAL_DAYS[skillState.level]);
+      skillState.needsReview = false;
     } else {
       skillState.level = Math.max(0, skillState.level - 1);
       skillState.due = startOfToday();
+      skillState.needsReview = true;
     }
     skillState.last = now;
 
@@ -1187,11 +1435,84 @@
     }
   }
 
-  function navigate(view) {
+  function recordPendingResult(word, skill, detail) {
+    var skillState = getSkillState(word.id, skill);
+    clearVisualRepairNeed(word.id, skill);
+    skillState.relearnRequired = false;
+    var now = Date.now();
+    skillState.pending = Number(skillState.pending || 0) + 1;
+    skillState.needsReview = true;
+    skillState.due = startOfToday();
+    skillState.last = now;
+    state.history.push({
+      wordId: word.id,
+      word: word.word,
+      skill: skill,
+      correct: null,
+      pendingReview: true,
+      detail: detail || '已提交，等待人工评阅',
+      at: now,
+    });
+    state.history = state.history.slice(-240);
+    saveState();
+
+    if (session) {
+      if (!session.stats[skill]) {
+        session.stats[skill] = { attempts: 0, correct: 0, pending: 0 };
+      }
+      session.stats[skill].pending = Number(session.stats[skill].pending || 0) + 1;
+    }
+  }
+
+  function clearVisualRepairNeed(wordId, skill) {
+    var wordState = getWordState(wordId);
+    if (!wordState.visualRepairPending) return;
+    delete wordState.visualRepairPending[skill];
+  }
+
+  function leaveSessionToToday() {
+    if (
+      session &&
+      history.back &&
+      history.state &&
+      (history.state.wordlabSession || history.state.wordlabView !== 'today')
+    ) {
+      history.back();
+      return;
+    }
+    navigate('today');
+  }
+
+  function navigate(view, options) {
     clearTimeout(advanceTimer);
     cleanupMedia();
+    var previousHistoryState = Object.assign({}, history.state || {});
+    var isSessionHistoryEntry = Boolean(previousHistoryState.wordlabSession);
+    var isLeavingSession = Boolean(session) || isSessionHistoryEntry;
+    delete previousHistoryState.wordlabSession;
     session = null;
     currentView = view;
+    if (!(options && options.fromPopState) && history.pushState) {
+      var nextHistoryState = Object.assign({}, previousHistoryState, { wordlabView: view });
+      if (isLeavingSession && history.replaceState) {
+        history.replaceState(nextHistoryState, '', location.href);
+      } else if (!history.state || history.state.wordlabView !== view) {
+        history.pushState(nextHistoryState, '', location.href);
+      }
+    } else if (
+      options &&
+      options.fromPopState &&
+      isSessionHistoryEntry &&
+      history.replaceState
+    ) {
+      // A completed in-memory session cannot be restored through browser Forward.
+      // Convert that stale entry into its safe landing view before another session starts.
+      history.replaceState(
+        Object.assign({}, previousHistoryState, { wordlabView: view }),
+        '',
+        location.href,
+      );
+    }
 
     if (view === 'today') {
       renderToday();
@@ -1200,9 +1521,9 @@
     } else if (view === 'visual') {
       renderVisualLab();
     } else if (SKILLS.indexOf(view) >= 0) {
-      startSkillSession(view);
+      startSkillSession(view, { historyReady: true });
     } else if (view === 'learn') {
-      startSkillSession('sound');
+      startSkillSession('sound', { historyReady: true });
     } else {
       renderToday();
     }
@@ -1219,7 +1540,12 @@
   function renderToday() {
     currentView = 'today';
     setActiveNav('today');
-    var queue = buildDailyQueue();
+    var plan = buildDailyPlan();
+    var taskCount = dailyPlanTaskCount(plan);
+    var newCount = plan.filter(function (item) {
+      return item.kind === 'new';
+    }).length;
+    var estimatedSeconds = dailyPlanSeconds(plan);
     var summary = progressSummary();
     var dueCount = countDueSkills();
     var today = new Intl.DateTimeFormat('zh-CN', {
@@ -1233,34 +1559,46 @@
       '<div>' +
       '<p class="eyebrow">ONE WORD · ONE LEARNING LOOP</p>' +
       '<h1>同一个词，走完一条学习闭环</h1>' +
-      '<p>系统让声音、拼写、词形、搭配和造句连续发生；每一关都为下一关留下可用的记忆线索。</p>' +
+      '<p>系统让声音、拼写、词形、搭配和标准句复现连续发生；每一关都为下一关留下可用的记忆线索。</p>' +
       '</div>' +
       '<span class="date-chip">' +
       esc(today) +
       '</span>' +
       '</section>' +
       '<section class="today-layout">' +
-      '<article class="panel start-panel">' +
-      '<p class="eyebrow">15–20 MINUTES</p>' +
+      '<article class="panel start-panel" data-daily-plan data-new-count="' +
+      newCount +
+      '" data-estimated-seconds="' +
+      estimatedSeconds +
+      '">' +
+      '<p class="eyebrow">8–12 MINUTES · NATURAL STOP</p>' +
       '<h2>' +
-      (queue.length ? '今日 ' + queue.length + ' 词，每个词连续走完四关' : '今日到期任务已完成') +
+      (plan.length
+        ? '预计 ' +
+          Math.max(1, Math.ceil(estimatedSeconds / 60)) +
+          ' 分钟 · ' +
+          plan.length +
+          ' 个词 · ' +
+          taskCount +
+          ' 项'
+        : '今日到期任务已完成') +
       '</h2>' +
       '<p>' +
-      (queue.length
-        ? '先听音、跟读并确认核心义；随后遮住拼写，判断词形，再从自然搭配进入完整句子。图片、故事和词源会在需要复盘时出现。'
+      (plan.length
+        ? '新词最多 2 个并完成声音、拼写、词形和表达四关；旧词只复习今天到期或尚未完成的能力，最后用新语境确认迁移。'
         : '你可以继续做专项练习，或明天按间隔计划回来复习。') +
       '</p>' +
       '<ol class="session-steps integrated-loop" aria-label="每日学习闭环">' +
       '<li><span>01</span><strong>声音与核心义</strong><small>听辨 · 跟读</small></li>' +
       '<li><span>02</span><strong>无提示拼写</strong><small>盲听 · 检索</small></li>' +
       '<li><span>03</span><strong>词形与构词</strong><small>判断 · 变形</small></li>' +
-      '<li><span>04</span><strong>搭配到表达</strong><small>词块 · 造句</small></li>' +
+      '<li><span>04</span><strong>搭配到句架</strong><small>词块 · 复现</small></li>' +
       '</ol>' +
       '<div class="start-actions">' +
       '<button class="primary-button" type="button" data-action="start-daily"' +
-      (queue.length ? '' : ' disabled') +
+      (plan.length ? '' : ' disabled') +
       '>' +
-      (queue.length ? '开始今日训练 →' : '今日任务已完成') +
+      (plan.length ? '开始今日训练 →' : '今日任务已完成') +
       '</button>' +
       '<button class="secondary-button" type="button" data-action="start-weak">智能补弱（按错因）</button>' +
       '<span class="mini-metric">' +
@@ -1273,7 +1611,7 @@
       '<h3>学习概览</h3>' +
       '<div class="metric-grid">' +
       metric(summary.started, '已开始') +
-      metric(summary.stable, '稳定掌握') +
+      metric(summary.stable, '四项受控任务达标且无待复习') +
       metric(summary.mistakes, '近期待纠正') +
       '</div>' +
       '</article>' +
@@ -1290,8 +1628,8 @@
       '<section class="module-grid" aria-label="专项训练">' +
       moduleCard(
         '01',
-        '声音与跟读',
-        '修复听辨、重音和尾音：听英音／美音，录下自己的发音做 A/B 对比。',
+        '音节听辨与自练',
+        '自动证据只检查音节听辨；跟读录音用于自己的 A/B 对比，不自动评价发音。',
         'sound',
       ) +
       moduleCard(
@@ -2669,18 +3007,35 @@
     );
   }
 
+  function pushSessionHistoryState() {
+    if (!history.pushState || (history.state && history.state.wordlabSession)) return;
+    history.pushState(
+      Object.assign({}, history.state || {}, {
+        wordlabView:
+          (history.state && history.state.wordlabView) || currentView || 'today',
+        wordlabSession: true,
+      }),
+      '',
+      location.href,
+    );
+  }
+
   function startDailySession() {
-    var queue = buildDailyQueue();
-    if (!queue.length) {
+    var plans = buildDailyPlan();
+    if (!plans.length) {
       showToast('今天没有到期任务，可以选择一个专项继续练习。');
       return;
     }
+    pushSessionHistoryState();
     session = {
       type: 'daily',
-      words: queue,
+      plans: plans,
+      words: plans.map(function (plan) {
+        return plan.word;
+      }),
       wordIndex: 0,
       stageIndex: 0,
-      stages: SKILLS.slice(),
+      stages: [],
       stats: {},
       taskState: {},
       token: Date.now(),
@@ -2697,6 +3052,7 @@
       startDailySession();
       return;
     }
+    pushSessionHistoryState();
     session = {
       type: 'repair',
       words: repairItems.map(function (item) {
@@ -2717,9 +3073,10 @@
     scrollToTop();
   }
 
-  function startSkillSession(skill) {
+  function startSkillSession(skill, options) {
     currentView = skill;
     var queue = skill === 'forms' ? buildFormsQueue(12) : buildSkillQueue(skill, 10);
+    if (!(options && options.historyReady)) pushSessionHistoryState();
     session = {
       type: 'skill',
       words: queue,
@@ -2744,43 +3101,55 @@
 
     var word = currentWord();
     var skill = currentSkill();
-    var currentTaskNumber =
-      session.type === 'daily'
-        ? session.wordIndex * session.stages.length + session.stageIndex + 1
-        : session.wordIndex + 1;
-    var totalTasks =
-      session.type === 'daily'
-        ? session.words.length * session.stages.length
-        : session.words.length;
+    var stages = currentStages();
+    var currentTaskNumber = session.type === 'daily' ? dailyTaskNumber() : session.wordIndex + 1;
+    var totalTasks = session.type === 'daily' ? dailyTaskTotal() : session.words.length;
 
     setActiveNav(skill);
     currentView = skill;
     var focusHeadings = {
-      sound: ['听音跟读', '先建立声音，再看拼写。录音只在当前页面内使用。'],
+      sound: ['音节听辨', '先建立声音，再看拼写。录音跟读只作自练，不计自动评分。'],
       spell: ['听写拼词', '先盲听拼写，可暂停和变速重播；提示不会直接显示答案。'],
       forms: ['词形变换', '四格词族、直接变形与语境填空交替出现；答案在答对前保持隐藏。'],
       sentence: ['句子工坊', '先回忆自然搭配，再用词块搭好骨架并完成受控仿写。'],
     };
-    var dailyHeadings = {
-      sound: [
-        '第 1 关 · 声音与核心义',
-        '听清、跟读并确认一个核心义，为接下来的无提示拼写留下声音线索。',
+    var dailyHeadingContent = {
+      sound: ['声音与核心义', '听清、跟读并确认一个核心义，为接下来的无提示拼写留下声音线索。'],
+      spell: ['无提示拼写', '保持同一个词，先盲听检索完整拼写；需要时只获得最小提示。'],
+      forms: ['词形与构词', '继续处理同一个词的词性、变形和句中位置；答案在作答前保持隐藏。'],
+      sentence: [
+        '搭配到标准句复现',
+        '先从记忆中提取一个自然词块，再隐藏骨架复现完整标准句。',
       ],
-      spell: ['第 2 关 · 无提示拼写', '保持同一个词，先盲听检索完整拼写；需要时只获得最小提示。'],
-      forms: [
-        '第 3 关 · 词形与构词',
-        '继续处理同一个词的词性、变形和句中位置；答案在作答前保持隐藏。',
-      ],
-      sentence: ['第 4 关 · 搭配到表达', '先从记忆中提取一个自然词块，再把同一个词带入完整句子。'],
     };
-    var headings = session.type === 'daily' ? dailyHeadings : focusHeadings;
+    var headings = focusHeadings;
+    if (session.type === 'daily') {
+      var dailyPlan = currentPlan();
+      var stage = currentStage();
+      var stagePrefix =
+        dailyPlan && dailyPlan.kind === 'new'
+          ? '第 ' + (session.stageIndex + 1) + ' 关 · '
+          : stages.length === 1
+            ? '迁移复习 · '
+            : '本词第 ' + (session.stageIndex + 1) + ' 步 · ';
+      var dailyDescription = dailyHeadingContent[skill][1];
+      if (stage && stage.role === 'transfer') {
+        dailyDescription = '这是本词今天的出口题：撤掉前面线索，在新语境中独立完成后自然结束。';
+      }
+      headings = {};
+      headings[skill] = [stagePrefix + dailyHeadingContent[skill][0], dailyDescription];
+    }
 
     main.innerHTML =
       '<section class="page-heading">' +
       '<div>' +
       '<p class="eyebrow">' +
       (session.type === 'daily'
-        ? 'CONTINUOUS LOOP · ' + (session.stageIndex + 1) + ' / ' + session.stages.length
+        ? (currentPlan() && currentPlan().kind === 'new' ? 'NEW WORD LOOP' : 'DUE SKILL LOOP') +
+          ' · ' +
+          (session.stageIndex + 1) +
+          ' / ' +
+          stages.length
         : 'FOCUS PRACTICE') +
       '</p>' +
       '<h1>' +
@@ -2797,7 +3166,9 @@
       '</span>' +
       '</section>' +
       '<section class="training-shell">' +
-      '<article class="panel training-panel">' +
+      '<article class="panel training-panel" data-word-id="' +
+      esc(word.id) +
+      '">' +
       renderTask(word, skill, currentTaskNumber, totalTasks) +
       '</article>' +
       '<aside class="training-aside">' +
@@ -2832,6 +3203,7 @@
   function renderQueuePanel() {
     var wordPosition = session.wordIndex + 1;
     var isRepair = session.type === 'repair';
+    var dailyPlan = currentPlan();
     var stageText =
       session.type === 'daily'
         ? '第 ' +
@@ -2844,11 +3216,19 @@
     return (
       '<article class="panel queue-panel">' +
       '<h3>' +
-      (session.type === 'daily' ? '本词学习链' : isRepair ? '本轮错误修复' : '当前队列') +
+      (session.type === 'daily'
+        ? dailyPlan && dailyPlan.kind === 'new'
+          ? '本词完整学习链'
+          : '本词定向复习'
+        : isRepair
+          ? '本轮错误修复'
+          : '当前队列') +
       '</h3>' +
       '<p>' +
       (session.type === 'daily'
-        ? '同一个词一直保留到第四关；图片和故事只在相应复盘节点解锁。'
+        ? dailyPlan && dailyPlan.kind === 'new'
+          ? '新词保持在同一条四关学习链中；中途不会换词。'
+          : '只练今天真正到期或尚未完成的能力，并以迁移任务自然结束。'
         : isRepair
           ? '系统只安排这个词真正薄弱的能力，不把已经稳定的关卡机械重做。'
           : currentSkill() === 'forms'
@@ -2878,10 +3258,12 @@
 
   function renderLearningStageTrack() {
     if (!session || session.type !== 'daily') return '';
+    var stages = currentStages();
     return (
-      '<ol class="learning-stage-track" aria-label="本词四关进度">' +
-      session.stages
-        .map(function (skill, index) {
+      '<ol class="learning-stage-track" aria-label="本词学习步骤">' +
+      stages
+        .map(function (stage, index) {
+          var skill = stage.skill;
           var className =
             index < session.stageIndex
               ? 'is-done'
@@ -2891,6 +3273,10 @@
           return (
             '<li class="' +
             className +
+            '" data-skill="' +
+            esc(skill) +
+            '" data-role="' +
+            esc(stage.role || 'practice') +
             '"><span>' +
             String(index + 1).padStart(2, '0') +
             '</span><strong>' +
@@ -2904,6 +3290,13 @@
   }
 
   function renderTrainingTip(word, skill) {
+    if (skill === 'sound' && !session.taskState.soundObserved) {
+      return (
+        '<article class="panel info-panel"><h3>先听后看</h3>' +
+        '<p>这一小步只检查你能否从声音中分出音节。先不显示拼写、音标、词义或例句；作答后再进入跟读。</p>' +
+        '</article>'
+      );
+    }
     if (skill === 'forms') {
       return (
         '<article class="panel info-panel"><h3>无答案提示</h3>' +
@@ -2917,9 +3310,16 @@
   }
 
   function renderSoundTask(word) {
-    var sourceBadge =
-      word.source && normaliseAnswer(word.source) !== normaliseAnswer(word.word)
-        ? '<span class="source-badge">原词形：' + esc(word.source) + '</span>'
+    if (!session.taskState.soundObserved) {
+      return renderSoundPrecheck(word);
+    }
+    var displayedAccent = state.settings.accent === 'us' ? 'us' : 'uk';
+    var sourceBadge = word.sourceError
+      ? '<span class="source-badge">原输入误拼：' +
+        esc(word.sourceError) +
+        '；正确拼写见上方</span>'
+      : word.source && normaliseAnswer(word.source) !== normaliseAnswer(word.word)
+        ? '<span class="source-badge">原输入形式：' + esc(word.source) + '</span>'
         : '';
     return (
       '<div class="word-stage">' +
@@ -2929,8 +3329,8 @@
       '<h2>' +
       esc(word.word) +
       '</h2>' +
-      '<div class="word-meta"><span class="ipa">' +
-      esc(word.ipa) +
+      '<div class="word-meta"><span class="ipa" data-ipa-display>' +
+      esc(accentLabel(displayedAccent) + ' ' + wordIpa(word, displayedAccent)) +
       '</span><span class="pos-badge">' +
       esc(word.pos) +
       '</span>' +
@@ -2939,6 +3339,7 @@
       '<p class="syllable-line">' +
       syllableHtml(word) +
       '</p>' +
+      renderSoundDiagnostic(word) +
       '<div class="audio-row">' +
       audioButton('uk', word.id, 1, '单词 · 英') +
       audioButton('us', word.id, 1, '单词 · 美') +
@@ -2946,7 +3347,7 @@
       exampleAudioButton('us', word.id, '例句 · 美') +
       '</div>' +
       '<div class="record-box">' +
-      '<p>跟读方法：听范音 → 录下自己 → 交替播放。重点检查重音和尾音，不评价“口音像不像”。</p>' +
+      '<p>自练方法：听范音 → 录下自己 → 交替播放。系统只记录前面的音节听辨，不自动评价你的发音或口音。</p>' +
       '<div class="record-actions">' +
       '<button class="secondary-button" type="button" data-action="record-toggle">● 录下跟读</button>' +
       '<button class="secondary-button" type="button" data-action="play-recording" disabled>▶ 回放自己</button>' +
@@ -2973,10 +3374,71 @@
       '</div>' +
       '</div>' +
       '<div class="card-actions">' +
-      '<button class="secondary-button" type="button" data-action="mark-sound" data-correct="false">还不稳，再排期</button>' +
-      '<button class="primary-button" type="button" data-action="mark-sound" data-correct="true">跟读清楚了 →</button>' +
+      '<button class="secondary-button" type="button" data-action="mark-sound" data-correct="false">仍听不清，再排期</button>' +
+      '<button class="primary-button" type="button" data-action="mark-sound" data-correct="true">完成声音对照 →</button>' +
       '</div>' +
       '</div>'
+    );
+  }
+
+  function renderSoundPrecheck(word) {
+    var accent = state.settings.accent === 'us' ? 'us' : 'uk';
+    var accentLabel = accent === 'us' ? '先听 · 美音' : '先听 · 英音';
+    var buttons = [1, 2, 3, 4, 5]
+      .map(function (count) {
+        return (
+          '<button type="button" data-action="sound-syllables" data-value="' +
+          count +
+          '"' +
+          (session.taskState.soundPlayed ? '' : ' disabled') +
+          '>' +
+          count +
+          ' 个</button>'
+        );
+      })
+      .join('');
+    return (
+      '<div class="word-stage sound-precheck" data-sound-precheck>' +
+      '<p class="eyebrow">AUDIO-ONLY CHECK</p>' +
+      '<h2>先听，不看拼写</h2>' +
+      '<p class="sound-precheck-lead" id="soundSyllablePrompt">播放主口音，凭耳朵判断这个词有几个音节。这里不显示主题、词长、首字母、音标或中文义。</p>' +
+      '<div class="audio-row">' +
+      audioButton(accent, word.id, 1, accentLabel) +
+      '</div>' +
+      '<p class="sound-precheck-status" id="soundPrecheckStatus" aria-live="polite">' +
+      (session.taskState.soundPlayed
+        ? '已经听过了，请选择音节数。'
+        : '先播放一次，音节选项随后可用。') +
+      '</p>' +
+      '<div class="sound-syllable-options" role="group" aria-labelledby="soundSyllablePrompt">' +
+      buttons +
+      '</div>' +
+      '<button class="quiet-button sound-precheck-skip" type="button" data-action="sound-precheck-skip">听不出来，先看拼写</button>' +
+      '</div>'
+    );
+  }
+
+  function renderSoundDiagnostic(word) {
+    var task = session.taskState;
+    var count = word.syllables.length;
+    if (task.soundDiagnosticSkipped) {
+      return (
+        '<div class="sound-diagnostic is-review"><strong>预听记录：暂时听不出</strong>' +
+        '<span>这个词有 ' +
+        count +
+        ' 个音节。现在对照拼写和重音跟读；本轮不会记为听辨通过。</span></div>'
+      );
+    }
+    return (
+      '<div class="sound-diagnostic ' +
+      (task.soundDiagnosticCorrect ? 'is-correct' : 'is-review') +
+      '"><strong>' +
+      (task.soundDiagnosticCorrect ? '音节听辨正确' : '音节听辨需要复习') +
+      '</strong><span>你选择了 ' +
+      Number(task.soundDiagnosticChoice || 0) +
+      ' 个；实际是 ' +
+      count +
+      ' 个。现在再听并对照重音位置。</span></div>'
     );
   }
 
@@ -3362,13 +3824,18 @@
   function getFormExercise(word) {
     var task = session.taskState;
     if (task.formExercise) return task.formExercise;
-    if (word.formPractice) {
+    var stage = currentStage();
+    var forceContextTransfer =
+      session.type === 'daily' && stage && stage.role === 'transfer' && stage.variant === 'context';
+    if (word.formPractice && !forceContextTransfer) {
       task.formExercise = word.formPractice;
       return task.formExercise;
     }
 
     var requestedMode = word.practiceMode;
-    if (!requestedMode && session.type === 'daily') {
+    if (forceContextTransfer) {
+      requestedMode = 'context';
+    } else if (!requestedMode && session.type === 'daily') {
       requestedMode = session.wordIndex % 2 === 1 ? 'direct' : 'context';
     }
     if (requestedMode === 'direct') {
@@ -3383,6 +3850,7 @@
       type: 'context',
       sentence: word.form.sentence,
       answer: word.form.answer,
+      answers: Array.isArray(word.form.answers) ? word.form.answers.slice() : [],
       need: word.form.need,
       explanation: word.form.explanation,
       baseVisible: normaliseAnswer(word.form.answer) !== normaliseAnswer(word.word),
@@ -3442,7 +3910,7 @@
       '<div class="chunk-answer" aria-label="已选词块">' +
       (task.chunksCorrect
         ? task.writingUnlocked
-          ? '<span class="fine-print">标准骨架已遮住；请只看中文独立仿写。</span>'
+          ? '<span class="fine-print">标准骨架已遮住；请只看中文完成标准句复现。</span>'
           : '<div class="chunk-solved-sentence"><span>标准骨架</span><strong>' +
             esc(joinChunks(word.chunks)) +
             '</strong></div>'
@@ -3459,7 +3927,7 @@
         ? '<button class="secondary-button" type="button" data-action="chunk-reset">重新排序</button>' +
           (task.writingUnlocked
             ? ''
-            : '<button class="primary-button" type="button" data-action="start-sentence-writing">遮住骨架，开始仿写</button>')
+            : '<button class="primary-button" type="button" data-action="start-sentence-writing">遮住骨架，开始复现</button>')
         : '<button class="secondary-button" type="button" data-action="chunk-reset">重排</button>' +
           '<button class="secondary-button" type="button" data-action="chunk-reveal">显示骨架</button>' +
           '<button class="primary-button" type="button" data-action="chunk-check">检查顺序</button>') +
@@ -3490,10 +3958,10 @@
 
   function renderSentenceWritingStep(word, task) {
     if (!task.chunksCorrect || !task.writingUnlocked) {
-      var lockedTitle = task.chunksCorrect ? '遮住骨架后开始仿写' : '完成排序后再仿写';
+      var lockedTitle = task.chunksCorrect ? '遮住骨架后开始复现' : '完成排序后再复现';
       var lockedNote = task.chunksCorrect
-        ? '先读一遍标准骨架，再点击“遮住骨架，开始仿写”。'
-        : '中文句子和写作检查项将在第二步完成后出现。';
+        ? '先读一遍标准骨架，再点击“遮住骨架，开始复现”。'
+        : '中文提示和复现检查项将在第二步完成后出现。';
       return (
         '<section class="sentence-step sentence-step-locked" aria-label="第三步尚未解锁">' +
         '<div class="sentence-step-header"><span class="step-number">3</span><div><h3>' +
@@ -3506,13 +3974,13 @@
     }
     return (
       '<section class="sentence-step">' +
-      '<div class="sentence-step-header"><span class="step-number">3</span><div><h3>按中文受控仿写</h3><p>必须使用目标词或本卡中的一个词形。</p></div></div>' +
+      '<div class="sentence-step-header"><span class="step-number">3</span><div><h3>按中文复现标准句</h3><p>只有首次完整复现标准句才计自动证据；其他表达只保存为待人工评阅草稿。</p></div></div>' +
       '<p class="model-sentence">' +
       esc(word.exampleCn) +
       '</p>' +
       '<form data-skill-form="sentence">' +
-      '<label class="eyebrow" for="sentenceInput">YOUR SENTENCE</label>' +
-      '<textarea class="sentence-input" id="sentenceInput" name="sentence" autocomplete="off" autocapitalize="sentences" spellcheck="false" placeholder="先自己写完整句子，再检查……"' +
+      '<label class="eyebrow" for="sentenceInput">HIDDEN SENTENCE RECALL</label>' +
+      '<textarea class="sentence-input" id="sentenceInput" name="sentence" autocomplete="off" autocapitalize="sentences" spellcheck="false" placeholder="不看英文，按中文写出刚才的标准句……"' +
       (task.chunksCorrect ? '' : ' disabled') +
       '>' +
       esc(task.writing || '') +
@@ -3520,7 +3988,7 @@
       '<div class="sentence-toolbar">' +
       '<button class="primary-button" type="submit"' +
       (task.chunksCorrect ? '' : ' disabled') +
-      '>检查并对照</button>' +
+      '>提交复现并对照</button>' +
       '</div>' +
       '</form>' +
       '<ul class="checklist" id="sentenceChecklist">' +
@@ -3539,8 +4007,8 @@
       '<div class="card-actions" id="sentenceFinishActions" ' +
       (task.evaluated ? '' : 'hidden') +
       '>' +
-      '<button class="secondary-button" type="button" data-action="finish-sentence" data-correct="false">仍需老师帮助</button>' +
-      '<button class="primary-button" type="button" data-action="finish-sentence" data-correct="true">已对照并修改 →</button>' +
+      '<button class="secondary-button" type="button" data-action="finish-sentence" data-correct="false">保存草稿，待老师评阅</button>' +
+      '<button class="primary-button" type="button" data-action="finish-sentence" data-correct="true">记录本次练习 →</button>' +
       '</div>' +
       '</section>'
     );
@@ -3617,7 +4085,13 @@
       '<div class="word-stage"><span class="topic-badge">训练小结</span><h2 style="font-size:42px">准确比刷量更重要</h2>' +
       '<div class="metric-grid" style="max-width:680px;margin:26px auto">' +
       SKILLS.map(function (skill) {
-        var skillStats = stats[skill] || { attempts: 0, correct: 0 };
+        var skillStats = stats[skill] || { attempts: 0, correct: 0, pending: 0 };
+        if (!skillStats.attempts && skillStats.pending) {
+          return metric('待评', SKILL_SHORT[skill] + '（不计正误）');
+        }
+        if (!skillStats.attempts) {
+          return metric('—', SKILL_SHORT[skill] + '（未安排）');
+        }
         var score = skillStats.attempts
           ? Math.round((skillStats.correct / skillStats.attempts) * 100)
           : 0;
@@ -3643,23 +4117,23 @@
       .join('');
     var mistakes = state.history
       .filter(function (item) {
-        return !item.correct;
+        return item.correct === false;
       })
       .slice(-18)
       .reverse();
     var journal = state.journal.slice(-12).reverse();
 
     main.innerHTML =
-      '<section class="page-heading"><div><p class="eyebrow">LOCAL PROGRESS</p><h1>错题与进度</h1><p>四项能力分别记录。自由造句保存的是学习草稿，不代表已经通过教师语法审核。</p></div></section>' +
+      '<section class="page-heading"><div><p class="eyebrow">LOCAL PROGRESS</p><h1>错题与进度</h1><p>声音、拼写、词形和标准句复现分别记录；其他表达只保存为待人工评阅草稿。</p></div></section>' +
       '<section class="progress-layout">' +
       '<article class="panel progress-panel">' +
       '<h2>50 词能力表</h2>' +
       '<div class="metric-grid">' +
       metric(summary.started, '已开始') +
-      metric(summary.stable, '稳定掌握') +
+      metric(summary.stable, '四项受控任务达标且无待复习') +
       metric(summary.mistakes, '近期错项') +
       '</div>' +
-      '<div class="word-table-wrap"><table class="word-table"><thead><tr><th>词汇</th><th>跟读</th><th>拼写</th><th>词形</th><th>句用</th><th>下次复习</th></tr></thead><tbody>' +
+      '<div class="word-table-wrap"><table class="word-table"><thead><tr><th>词汇</th><th>辨音</th><th>拼写</th><th>词形</th><th>句架复现</th><th>下次复习</th></tr></thead><tbody>' +
       rows +
       '</tbody></table></div>' +
       '</article>' +
@@ -3685,7 +4159,7 @@
           '</ul>'
         : '<div class="empty-state">完成一次练习后，错项会出现在这里。</div>') +
       '</article>' +
-      '<article class="panel progress-panel" style="margin-top:18px"><h3>造句草稿</h3>' +
+      '<article class="panel progress-panel" style="margin-top:18px"><h3>表达草稿</h3>' +
       (journal.length
         ? '<ul class="journal-list">' +
           journal
@@ -3693,6 +4167,8 @@
               return (
                 '<li><strong>' +
                 esc(item.word) +
+                ' · ' +
+                esc(journalStatusLabel(item.status)) +
                 '</strong><span>' +
                 esc(item.text) +
                 '</span></li>'
@@ -3715,13 +4191,19 @@
       var score = skillState.attempts
         ? Math.round((skillState.correct / skillState.attempts) * 100)
         : null;
+      var pendingOnly = !skillState.attempts && Number(skillState.pending || 0) > 0;
+      var relearnRequired = !skillState.attempts && Boolean(skillState.relearnRequired);
       var className =
-        score === null ? 'score-chip' : score >= 80 ? 'score-chip good' : 'score-chip weak';
+        score === null && !pendingOnly && !relearnRequired
+          ? 'score-chip'
+          : !skillState.needsReview && score !== null && score >= 80
+            ? 'score-chip good'
+            : 'score-chip weak';
       return (
         '<td><span class="' +
         className +
         '">' +
-        (score === null ? '—' : score + '%') +
+        (pendingOnly ? '待评' : relearnRequired ? '需重练' : score === null ? '—' : score + '%') +
         '</span></td>'
       );
     }).join('');
@@ -3736,6 +4218,13 @@
     );
   }
 
+  function journalStatusLabel(status) {
+    if (status === 'controlled_recall') return '标准句复现';
+    if (status === 'corrected_practice') return '纠错练习';
+    if (status === 'legacy_unverified') return '旧版未核实';
+    return '待人工评阅';
+  }
+
   function handleMainClick(event) {
     var button = event.target.closest('[data-action]');
     if (!button) return;
@@ -3745,9 +4234,9 @@
     if (action === 'start-weak') return startWeakSession();
     if (action === 'start-skill') return startSkillSession(button.dataset.skill);
     if (action === 'go-view') return navigate(button.dataset.view);
-    if (action === 'go-today') return navigate('today');
+    if (action === 'go-today') return leaveSessionToToday();
     if (action === 'go-progress') return navigate('progress');
-    if (action === 'leave-session') return navigate('today');
+    if (action === 'leave-session') return leaveSessionToToday();
     if (action === 'visual-section') return changeVisualSection(button.dataset.section);
     if (action === 'visual-pos-token') return chooseVisualPosToken(button);
     if (action === 'visual-family-skip') return skipVisualFamily(button);
@@ -3777,6 +4266,8 @@
     if (action === 'play-example') return playExample(button);
     if (action === 'record-toggle') return toggleRecording(button);
     if (action === 'play-recording') return playRecording(button);
+    if (action === 'sound-syllables') return chooseSoundSyllables(button.dataset.value);
+    if (action === 'sound-precheck-skip') return skipSoundPrecheck();
     if (action === 'mark-sound') return markSound(button.dataset.correct === 'true');
     if (action === 'reveal-spell') return revealSpellHint();
     if (action === 'skip-spell') return skipSpelling();
@@ -4247,7 +4738,29 @@
       }, 90);
       return;
     }
-    if (!session || currentSkill() !== 'spell' || event.target.id !== 'spellInput') return;
+    if (!session) return;
+    if (currentSkill() === 'sentence' && event.target.id === 'sentenceInput') {
+      var task = session.taskState;
+      task.writing = event.target.value;
+      if (task.evaluated && String(event.target.value).trim() !== task.submittedWriting) {
+        task.hadError = true;
+        task.evaluated = false;
+        task.controlledRecallPass = false;
+        task.mechanicsPass = false;
+        task.checks = null;
+        task.sentenceFeedback =
+          '文本已在对照后修改，旧检查已失效。本次只能保存为纠错练习或待人工评阅草稿。';
+        var checklist = document.getElementById('sentenceChecklist');
+        var model = document.getElementById('modelSentence');
+        var actions = document.getElementById('sentenceFinishActions');
+        if (checklist) checklist.innerHTML = defaultChecklistHtml();
+        if (model) model.hidden = true;
+        if (actions) actions.hidden = true;
+        setFeedback('sentenceFeedback', task.sentenceFeedback, 'is-wrong');
+      }
+      return;
+    }
+    if (currentSkill() !== 'spell' || event.target.id !== 'spellInput') return;
     session.taskState.answerValue = event.target.value;
   }
 
@@ -4259,14 +4772,53 @@
     }
   }
 
+  function chooseSoundSyllables(rawValue) {
+    if (!session || currentSkill() !== 'sound') return;
+    var task = session.taskState;
+    if (!task.soundPlayed || task.soundObserved) return;
+    var choice = Number(rawValue);
+    var expected = currentWord().syllables.length;
+    task.soundObserved = true;
+    task.soundDiagnosticChoice = choice;
+    task.soundDiagnosticCorrect = choice === expected;
+    task.soundDiagnosticSkipped = false;
+    stopAudio();
+    renderSession();
+    focusCurrentSessionTask();
+  }
+
+  function skipSoundPrecheck() {
+    if (!session || currentSkill() !== 'sound') return;
+    var task = session.taskState;
+    if (task.soundObserved) return;
+    task.soundObserved = true;
+    task.soundDiagnosticChoice = 0;
+    task.soundDiagnosticCorrect = false;
+    task.soundDiagnosticSkipped = true;
+    stopAudio();
+    renderSession();
+    focusCurrentSessionTask();
+  }
+
   function markSound(correct) {
-    if (!session) return;
+    if (!session || currentSkill() !== 'sound' || !session.taskState.soundObserved) return;
     var word = currentWord();
+    var task = session.taskState;
+    var evidenceCorrect = Boolean(correct && task.soundDiagnosticCorrect);
+    var diagnosticDetail = task.soundDiagnosticSkipped
+      ? '预听音节：主动跳过'
+      : task.soundDiagnosticCorrect
+        ? '预听音节：正确'
+        : '预听音节：错误';
     recordResult(
       word,
       'sound',
-      correct,
-      correct ? '跟读自评：重音与尾音清楚' : '跟读自评：仍需 A/B 对比',
+      evidenceCorrect,
+      diagnosticDetail +
+        '；' +
+        (correct
+          ? '声音对照已完成；录音跟读不计自动评分'
+          : '声音仍不清楚；录音跟读不计自动评分'),
     );
     advanceSession();
   }
@@ -4499,9 +5051,12 @@
       setFeedback('formFeedback', '先写出一个词形。', 'is-wrong');
       return;
     }
-    var correct = normaliseAnswer(answer) === normaliseAnswer(exercise.answer);
+    var acceptedAnswers = [exercise.answer].concat(exercise.answers || []);
+    var correct = acceptedAnswers.some(function (candidate) {
+      return normaliseAnswer(answer) === normaliseAnswer(candidate);
+    });
     if (correct) {
-      completeFormExercise(word, exercise, task);
+      completeFormExercise(word, exercise, task, answer);
       return;
     }
 
@@ -4555,7 +5110,7 @@
     focusFirstFamilyGap(exercise, status);
   }
 
-  function completeFormExercise(word, exercise, task) {
+  function completeFormExercise(word, exercise, task, acceptedAnswer) {
     var firstTry = !task.hadError && !(task.formAttempts > 0);
     var typeLabels = {
       family: '四格词族',
@@ -4582,12 +5137,18 @@
         (firstTry ? '三个变形全部正确。' : '三个变形已改对，本次仍进入复习。') +
         ' 现在按自己的速度读一遍完整四格词族，再手动进入下一题。';
     } else {
-      task.answerValue = exercise.answer;
+      var completedAnswer = acceptedAnswer || exercise.answer;
+      task.answerValue = completedAnswer;
       task.formFeedbackHtml =
         (firstTry ? '正确：' : '已经改对，本次仍进入复习：') +
         '<strong>' +
-        esc(exercise.answer) +
+        esc(completedAnswer) +
         '</strong>。' +
+        (normaliseAnswer(completedAnswer) !== normaliseAnswer(exercise.answer)
+          ? '这是可接受的标准变体；本卡首选形式是 <strong>' +
+            esc(exercise.answer) +
+            '</strong>。'
+          : '') +
         esc(exercise.explanation || '');
     }
     renderSession();
@@ -4797,8 +5358,10 @@
     task.chunkFeedback = '';
     task.chunkFeedbackClass = '';
     task.writing = '';
+    task.submittedWriting = '';
     task.checks = null;
     task.mechanicsPass = false;
+    task.controlledRecallPass = false;
     task.evaluated = false;
     task.sentenceFeedback = '';
     renderSession();
@@ -4831,7 +5394,7 @@
     if (correct) {
       task.chunksCorrect = true;
       task.writingUnlocked = false;
-      task.chunkFeedback = '顺序正确。先读一遍标准骨架，再遮住英文完成仿写。';
+      task.chunkFeedback = '顺序正确。先读一遍标准骨架，再遮住英文完成复现。';
       task.chunkFeedbackClass = 'is-correct';
     } else {
       task.hadError = true;
@@ -4852,7 +5415,7 @@
     var task = session.taskState;
     if (!task.chunksCorrect || task.writingUnlocked) return;
     task.writingUnlocked = true;
-    task.chunkFeedback = '骨架已遮住。现在只看中文，独立写出完整句子。';
+    task.chunkFeedback = '骨架已遮住。现在只看中文，独立复现刚才的标准句。';
     task.chunkFeedbackClass = '';
     renderSession();
     setTimeout(function () {
@@ -4875,12 +5438,20 @@
     });
     var task = session.taskState;
     task.writing = text;
+    task.submittedWriting = text;
     task.checks = checks;
     task.mechanicsPass = allPass;
+    task.controlledRecallPass =
+      normaliseControlledSentence(text) ===
+      normaliseControlledSentence(joinChunks(word.chunks));
     task.evaluated = true;
-    task.sentenceFeedback = allPass
-      ? '机械检查通过。请对照参考范句和本词提醒，再修改一次；这不等于完整语法评分。'
-      : '先修正红色项目，再对照参考范句。静态页面不会宣称你的语法已经完全正确。';
+    task.sentenceFeedback = task.controlledRecallPass
+      ? task.hadError
+        ? '已经复现标准句，但本轮看过答案或有过错误，只记录为纠错练习。'
+        : '首次完整复现标准句。这里只证明受控短时复现，不代表自由造句或语法已通过。'
+      : allPass
+        ? '表面检查通过，但与标准句不完全一致。你的表达将只保存为待人工评阅草稿，不自动判对或判错。'
+        : '表面检查仍有缺项。请对照参考句；静态页面不会把机械检查当作完整语法评分。';
 
     document.getElementById('sentenceChecklist').innerHTML = checklistHtml(checks);
     document.getElementById('modelSentence').hidden = false;
@@ -4891,38 +5462,66 @@
       if (skipRow) skipRow.remove();
       else skipButton.remove();
     }
-    setFeedback('sentenceFeedback', task.sentenceFeedback, allPass ? 'is-correct' : 'is-wrong');
+    setFeedback(
+      'sentenceFeedback',
+      task.sentenceFeedback,
+      task.controlledRecallPass && !task.hadError
+        ? 'is-correct'
+        : allPass
+          ? ''
+          : 'is-wrong',
+    );
   }
 
   function finishSentence(selfRatedCorrect) {
     if (!session || currentSkill() !== 'sentence') return;
     var word = currentWord();
     var task = session.taskState;
-    var textarea = document.getElementById('sentenceInput');
-    var text = String((textarea && textarea.value) || task.writing || '').trim();
+    var text = String(task.submittedWriting || '').trim();
     if (!task.evaluated || !text) {
-      setFeedback('sentenceFeedback', '请先点击“检查并对照”。', 'is-wrong');
+      setFeedback('sentenceFeedback', '请先点击“提交复现并对照”。', 'is-wrong');
       return;
     }
-    var correct = Boolean(selfRatedCorrect && task.mechanicsPass && !task.hadError);
+    var controlledCorrect = Boolean(
+      selfRatedCorrect && task.controlledRecallPass && task.mechanicsPass && !task.hadError,
+    );
+    var status = controlledCorrect
+      ? 'controlled_recall'
+      : task.controlledRecallPass
+        ? 'corrected_practice'
+        : 'pending_human_review';
     state.journal.push({
       wordId: word.id,
       word: word.word,
       text: text,
-      reviewed: Boolean(selfRatedCorrect),
+      revisedText: String(task.writing || text).trim(),
+      reviewed: false,
+      teacherVerified: false,
+      status: status,
+      surfaceChecks: task.checks,
       at: Date.now(),
     });
     state.journal = state.journal.slice(-120);
-    recordResult(
-      word,
-      'sentence',
-      correct,
-      selfRatedCorrect
-        ? correct
-          ? '词块与仿写首次完成'
-          : '对照范句后完成修改'
-        : '需要教师进一步帮助',
-    );
+    if (controlledCorrect) {
+      recordResult(word, 'sentence', true, '标准句在隐藏后首次完整复现');
+    } else if (task.controlledRecallPass || !task.mechanicsPass || !selfRatedCorrect) {
+      recordResult(
+        word,
+        'sentence',
+        false,
+        task.controlledRecallPass
+          ? '看过答案或纠错后复现；不计独立证据'
+          : !task.mechanicsPass
+            ? '表面检查未通过；需修改'
+            : '学习者标记为需要人工帮助',
+      );
+    } else {
+      recordPendingResult(
+        word,
+        'sentence',
+        '表达与标准句不同；已保存为待人工评阅草稿，不计正误',
+      );
+    }
     saveState();
     advanceSession();
   }
@@ -4933,7 +5532,7 @@
     if (task.skipping || task.evaluated) return;
     if (!acquireSkipLock()) return;
     task.skipping = true;
-    recordResult(currentWord(), 'sentence', false, '主动跳过搭配与造句任务；稍后复习');
+    recordResult(currentWord(), 'sentence', false, '主动跳过搭配与句架任务；稍后复习');
     showToast('已跳过；这道表达题已加入待复习。');
     advanceSession();
   }
@@ -4961,6 +5560,15 @@
     ];
   }
 
+  function normaliseControlledSentence(value) {
+    return String(value || '')
+      .trim()
+      .replace(/[‘’]/g, "'")
+      .replace(/[“”]/g, '"')
+      .replace(/\s+([,.;:!?])/g, '$1')
+      .replace(/\s+/g, ' ');
+  }
+
   function containsTargetForm(word, sentence) {
     var candidates = [word.word]
       .concat(
@@ -4968,12 +5576,20 @@
           return familyItem[0];
         }),
       )
+      .concat(word.form ? [word.form.answer].concat(word.form.answers || []) : [])
       .join(' ')
       .toLowerCase()
       .split(/[^a-z-]+/)
       .filter(function (token) {
         return token.length > 1 && ['the', 'base', 'past', 'singular', 'plural'].indexOf(token) < 0;
       });
+    candidates = Array.from(
+      new Set(
+        candidates.reduce(function (forms, candidate) {
+          return forms.concat(commonSurfaceForms(candidate));
+        }, []),
+      ),
+    );
     var normalisedSentence = ' ' + sentence.toLowerCase().replace(/[’]/g, "'") + ' ';
     return candidates.some(function (candidate) {
       var escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -4986,14 +5602,36 @@
     });
   }
 
+  function commonSurfaceForms(candidate) {
+    var forms = [candidate];
+    if (!/^[a-z]+$/.test(candidate) || candidate.length < 3) return forms;
+    if (/[^aeiou]y$/.test(candidate)) {
+      forms.push(candidate.slice(0, -1) + 'ies', candidate.slice(0, -1) + 'ied');
+    } else if (/(?:s|x|z|ch|sh|o)$/.test(candidate)) {
+      forms.push(candidate + 'es');
+    } else {
+      forms.push(candidate + 's');
+    }
+    if (/e$/.test(candidate)) {
+      forms.push(candidate + 'd', candidate.slice(0, -1) + 'ing');
+    } else {
+      forms.push(candidate + 'ed', candidate + 'ing');
+    }
+    return forms;
+  }
+
   function advanceSession() {
     if (!session) return;
     cleanupMedia();
     if (session.type === 'daily') {
       session.stageIndex += 1;
-      if (session.stageIndex >= session.stages.length) {
+      if (session.stageIndex >= currentStages().length) {
         session.stageIndex = 0;
         session.wordIndex += 1;
+      }
+      if (session.wordIndex >= session.words.length) {
+        state.daily.completedAt = Date.now();
+        saveState();
       }
     } else {
       session.wordIndex += 1;
@@ -5016,60 +5654,260 @@
   }
 
   function currentWord() {
+    if (session.type === 'daily') {
+      var plan = currentPlan();
+      return plan && plan.word;
+    }
     return session.words[session.wordIndex];
+  }
+
+  function currentPlan() {
+    if (!session || session.type !== 'daily' || !Array.isArray(session.plans)) return null;
+    return session.plans[session.wordIndex] || null;
+  }
+
+  function currentStages() {
+    if (!session) return [];
+    if (session.type === 'daily') {
+      var plan = currentPlan();
+      return (plan && plan.stages) || [];
+    }
+    return (session.stages || []).map(function (skill) {
+      return { skill: skill, role: 'practice' };
+    });
+  }
+
+  function currentStage() {
+    return currentStages()[session.stageIndex] || null;
   }
 
   function currentSkill() {
     if (session.type === 'repair') {
       return session.repairSkills[session.wordIndex];
     }
-    return session.stages[session.stageIndex];
+    var stage = currentStage();
+    return stage && stage.skill;
   }
 
-  function buildDailyQueue() {
-    var now = startOfToday();
-    var dateKey = localDateKey();
-    if (!state.daily || state.daily.date !== dateKey) {
-      state.daily = { date: dateKey, newIds: [] };
-    }
-    var due = WORDS.filter(function (word) {
-      return SKILLS.some(function (skill) {
-        var skillState = peekSkillState(word.id, skill);
-        return skillState.attempts > 0 && skillState.due <= now;
-      });
-    }).sort(function (a, b) {
-      return nextDueTime(a.id) - nextDueTime(b.id);
-    });
+  function dailyTaskNumber() {
+    var completedBefore = session.plans.slice(0, session.wordIndex).reduce(function (total, plan) {
+      return total + plan.stages.length;
+    }, 0);
+    return completedBefore + session.stageIndex + 1;
+  }
 
-    if (!state.daily.newIds.length) {
-      state.daily.newIds = seededWords(
-        WORDS.filter(function (word) {
-          return !hasAnyAttempt(word.id) && due.indexOf(word) < 0;
+  function dailyTaskTotal() {
+    return dailyPlanTaskCount(session.plans || []);
+  }
+
+  function dailyPlanTaskCount(plans) {
+    return plans.reduce(function (total, plan) {
+      return total + plan.stages.length;
+    }, 0);
+  }
+
+  function dailyPlanSeconds(plans) {
+    return plans.reduce(function (total, plan) {
+      return (
+        total +
+        plan.stages.reduce(function (stageTotal, stage) {
+          return stageTotal + (Number(stage.estimatedSeconds) || STAGE_SECONDS[stage.skill] || 60);
+        }, 0)
+      );
+    }, 0);
+  }
+
+  function buildDailyPlan() {
+    var today = startOfToday();
+    var dateKey = localDateKey();
+    if (!state.daily) state.daily = defaultState().daily;
+    if (state.daily.date !== dateKey) {
+      var rolledIds = (state.daily.carryoverIds || []).concat(
+        (state.daily.newIds || []).filter(function (id) {
+          return hasAnyAttempt(id) && hasUnattemptedSkill(id);
         }),
-      )
-        .slice(0, Number(state.settings.dailyNew) || 6)
-        .map(function (word) {
-          return word.id;
-        });
+      );
+      state.daily = {
+        date: dateKey,
+        newIds: [],
+        carryoverIds: uniqueIds(rolledIds),
+        newSelectionDone: false,
+        completedAt: 0,
+      };
       saveState();
     }
 
-    var introducedButIncomplete = state.daily.newIds
+    if (Number(state.daily.completedAt || 0) > 0) return [];
+
+    state.daily.carryoverIds = (state.daily.carryoverIds || []).filter(function (id) {
+      return Boolean(findWord(id) && hasUnattemptedSkill(id));
+    });
+    state.daily.newIds = (state.daily.newIds || []).filter(function (id) {
+      return Boolean(findWord(id));
+    });
+
+    var currentNewPlans = state.daily.newIds
       .map(function (id) {
-        return WORDS.find(function (word) {
-          return word.id === id;
-        });
+        var word = findWord(id);
+        var remaining = word ? unattemptedSkills(word.id) : [];
+        return remaining.length ? makeDailyPlan(word, 'new', makeNewStages(remaining)) : null;
       })
-      .filter(function (word) {
-        return (
-          word &&
-          SKILLS.some(function (skill) {
-            return peekSkillState(word.id, skill).attempts === 0;
-          })
-        );
+      .filter(Boolean);
+    var reservedNewSeconds = dailyPlanSeconds(currentNewPlans);
+    var reviewBudget = Math.max(0, DAILY_MAX_SECONDS - reservedNewSeconds);
+    var excludedIds = new Set(state.daily.newIds.concat(state.daily.carryoverIds || []));
+
+    var carryoverCandidates = state.daily.carryoverIds
+      .map(function (id) {
+        var word = findWord(id);
+        if (!word) return null;
+        var skills = uniqueSkills(dueSkills(word.id, today).concat(unattemptedSkills(word.id)));
+        return skills.length ? makeDailyPlan(word, 'carryover', makeReviewStages(skills)) : null;
+      })
+      .filter(Boolean);
+
+    var dueCandidates = WORDS.filter(function (word) {
+      return !excludedIds.has(word.id);
+    })
+      .map(function (word) {
+        var skills = dueSkills(word.id, today);
+        return skills.length ? makeDailyPlan(word, 'review', makeReviewStages(skills)) : null;
+      })
+      .filter(Boolean)
+      .sort(function (a, b) {
+        var dueDifference = nextDueTime(a.word.id) - nextDueTime(b.word.id);
+        if (dueDifference) return dueDifference;
+        return overallWordScore(a.word.id) - overallWordScore(b.word.id);
       });
-    var combined = uniqueWords(due.slice(0, 6).concat(introducedButIncomplete));
-    return combined.slice(0, 10);
+
+    var reviewPlans = [];
+    var reviewSeconds = 0;
+    carryoverCandidates.concat(dueCandidates).forEach(function (plan) {
+      var seconds = dailyPlanSeconds([plan]);
+      if (reviewSeconds + seconds > reviewBudget) return;
+      reviewPlans.push(plan);
+      reviewSeconds += seconds;
+    });
+
+    if (!state.daily.newSelectionDone) {
+      var fullNewSeconds = dailyPlanSeconds([
+        makeDailyPlan(WORDS[0], 'new', makeNewStages(SKILLS)),
+      ]);
+      var availableForNew = Math.max(0, DAILY_MAX_SECONDS - reviewSeconds);
+      var allowedNew = Math.min(
+        normaliseDailyNew(state.settings.dailyNew),
+        Math.floor(availableForNew / fullNewSeconds),
+      );
+      state.daily.newIds = seededWords(
+        WORDS.filter(function (word) {
+          return !hasAnyAttempt(word.id) && !excludedIds.has(word.id);
+        }),
+      )
+        .slice(0, allowedNew)
+        .map(function (word) {
+          return word.id;
+        });
+      state.daily.newSelectionDone = true;
+      saveState();
+      currentNewPlans = state.daily.newIds
+        .map(function (id) {
+          var word = findWord(id);
+          return word ? makeDailyPlan(word, 'new', makeNewStages(SKILLS)) : null;
+        })
+        .filter(Boolean);
+    }
+
+    return reviewPlans.concat(currentNewPlans);
+  }
+
+  function findWord(wordId) {
+    return WORDS.find(function (word) {
+      return word.id === wordId;
+    });
+  }
+
+  function hasUnattemptedSkill(wordId) {
+    return SKILLS.some(function (skill) {
+      return !hasSkillActivity(peekSkillState(wordId, skill));
+    });
+  }
+
+  function unattemptedSkills(wordId) {
+    return SKILLS.filter(function (skill) {
+      return !hasSkillActivity(peekSkillState(wordId, skill));
+    });
+  }
+
+  function dueSkills(wordId, today) {
+    return SKILLS.filter(function (skill) {
+      var skillState = peekSkillState(wordId, skill);
+      return (
+        hasSkillActivity(skillState) && skillState.due <= today && skillState.last < today
+      );
+    });
+  }
+
+  function hasSkillActivity(skillState) {
+    return (
+      Number(skillState.attempts || 0) > 0 ||
+      Number(skillState.pending || 0) > 0 ||
+      Boolean(skillState.relearnRequired)
+    );
+  }
+
+  function uniqueSkills(skills) {
+    return SKILLS.filter(function (skill) {
+      return skills.indexOf(skill) >= 0;
+    });
+  }
+
+  function uniqueIds(ids) {
+    var seen = new Set();
+    return ids.filter(function (id) {
+      if (!findWord(id) || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }
+
+  function makeNewStages(skills) {
+    return uniqueSkills(skills).map(function (skill) {
+      return {
+        skill: skill,
+        role: 'learn',
+        estimatedSeconds: STAGE_SECONDS[skill],
+      };
+    });
+  }
+
+  function makeReviewStages(skills) {
+    var ordered = uniqueSkills(skills);
+    var exitSkill = '';
+    if (ordered.indexOf('sentence') >= 0) {
+      exitSkill = 'sentence';
+    } else if (ordered.indexOf('forms') >= 0) {
+      exitSkill = 'forms';
+    } else {
+      ordered.push('forms');
+      exitSkill = 'forms';
+    }
+    return ordered.map(function (skill) {
+      var isTransfer = skill === exitSkill;
+      return {
+        skill: skill,
+        role: isTransfer ? 'transfer' : 'review',
+        variant: isTransfer && skill === 'forms' ? 'context' : '',
+        estimatedSeconds: STAGE_SECONDS[skill],
+      };
+    });
+  }
+
+  function makeDailyPlan(word, kind, stages) {
+    return {
+      word: word,
+      kind: kind,
+      stages: stages,
+    };
   }
 
   function buildRepairQueue(limit) {
@@ -5077,7 +5915,7 @@
     var recentBoundary = Date.now() - 14 * 86400000;
     var recentErrors = {};
     state.history.forEach(function (item) {
-      if (item.correct || item.at < recentBoundary) return;
+      if (item.correct !== false || item.at < recentBoundary) return;
       var key = item.wordId + ':' + item.skill;
       recentErrors[key] = (recentErrors[key] || 0) + 1;
     });
@@ -5085,11 +5923,17 @@
     WORDS.forEach(function (word) {
       SKILLS.forEach(function (skill) {
         var skillState = peekSkillState(word.id, skill);
-        if (!skillState.attempts) return;
-        var accuracy = skillState.correct / skillState.attempts;
+        var wordState = state.words[word.id] || {};
+        var visualPending = Boolean(
+          wordState.visualRepairPending && wordState.visualRepairPending[skill],
+        );
+        if (!hasSkillActivity(skillState) && !visualPending) return;
+        var accuracy = skillState.attempts
+          ? skillState.correct / skillState.attempts
+          : 0;
         var errorCount = recentErrors[word.id + ':' + skill] || 0;
         var due = skillState.due <= today;
-        if (accuracy >= 0.8 && !errorCount) return;
+        if (accuracy >= 0.8 && !errorCount && !skillState.needsReview) return;
         items.push({
           word: word,
           skill: skill,
@@ -5097,6 +5941,7 @@
             (1 - accuracy) * 100 +
             errorCount * 20 +
             (due ? 12 : 0) +
+            (visualPending ? 30 : 0) +
             Math.max(0, 4 - skillState.level) * 3,
           due: skillState.due || 0,
         });
@@ -5116,7 +5961,7 @@
     var now = startOfToday();
     var due = WORDS.filter(function (word) {
       var skillState = peekSkillState(word.id, skill);
-      return skillState.attempts > 0 && skillState.due <= now;
+      return hasSkillActivity(skillState) && skillState.due <= now;
     }).sort(function (a, b) {
       return peekSkillState(a.id, skill).due - peekSkillState(b.id, skill).due;
     });
@@ -5130,7 +5975,7 @@
     });
     var unseen = seededWords(
       WORDS.filter(function (word) {
-        return peekSkillState(word.id, skill).attempts === 0;
+        return !hasSkillActivity(peekSkillState(word.id, skill));
       }),
     );
     return uniqueWords(due.concat(weak, unseen)).slice(0, limit);
@@ -5222,12 +6067,13 @@
     }).length;
     var stable = WORDS.filter(function (word) {
       return SKILLS.every(function (skill) {
-        return peekSkillState(word.id, skill).level >= 4;
+        var skillState = peekSkillState(word.id, skill);
+        return skillState.level >= 4 && !skillState.needsReview;
       });
     }).length;
     var recentBoundary = Date.now() - 14 * 86400000;
     var mistakes = state.history.filter(function (item) {
-      return !item.correct && item.at >= recentBoundary;
+      return item.correct === false && item.at >= recentBoundary;
     }).length;
     var skills = {};
     SKILLS.forEach(function (skill) {
@@ -5249,7 +6095,9 @@
     WORDS.forEach(function (word) {
       SKILLS.forEach(function (skill) {
         var skillState = peekSkillState(word.id, skill);
-        if (skillState.attempts > 0 && skillState.due <= now) count += 1;
+        if (hasSkillActivity(skillState) && skillState.due <= now && skillState.last < now) {
+          count += 1;
+        }
       });
     });
     return count;
@@ -5257,7 +6105,7 @@
 
   function hasAnyAttempt(wordId) {
     return SKILLS.some(function (skill) {
-      return peekSkillState(wordId, skill).attempts > 0;
+      return hasSkillActivity(peekSkillState(wordId, skill));
     });
   }
 
@@ -5266,9 +6114,9 @@
     var total = 0;
     SKILLS.forEach(function (skill) {
       var skillState = peekSkillState(wordId, skill);
-      if (skillState.attempts > 0) {
+      if (hasSkillActivity(skillState)) {
         attempted += 1;
-        total += skillState.correct / skillState.attempts;
+        total += skillState.attempts ? skillState.correct / skillState.attempts : 0;
       }
     });
     return attempted ? total / attempted : -1;
@@ -5277,7 +6125,7 @@
   function nextDueTime(wordId) {
     var times = SKILLS.map(function (skill) {
       var skillState = peekSkillState(wordId, skill);
-      return skillState.attempts ? skillState.due : Infinity;
+      return hasSkillActivity(skillState) ? skillState.due : Infinity;
     });
     return Math.min.apply(Math, times);
   }
@@ -5299,6 +6147,13 @@
     return date.getTime();
   }
 
+  function addCalendarDays(timestamp, days) {
+    var date = new Date(timestamp);
+    date.setDate(date.getDate() + Number(days || 0));
+    date.setHours(0, 0, 0, 0);
+    return date.getTime();
+  }
+
   function localDateKey() {
     var date = new Date();
     var year = String(date.getFullYear());
@@ -5308,7 +6163,7 @@
   }
 
   function seededWords(words) {
-    var seed = Number(new Date().toISOString().slice(0, 10).replace(/-/g, ''));
+    var seed = Number(localDateKey().replace(/-/g, ''));
     return words.slice().sort(function (a, b) {
       return seededHash(a.id, seed) - seededHash(b.id, seed);
     });
@@ -5338,7 +6193,40 @@
       : button.dataset.accent || state.settings.accent;
     var rate = Number(button.dataset.rate) || 1;
     button.dataset.accent = accent;
+    updateDisplayedAccent(currentWord(), accent);
     playFixedAudio(currentWord(), accent, rate, button, 'word');
+  }
+
+  function wordIpa(word, accent) {
+    if (accent === 'us') return word.ipaUs || word.ipa || '';
+    return word.ipaUk || word.ipa || '';
+  }
+
+  function accentLabel(accent) {
+    return accent === 'us' ? 'US' : 'UK';
+  }
+
+  function updateDisplayedAccent(word, accent) {
+    var display = document.querySelector('[data-ipa-display]');
+    if (!display) return;
+    display.textContent = accentLabel(accent) + ' ' + wordIpa(word, accent);
+  }
+
+  function unlockSoundPrecheck(button) {
+    if (
+      !session ||
+      currentSkill() !== 'sound' ||
+      session.taskState.soundObserved ||
+      !button.closest('[data-sound-precheck]')
+    ) {
+      return;
+    }
+    session.taskState.soundPlayed = true;
+    document.querySelectorAll('[data-action="sound-syllables"]').forEach(function (choice) {
+      choice.disabled = false;
+    });
+    var status = document.getElementById('soundPrecheckStatus');
+    if (status) status.textContent = '已经听到范音，请选择音节数。';
   }
 
   function playFixedAudio(word, accent, rate, button, kind) {
@@ -5404,6 +6292,7 @@
       playbackStatus = 'playing';
       updatePlaybackButton(button, 'playing');
       updatePlaybackMessage(button, 'playing');
+      unlockSoundPrecheck(button);
     });
     audio.addEventListener('waiting', function () {
       if (!isCurrent() || playbackDesired !== 'playing') return;
@@ -5432,6 +6321,7 @@
   function playExample(button) {
     if (!session) return;
     var accent = button.dataset.accent || state.settings.accent;
+    updateDisplayedAccent(currentWord(), accent);
     playFixedAudio(currentWord(), accent, 1, button, 'sentence');
   }
 
@@ -5649,7 +6539,18 @@
   function saveSettings() {
     var form = document.getElementById('settingsForm');
     state.settings.accent = form.elements.accent.value === 'us' ? 'us' : 'uk';
-    state.settings.dailyNew = Number(form.elements.dailyNew.value) || 6;
+    var nextDailyNew = normaliseDailyNew(form.elements.dailyNew.value);
+    if (
+      nextDailyNew !== state.settings.dailyNew &&
+      state.daily.date === localDateKey() &&
+      !state.daily.newIds.some(function (id) {
+        return hasAnyAttempt(id);
+      })
+    ) {
+      state.daily.newIds = [];
+      state.daily.newSelectionDone = false;
+    }
+    state.settings.dailyNew = nextDailyNew;
     saveState();
     settingsDialog.close();
     showToast('训练设置已保存。');
@@ -5659,7 +6560,7 @@
   function exportData() {
     var payload = {
       app: 'WordLab 50',
-      version: 1,
+      version: 3,
       exportedAt: new Date().toISOString(),
       state: state,
       visualState: visualState,
@@ -5686,23 +6587,7 @@
       if (!payload || payload.app !== 'WordLab 50' || !payload.state) {
         throw new Error('Invalid WordLab export');
       }
-      var imported = payload.state;
-      state = {
-        version: 1,
-        settings: Object.assign({}, defaultState().settings, imported.settings || {}),
-        daily:
-          imported.daily && typeof imported.daily === 'object'
-            ? {
-                date: String(imported.daily.date || ''),
-                newIds: Array.isArray(imported.daily.newIds)
-                  ? imported.daily.newIds.slice(0, 10)
-                  : [],
-              }
-            : defaultState().daily,
-        words: imported.words && typeof imported.words === 'object' ? imported.words : {},
-        history: Array.isArray(imported.history) ? imported.history.slice(-240) : [],
-        journal: Array.isArray(imported.journal) ? imported.journal.slice(-120) : [],
-      };
+      state = normaliseState(payload.state);
       visualState = normaliseVisualState(payload.visualState);
       visualRuntime = defaultVisualRuntime();
       saveState();
