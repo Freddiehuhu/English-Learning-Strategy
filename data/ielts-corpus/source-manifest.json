@@ -5,6 +5,16 @@
     "source_files": [
       "b1_preliminary.tsv"
     ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
+    ],
     "pdf_files": [
       "506887-b1-preliminary-vocabulary-list.pdf"
     ],
@@ -60,6 +70,16 @@
     "source_files": [
       "ket_schools.tsv"
     ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
+    ],
     "pdf_files": [
       "23387-ket-schools-vocabulary-list.pdf"
     ],
@@ -93,6 +113,16 @@
     "source_files": [
       "CompleteCAE_WLM_ExtendedUnit01.tsv"
     ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
+    ],
     "pdf_files": [
       "CompleteCAE_WLM_ExtendedUnit01.pdf"
     ],
@@ -112,6 +142,16 @@
     "name": "Complete CAE Extended Unit 02",
     "source_files": [
       "CompleteCAE_WLM_ExtendedUnit02.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
     ],
     "pdf_files": [
       "CompleteCAE_WLM_ExtendedUnit02.pdf"
@@ -133,6 +173,16 @@
     "source_files": [
       "CompleteCAE_WLM_ExtendedUnit03.tsv"
     ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
+    ],
     "pdf_files": [
       "CompleteCAE_WLM_ExtendedUnit03.pdf"
     ],
@@ -152,6 +202,16 @@
     "name": "Complete CAE Extended Unit 04",
     "source_files": [
       "CompleteCAE_WLM_ExtendedUnit04.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
     ],
     "pdf_files": [
       "CompleteCAE_WLM_ExtendedUnit04.pdf"
@@ -173,6 +233,16 @@
     "source_files": [
       "CompleteCAE_WLM_ExtendedUnit05.tsv"
     ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
+    ],
     "pdf_files": [
       "CompleteCAE_WLM_ExtendedUnit05.pdf"
     ],
@@ -192,6 +262,16 @@
     "name": "Complete CAE Extended Unit 06",
     "source_files": [
       "CompleteCAE_WLM_ExtendedUnit06.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
     ],
     "pdf_files": [
       "CompleteCAE_WLM_ExtendedUnit06.pdf"
@@ -213,6 +293,16 @@
     "source_files": [
       "CompleteCAE_WLM_ExtendedUnit07.tsv"
     ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
+    ],
     "pdf_files": [
       "CompleteCAE_WLM_ExtendedUnit07.pdf"
     ],
@@ -232,6 +322,16 @@
     "name": "Complete CAE Extended Unit 08",
     "source_files": [
       "CompleteCAE_WLM_ExtendedUnit08.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
     ],
     "pdf_files": [
       "CompleteCAE_WLM_ExtendedUnit08.pdf"
@@ -253,6 +353,16 @@
     "source_files": [
       "CompleteCAE_WLM_ExtendedUnit09.tsv"
     ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
+    ],
     "pdf_files": [
       "CompleteCAE_WLM_ExtendedUnit09.pdf"
     ],
@@ -272,6 +382,16 @@
     "name": "Complete CAE Extended Unit 10",
     "source_files": [
       "CompleteCAE_WLM_ExtendedUnit10.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
     ],
     "pdf_files": [
       "CompleteCAE_WLM_ExtendedUnit10.pdf"
@@ -293,6 +413,16 @@
     "source_files": [
       "CompleteCAE_WLM_ExtendedUnit11.tsv"
     ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
+    ],
     "pdf_files": [
       "CompleteCAE_WLM_ExtendedUnit11.pdf"
     ],
@@ -312,6 +442,16 @@
     "name": "Complete CAE Extended Unit 12",
     "source_files": [
       "CompleteCAE_WLM_ExtendedUnit12.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
     ],
     "pdf_files": [
       "CompleteCAE_WLM_ExtendedUnit12.pdf"
@@ -333,6 +473,16 @@
     "source_files": [
       "CompleteCAE_WLM_ExtendedUnit13.tsv"
     ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
+    ],
     "pdf_files": [
       "CompleteCAE_WLM_ExtendedUnit13.pdf"
     ],
@@ -352,6 +502,16 @@
     "name": "Complete CAE Extended Unit 14",
     "source_files": [
       "CompleteCAE_WLM_ExtendedUnit14.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
     ],
     "pdf_files": [
       "CompleteCAE_WLM_ExtendedUnit14.pdf"
@@ -373,6 +533,16 @@
     "source_files": [
       "CompleteCAE_WLM_PhrasalVerbs.tsv"
     ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
+    ],
     "pdf_files": [
       "CompleteCAE_WLM_PhrasalVerbs.pdf"
     ],
@@ -388,10 +558,70 @@
     "public_definition_policy": "omitted_from_public_outputs"
   },
   {
+    "id": "edge-2e-1b-unit-7-vocabulary-1-0eee8dda",
+    "name": "Edge 2E 1B Unit 7 Vocabulary 1",
+    "source_files": [
+      "edge-unit7-candidates.tsv"
+    ],
+    "source_formats": [
+      "docx"
+    ],
+    "registry_source_ids": [
+      "edge-2e-1bu7-vocabulary-moves"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [],
+    "extracted_rows": 7,
+    "unique_normalized_terms": 7,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "edge-2e-1b-unit-7-vocabulary-2-64327d1d",
+    "name": "Edge 2E 1B Unit 7 Vocabulary 2",
+    "source_files": [
+      "edge-unit7-candidates.tsv"
+    ],
+    "source_formats": [
+      "docx"
+    ],
+    "registry_source_ids": [
+      "edge-2e-1bu7-vocabulary-adjectives"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [],
+    "extracted_rows": 7,
+    "unique_normalized_terms": 7,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
     "id": "grammar-and-vocabulary-for-first-and-first-for-schools-8b73ed4c",
     "name": "Grammar and Vocabulary for First and First for Schools wordlist (2015)",
     "source_files": [
       "first_first_for_schools.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
     ],
     "pdf_files": [
       "Grammar--Vocabulary-First-and-First-for-Schools-wordlist.pdf"
@@ -416,6 +646,16 @@
     "name": "IELTS Listening 1200 High-Frequency Wordlist",
     "source_files": [
       "ielts_listening_1200.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
     ],
     "pdf_files": [
       "雅思听力1200高频词.pdf"
@@ -449,6 +689,16 @@
     "source_files": [
       "oxford_3000.tsv"
     ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
+    ],
     "pdf_files": [
       "The Oxford 3000_by CEFR level.pdf"
     ],
@@ -481,6 +731,16 @@
     "name": "Oxford 5000 by CEFR level",
     "source_files": [
       "oxford_5000.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
     ],
     "pdf_files": [
       "The Oxford 5000_by CEFR level.pdf"

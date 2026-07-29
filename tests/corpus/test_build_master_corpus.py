@@ -432,9 +432,225 @@ class CorpusBuilderTests(unittest.TestCase):
                         "notes": "",
                     }
                 )
-            rows = corpus.read_tsv(path)
+            with self.assertRaisesRegex(
+                ValueError,
+                "supplementary TSV is missing explicit policy columns",
+            ):
+                corpus.read_tsv(path)
+            rows = corpus.read_tsv(path, allow_legacy_target=True)
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0].headword, "word")
+
+    def test_candidate_only_source_cannot_create_an_active_entry(self):
+        candidate = corpus.SourceRow(
+            **{
+                **self.row(
+                    source="Edge Vocabulary",
+                    headword="addictive",
+                    pos="adj.",
+                    cefr="B1",
+                ).__dict__,
+                "source_role": "lexical_candidate",
+                "corpus_policy": "candidate_only",
+                "source_format": "docx",
+                "locator": "docx:table=0,row=1,col=0",
+            }
+        )
+        entry = corpus.build_entry(
+            corpus.EntryGroup("addictive", [candidate])
+        )
+        self.assertEqual(entry["status"], "candidate_only")
+        self.assertEqual(entry["skill_profile"]["labels"], [])
+        self.assertFalse(entry["image_plan"]["eligible"])
+        self.assertEqual(entry["source_rows"], [])
+        self.assertEqual(entry["candidate_sources"], ["Edge Vocabulary"])
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            master_path = root / "master.tsv"
+            catalog_path = root / "catalog.json"
+            corpus.write_master_tsv(master_path, [entry])
+            corpus.write_public_catalog(
+                catalog_path,
+                {
+                    "schema_version": 3,
+                    "generated_at": "test",
+                    "statistics": {},
+                    "sources": [],
+                    "entries": [entry],
+                },
+            )
+            with master_path.open(encoding="utf-8", newline="") as handle:
+                master_rows = list(csv.DictReader(handle, delimiter="\t"))
+            catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        self.assertEqual(master_rows, [])
+        self.assertEqual(catalog["entries"], [])
+
+    def test_public_catalog_counts_only_target_source_rows(self):
+        with tempfile.TemporaryDirectory() as directory:
+            catalog_path = Path(directory) / "catalog.json"
+            corpus.write_public_catalog(
+                catalog_path,
+                {
+                    "schema_version": 3,
+                    "generated_at": "test",
+                    "statistics": {
+                        "source_rows": 2,
+                        "target_source_rows": 1,
+                        "candidate_source_rows": 1,
+                        "candidate_only_entries": 1,
+                    },
+                    "sources": [],
+                    "entries": [],
+                },
+            )
+            catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+        self.assertEqual(catalog["statistics"]["source_rows"], 1)
+        self.assertNotIn(
+            "candidate_source_rows",
+            catalog["statistics"],
+        )
+        self.assertNotIn(
+            "candidate_only_entries",
+            catalog["statistics"],
+        )
+
+    def test_candidate_overlap_does_not_change_target_metadata(self):
+        target = self.row(
+            source="Oxford 3000",
+            headword="classic",
+            pos="n.",
+            cefr="A2",
+        )
+        candidate = corpus.SourceRow(
+            **{
+                **self.row(
+                    source="Edge Vocabulary",
+                    headword="classic",
+                    pos="adj.",
+                    cefr="C1",
+                ).__dict__,
+                "source_role": "lexical_candidate",
+                "corpus_policy": "candidate_only",
+                "source_format": "docx",
+            }
+        )
+        target_only = corpus.build_entry(
+            corpus.EntryGroup("classic", [target])
+        )
+        combined = corpus.build_entry(
+            corpus.EntryGroup("classic", [target, candidate])
+        )
+        self.assertEqual(combined["status"], "active")
+        self.assertEqual(
+            combined["parts_of_speech"],
+            target_only["parts_of_speech"],
+        )
+        self.assertEqual(combined["cefr_levels"], target_only["cefr_levels"])
+        self.assertEqual(
+            combined["skill_profile"],
+            target_only["skill_profile"],
+        )
+        self.assertEqual(combined["source_count"], 1)
+        self.assertEqual(combined["sources"], ["Oxford 3000"])
+        self.assertEqual(
+            combined["candidate_sources"],
+            ["Edge Vocabulary"],
+        )
+
+    def test_reader_validates_and_preserves_supplementary_policy(self):
+        fields = (
+            "source",
+            "registry_source_id",
+            "raw_term",
+            "headword",
+            "pos",
+            "cefr",
+            "topic_or_section",
+            "pdf_page",
+            "source_ref",
+            "definition",
+            "notes",
+            "source_role",
+            "corpus_policy",
+            "source_format",
+            "locator",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "candidate.tsv"
+            with path.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=fields,
+                    delimiter="\t",
+                )
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "source": "Edge Vocabulary",
+                        "registry_source_id": (
+                            "edge-2e-1bu7-vocabulary-moves"
+                        ),
+                        "raw_term": "draws a card",
+                        "headword": "draw a card",
+                        "pos": "verb phrase",
+                        "cefr": "",
+                        "topic_or_section": "Moves in games",
+                        "pdf_page": "",
+                        "source_ref": "",
+                        "definition": "",
+                        "notes": "",
+                        "source_role": "lexical_candidate",
+                        "corpus_policy": "candidate_only",
+                        "source_format": "docx",
+                        "locator": "docx:table=0,row=1,col=0",
+                    }
+                )
+            rows = corpus.read_tsv(path)
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "candidate_only",
+                    "target",
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                ValueError,
+                "requires corpus_policy 'candidate_only'",
+            ):
+                corpus.read_tsv(path)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0].corpus_policy, "candidate_only")
+        self.assertEqual(rows[0].source_format, "docx")
+        self.assertEqual(rows[0].locator, "docx:table=0,row=1,col=0")
+        self.assertEqual(
+            rows[0].registry_source_id,
+            "edge-2e-1bu7-vocabulary-moves",
+        )
+        corpus.validate_supplementary_registry_links(
+            rows,
+            {
+                "edge-2e-1bu7-vocabulary-moves": {
+                    "source_role": "lexical_candidate",
+                    "corpus_policy": "candidate_only",
+                    "format": "docx",
+                }
+            },
+        )
+        with self.assertRaisesRegex(
+            ValueError,
+            "declares format='pdf', not 'docx'",
+        ):
+            corpus.validate_supplementary_registry_links(
+                rows,
+                {
+                    "edge-2e-1bu7-vocabulary-moves": {
+                        "source_role": "lexical_candidate",
+                        "corpus_policy": "candidate_only",
+                        "format": "pdf",
+                    }
+                },
+            )
 
 
 if __name__ == "__main__":

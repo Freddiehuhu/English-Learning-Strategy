@@ -1,0 +1,1188 @@
+{
+  "schema_version": 2,
+  "registry_schema_version": 2,
+  "rights_policy": "copyrighted_reference_private_processing",
+  "ielts_authority_policy": "no_supplementary_source_can_auto_promote_an_active_ielts_target",
+  "statistics": {
+    "registered_source_count": 46,
+    "inventoried_source_count": 46,
+    "error_source_count": 0,
+    "tool_unavailable_source_count": 0,
+    "format_counts": {
+      "docx": 3,
+      "epub": 1,
+      "pdf": 42
+    },
+    "source_role_counts": {
+      "activity_reference": 4,
+      "lexical_candidate": 30,
+      "linguistic_reference": 4,
+      "pedagogy_reference": 4,
+      "relation_reference": 4
+    },
+    "corpus_policy_counts": {
+      "candidate_only": 30,
+      "enrich_only": 8,
+      "methods_only": 8
+    },
+    "text_route_counts": {
+      "docx_ooxml": 3,
+      "epub_xhtml": 1,
+      "pdf_native_text": 24,
+      "pdf_ocr_required": 18
+    },
+    "error_counts": {}
+  },
+  "sources": [
+    {
+      "id": "english-vocabulary-in-use-elementary-3e",
+      "display_name": "English Vocabulary in Use Elementary, 3rd edition",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "general_english",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "fe0f73c4605a10bacc6d8440facf3ea44075128bcea1b9817c07a41540c23160",
+      "byte_size": 109265438,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 176,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "555.597 x 748.346 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 34797
+      }
+    },
+    {
+      "id": "english-vocabulary-in-use-pre-intermediate-intermediate",
+      "display_name": "English Vocabulary in Use Pre-Intermediate and Intermediate",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "general_english",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "3a357be041df101c84867add40756ad50e7510adf8430ca3c6f403009d0e7875",
+      "byte_size": 27969061,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 265,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "768 x 1034 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 14768
+      }
+    },
+    {
+      "id": "edge-vocabulary-3b",
+      "display_name": "Edge 3B Vocabulary",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "70ba3d07eedd7d38d4c8787ef6a3a5ebac87207a870c7656ca2e9d844e28f7cd",
+      "byte_size": 123554459,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 62,
+        "pdf_version": "1.4",
+        "encrypted": "no",
+        "page_size": "401.886 x 310.549 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "edge-vocabulary-booster-3a",
+      "display_name": "Edge Vocabulary Booster 3A",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "36d287cb0c0008794a775d0c84eb5eac72248f93e394f397996bd9c9731c407a",
+      "byte_size": 116626733,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 66,
+        "pdf_version": "1.4",
+        "encrypted": "no",
+        "page_size": "391.447 x 309.243 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "edge-vocabulary-book-1a",
+      "display_name": "Edge Vocabulary Book 1A",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "e8d741b822385e5b297f81e2f3485bf424ee7be8a92dbcb0612ef0f8938d6e47",
+      "byte_size": 30061659,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 60,
+        "pdf_version": "1.3",
+        "encrypted": "no",
+        "page_size": "676.143 x 871.908 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "edge-vocabulary-book-1b",
+      "display_name": "Edge Vocabulary Book 1B",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "86bb8d09e7961333aac9c38286ea796b0cdca8e0251c3080fdd86c64ef0399bf",
+      "byte_size": 27563080,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 60,
+        "pdf_version": "1.3",
+        "encrypted": "no",
+        "page_size": "620.606 x 800.308 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "edge-vocabulary-booster-2a",
+      "display_name": "Edge Vocabulary Booster 2A",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "bccc70c3f2d2a9cbae4bcd3b16c6c6278964a91ccb77727b93b36f556e8b18f7",
+      "byte_size": 31711488,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 62,
+        "pdf_version": "1.3",
+        "encrypted": "no",
+        "page_size": "1348.75 x 1741.16 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "edge-vocabulary-booster-2b",
+      "display_name": "Edge Vocabulary Booster 2B",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "404632a56b09ec9e1f59d20f8dfd461f646f3141c91ca0f661111e7bd73d5035",
+      "byte_size": 29022866,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 62,
+        "pdf_version": "1.3",
+        "encrypted": "no",
+        "page_size": "618.983 x 798.143 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "scholastic-240-vocabulary-grade-1",
+      "display_name": "240 Vocabulary Words Kids Need to Know, Grade 1",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "8505b59dcb6a672e8cd58c46d44ad2b2dafcf88ea848e05324d6d746771760a7",
+      "byte_size": 2457824,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 82,
+        "pdf_version": "1.4",
+        "encrypted": "yes (print:yes copy:yes change:no addNotes:no algorithm:RC4)",
+        "page_size": "603 x 783.119 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 9006
+      }
+    },
+    {
+      "id": "scholastic-240-vocabulary-grade-3",
+      "display_name": "240 Vocabulary Words Kids Need to Know, Grade 3",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "f660224dab8f0eee6d1961f8abb5c10cf6cb8d0b7726629dfcaa50f86802af39",
+      "byte_size": 1898855,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 82,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "603 x 784 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 9920
+      }
+    },
+    {
+      "id": "scholastic-240-vocabulary-grade-4",
+      "display_name": "240 Vocabulary Words Kids Need to Know, Grade 4",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "20856516b959f14dc063192ac564dd42bc49e54739ff8b414a89445f2fd76cbd",
+      "byte_size": 17783107,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 83,
+        "pdf_version": "1.3",
+        "encrypted": "no",
+        "page_size": "594 x 775.08 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 8103
+      }
+    },
+    {
+      "id": "assessing-vocabulary-john-read",
+      "display_name": "Assessing Vocabulary",
+      "format": "pdf",
+      "source_role": "pedagogy_reference",
+      "corpus_policy": "methods_only",
+      "target_scope": "none",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "e0c9b5fbcb15bb946504689d396dd46e21998c1867a6a80d7a9ea323c3d46615",
+      "byte_size": 2796838,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 146,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "612 x 842 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "scholastic-success-vocabulary-grade-1",
+      "display_name": "Scholastic Success with Vocabulary, Grade 1",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "a91461d7adcb3e39462c643359e2d4e87d45c6570b53b52f85c96f420853cdce",
+      "byte_size": 2568376,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 87,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "966 x 1200 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 2590
+      }
+    },
+    {
+      "id": "scholastic-success-vocabulary-grade-2",
+      "display_name": "Scholastic Success with Vocabulary, Grade 2",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "3e782cc3d544d84df2a9c4c35786072052074ce5ea9fd241417856eba9377eb4",
+      "byte_size": 2389764,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 87,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "966 x 1200 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 3480
+      }
+    },
+    {
+      "id": "scholastic-success-vocabulary-grade-3",
+      "display_name": "Scholastic Success with Vocabulary, Grade 3",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "c3c5432508e3451a9b236a05cf801064ae2bb7bdff2d8532e125d269c7383d4f",
+      "byte_size": 2299300,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 87,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "966 x 1200 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 5719
+      }
+    },
+    {
+      "id": "scholastic-success-vocabulary-grade-4",
+      "display_name": "Scholastic Success with Vocabulary, Grade 4",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "c7fdae809a3366b7cbb0a7d3669f056746fc8337608267fb565c012894dc3eff",
+      "byte_size": 2453925,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 87,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "966 x 1200 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 6290
+      }
+    },
+    {
+      "id": "scholastic-success-vocabulary-grade-5",
+      "display_name": "Scholastic Success with Vocabulary, Grade 5",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "6fedaab6d78dc409c42667a22166bc558ed3417c8ec7cad59af5b36c53bae4ba",
+      "byte_size": 2185140,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 84,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "966 x 1200 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 6224
+      }
+    },
+    {
+      "id": "oef-1bu5-vocabulary-writing-book",
+      "display_name": "OEF 1B Unit 5 Vocabulary and Writing Book",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "d2a23c2ad9e1b203879a3f1ee667cd233eddcd7d74c1b94c237025f7ca0557d6",
+      "byte_size": 1278408,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 8,
+        "pdf_version": "1.7",
+        "encrypted": "no",
+        "page_size": "419.52 x 595.32 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 8,
+        "probe_character_count": 6232
+      }
+    },
+    {
+      "id": "edge-2e-1bu7-vocabulary-moves",
+      "display_name": "Edge 2E 1B Unit 7 Graded Vocabulary 1 - Moves in games",
+      "format": "docx",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "24c95d32532d1b725eeae03f679afa8235059c509ef3535b56bca02faf2c8aac",
+      "byte_size": 172446,
+      "file_count": 1,
+      "metadata": {
+        "package_entry_count": 36,
+        "text_character_count": 7966,
+        "declared_page_count": 3,
+        "declared_word_count": 1572,
+        "declared_paragraph_count": 21
+      },
+      "text_route": {
+        "route": "docx_ooxml",
+        "probe_method": "word/document.xml",
+        "probe_character_count": 7966
+      }
+    },
+    {
+      "id": "edge-2e-1bu7-vocabulary-adjectives",
+      "display_name": "Edge 2E 1B Unit 7 Graded Vocabulary 2 - Adjectives to describe games",
+      "format": "docx",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "5a8757e12f024348f3c12bee5bf922916f45fbeba036c6eaee9786701d9c2f68",
+      "byte_size": 187544,
+      "file_count": 1,
+      "metadata": {
+        "package_entry_count": 36,
+        "text_character_count": 7700,
+        "declared_page_count": 3,
+        "declared_word_count": 814,
+        "declared_paragraph_count": 10
+      },
+      "text_route": {
+        "route": "docx_ooxml",
+        "probe_method": "word/document.xml",
+        "probe_character_count": 7700
+      }
+    },
+    {
+      "id": "visualize-your-vocabulary-sat",
+      "display_name": "Visualize Your Vocabulary: Turn Any SAT Word into a Picture and Remember It Forever",
+      "format": "epub",
+      "source_role": "activity_reference",
+      "corpus_policy": "methods_only",
+      "target_scope": "sat",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "afd7fe89f015fe07b39499a70def3a66f1cdf759f46ba2c48585e82d9f70e6fc",
+      "byte_size": 9881364,
+      "file_count": 523,
+      "metadata": {
+        "language": "en",
+        "manifest_item_count": 518,
+        "image_item_count": 253,
+        "text_document_count": 262
+      },
+      "text_route": {
+        "route": "epub_xhtml",
+        "probe_method": "epub_manifest",
+        "manifest_text_documents": 262,
+        "manifest_images": 253
+      }
+    },
+    {
+      "id": "building-vocabulary-word-roots-level-3",
+      "display_name": "Building Vocabulary from Word Roots, Level 3",
+      "format": "pdf",
+      "source_role": "linguistic_reference",
+      "corpus_policy": "enrich_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "37df9df0203fc9ea9471492a2edc2f4a2aa4fb09bd1dcb628e4c2b00c1b33952",
+      "byte_size": 9427716,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 144,
+        "pdf_version": "1.4",
+        "encrypted": "no",
+        "page_size": "612 x 792 pts (letter)"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 6181
+      }
+    },
+    {
+      "id": "building-vocabulary-word-roots-level-5",
+      "display_name": "Building Vocabulary from Word Roots, Level 5",
+      "format": "pdf",
+      "source_role": "linguistic_reference",
+      "corpus_policy": "enrich_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "8752df19f8b21b97793aee6c6fe795f5d218170e73bbf4b538e535d9e741572b",
+      "byte_size": 9233819,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 144,
+        "pdf_version": "1.4",
+        "encrypted": "no",
+        "page_size": "612 x 792 pts (letter)"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 7059
+      }
+    },
+    {
+      "id": "c1-vocabulary-pack-cae",
+      "display_name": "C1 Vocabulary Pack for CAE",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "cae",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "a1d6542a0367d922cd445864d56a1dc2f953e37e0a94cf1a565291f1548e7a6f",
+      "byte_size": 861929,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 20,
+        "pdf_version": "1.5",
+        "encrypted": "no",
+        "page_size": "595.32 x 841.92 pts (A4)"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 12368
+      }
+    },
+    {
+      "id": "natural-english-collocations",
+      "display_name": "Check Your Vocabulary for Natural English Collocations",
+      "format": "pdf",
+      "source_role": "relation_reference",
+      "corpus_policy": "enrich_only",
+      "target_scope": "general_english",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "7b3438d821f8906ce82b16cc009f191a4043f57bbceced2a05692ca6b1f065c0",
+      "byte_size": 40589173,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 97,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "572 x 829 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "check-english-vocabulary-phrasal-verbs",
+      "display_name": "Check Your English Vocabulary for Phrasal Verbs",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "general_english",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "d8ea969175f87b4964eabfdfb9c68ebf320c83b16b4c0bf5b685d37c2a4e622f",
+      "byte_size": 1172985,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 81,
+        "pdf_version": "1.4",
+        "encrypted": "no",
+        "page_size": "594.72 x 841.68 pts (A4)"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 18484
+      }
+    },
+    {
+      "id": "vocabulary-building-activity-pack",
+      "display_name": "Vocabulary Building Activity Pack",
+      "format": "pdf",
+      "source_role": "activity_reference",
+      "corpus_policy": "methods_only",
+      "target_scope": "none",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "50a7bb8adb3b387236fd8565cd47afd3ad2d6d622c1bb0d8e57f4663f19f51fd",
+      "byte_size": 10836655,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 22,
+        "pdf_version": "1.3",
+        "encrypted": "no",
+        "page_size": "1668 x 2604 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "js-vocabulary-starter-pack",
+      "display_name": "JS Vocabulary Starter Pack Overview",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "6cdc57c858864c62dae53bf425d7bbd427d701a74522b4cb1c554a27e30136b4",
+      "byte_size": 109674,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 1,
+        "pdf_version": "1.7",
+        "encrypted": "no",
+        "page_size": "595.32 x 841.92 pts (A4)"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 1,
+        "probe_character_count": 267
+      }
+    },
+    {
+      "id": "english-prepositions-list",
+      "display_name": "English Prepositions List",
+      "format": "pdf",
+      "source_role": "relation_reference",
+      "corpus_policy": "enrich_only",
+      "target_scope": "general_english",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "4dc519de373e117a2664fed1f4ba94747e645a57de216bb4b6046b0a1bd1a572",
+      "byte_size": 713356,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 56,
+        "pdf_version": "1.4",
+        "encrypted": "no",
+        "page_size": "595 x 842 pts (A4)"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 6488
+      }
+    },
+    {
+      "id": "english-for-everyone-junior-beginners",
+      "display_name": "English for Everyone Junior: Beginners Course",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "3f1c62b724582a0987e35e8d8940106f0929d198c0630a3cbbe1beb4928f2e49",
+      "byte_size": 111955857,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 256,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "552.774 x 660.495 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 10851
+      }
+    },
+    {
+      "id": "english-collocations-in-use-intermediate",
+      "display_name": "English Collocations in Use Intermediate",
+      "format": "pdf",
+      "source_role": "relation_reference",
+      "corpus_policy": "enrich_only",
+      "target_scope": "general_english",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "d4426c9bbdcf931d95aec01fb5fd5e922e81a18c04b656a76a76d372cefdf0a8",
+      "byte_size": 18383153,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 194,
+        "pdf_version": "1.7",
+        "encrypted": "no",
+        "page_size": "552.756 x 748.346 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 18398
+      }
+    },
+    {
+      "id": "elementary-vocabulary-games",
+      "display_name": "Elementary Vocabulary Games",
+      "format": "pdf",
+      "source_role": "activity_reference",
+      "corpus_policy": "methods_only",
+      "target_scope": "none",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "1b61aa08499a980b9bc2f07b5221e002959eee2003fd3b09c52022a93fcc36f9",
+      "byte_size": 9917180,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 120,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "548.16 x 822.72 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "english-words-latin-greek-elements",
+      "display_name": "English Words from Latin and Greek Elements",
+      "format": "pdf",
+      "source_role": "linguistic_reference",
+      "corpus_policy": "enrich_only",
+      "target_scope": "general_english",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "3e8348f569818d5c7ff0c9fa7800366d93738741b68dd4ff7cbcf5abbf1097a3",
+      "byte_size": 5370510,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 157,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "842.4 x 595.2 pts (A4)"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 23477
+      }
+    },
+    {
+      "id": "wordly-wise-3000-book-4",
+      "display_name": "Wordly Wise 3000, Book 4",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "f9124e70f8f55b77380da3a9b267deb2c26ce9c7a84963394076d70af1637a2d",
+      "byte_size": 528476519,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 256,
+        "pdf_version": "1.4",
+        "encrypted": "no",
+        "page_size": "571 x 789 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "wordly-wise-3000-k-concept-cards",
+      "display_name": "Wordly Wise 3000 K Concept Cards",
+      "format": "pdf",
+      "source_role": "relation_reference",
+      "corpus_policy": "enrich_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "3c1fb1f4da109383cbd1309317b00186fe46a2cacb83a278e2c00439f1d1dc49",
+      "byte_size": 27827749,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 26,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "995.97 x 837.18 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "wordly-wise-3000-k-picture-cards",
+      "display_name": "Wordly Wise 3000 K Picture Cards",
+      "format": "pdf",
+      "source_role": "activity_reference",
+      "corpus_policy": "methods_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "58bde230a5b0395cb7f76d3ae7228dadcb6145f517a4c8ef5fc4539c919e4baa",
+      "byte_size": 99301380,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 242,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "499.51 x 353.7 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "wordly-wise-3000-k-teachers-resource",
+      "display_name": "Wordly Wise 3000 K Teacher's Resource Book",
+      "format": "pdf",
+      "source_role": "pedagogy_reference",
+      "corpus_policy": "methods_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "9710422e20335e6c4deea8199fd5e95c3190dce78e8cd0ddf8ee47286cf62ab8",
+      "byte_size": 188684694,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 140,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "586.98 x 781.41 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "wordly-wise-k-revision-1",
+      "display_name": "Wordly Wise K - Revision 1",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "fedf2f1e819b276b562d75469ad7d8c885755e4d47777f435a8195481e3a6de8",
+      "byte_size": 308706264,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 106,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "782 x 585 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "wordly-wise-workbook-4",
+      "display_name": "Wordly Wise Workbook 4",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "school_curriculum",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "9a53393cae02474e9f59f1f7ae3b11a96bdac0fcd001f0df6d1d167cf8e3325e",
+      "byte_size": 65449982,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 112,
+        "pdf_version": "1.4",
+        "encrypted": "no",
+        "page_size": "566.33 x 783.33 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "english-vocabulary-in-use-upper-intermediate-4e",
+      "display_name": "English Vocabulary in Use Upper-Intermediate, 4th edition",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "general_english",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "248c49fba278071aff52ce6a5ce816e12c277c9e67baea5cd0f9c7ef7551c080",
+      "byte_size": 25902619,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 280,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "768 x 1034 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 16336
+      }
+    },
+    {
+      "id": "english-vocabulary-in-use-advanced-3e",
+      "display_name": "English Vocabulary in Use Advanced, 3rd edition",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "general_english",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "96040f9bba7afa4acfee6cefa6e80e2df7abae62ca773532186dbf969ec766f0",
+      "byte_size": 29208970,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 303,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "551.417 x 748.301 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 38179
+      }
+    },
+    {
+      "id": "ielts-toefl-toeic-vocabulary",
+      "display_name": "IELTS, TOEFL and TOEIC Vocabulary",
+      "format": "pdf",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "multi_exam_unverified",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "eae470021e47ec37235bf35a26e83a88dbe5e3848ef8997b506a23d26b7fe77e",
+      "byte_size": 7108732,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 96,
+        "pdf_version": "1.4",
+        "encrypted": "no",
+        "page_size": "612 x 792 pts (letter)"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "ssat-vocabulary-notes",
+      "display_name": "SSAT Vocabulary Notes",
+      "format": "docx",
+      "source_role": "lexical_candidate",
+      "corpus_policy": "candidate_only",
+      "target_scope": "ssat",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "fbf969bb23523f8dc13a92c27a5faa92a2089564979c4f94f7b343be5929c94d",
+      "byte_size": 32067,
+      "file_count": 1,
+      "metadata": {
+        "package_entry_count": 11,
+        "text_character_count": 10764,
+        "declared_page_count": 17,
+        "declared_word_count": 1733,
+        "declared_paragraph_count": 23
+      },
+      "text_route": {
+        "route": "docx_ooxml",
+        "probe_method": "word/document.xml",
+        "probe_character_count": 10764
+      }
+    },
+    {
+      "id": "introduction-english-morphology",
+      "display_name": "An Introduction to English Morphology: Words and Their Structure",
+      "format": "pdf",
+      "source_role": "linguistic_reference",
+      "corpus_policy": "enrich_only",
+      "target_scope": "none",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "a9a208766ac6aaa3831db9ece3afda520cad080830522e765297503af909da34",
+      "byte_size": 1702431,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 160,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "342 x 432 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 9630
+      }
+    },
+    {
+      "id": "how-to-teach-vocabulary",
+      "display_name": "How to Teach Vocabulary",
+      "format": "pdf",
+      "source_role": "pedagogy_reference",
+      "corpus_policy": "methods_only",
+      "target_scope": "none",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "ff8d6cde078ceb82212f922891ba8045a93acad38dc885e5365203f4241e8af1",
+      "byte_size": 9819613,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 191,
+        "pdf_version": "1.6",
+        "encrypted": "no",
+        "page_size": "422.28 x 563.4 pts"
+      },
+      "text_route": {
+        "route": "pdf_ocr_required",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 0
+      }
+    },
+    {
+      "id": "how-to-improve-memory-for-study",
+      "display_name": "How to Improve Your Memory for Study",
+      "format": "pdf",
+      "source_role": "pedagogy_reference",
+      "corpus_policy": "methods_only",
+      "target_scope": "none",
+      "public_policy": "metadata_only",
+      "status": "ok",
+      "sha256": "42c143b403b473ddcab7ff69a5ba5a84384082bbcd7b7d6b02e453bfc6a1f3f1",
+      "byte_size": 3011852,
+      "file_count": 1,
+      "metadata": {
+        "page_count": 213,
+        "pdf_version": "1.3",
+        "encrypted": "no",
+        "page_size": "391.181 x 612.283 pts"
+      },
+      "text_route": {
+        "route": "pdf_native_text",
+        "probe_method": "pdftotext",
+        "probed_pages": 12,
+        "probe_character_count": 4644
+      }
+    }
+  ]
+}

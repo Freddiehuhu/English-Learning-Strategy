@@ -1,0 +1,15 @@
+entry_id	headword	normalized_key	candidate_status	overlaps_active_target	candidate_parts_of_speech	candidate_cefr_levels	candidate_source_count	candidate_sources	enrichment_source_count	enrichment_sources	review_status
+addictive-b3ee97f2	addictive	addictive	target_candidate	no	adjective		1	Edge 2E 1B Unit 7 Vocabulary 2	0		needs_teacher_approval
+best-selling-24969389	best-selling	best-selling	target_candidate	no	adjective		1	Edge 2E 1B Unit 7 Vocabulary 2	0		needs_teacher_approval
+challenging-c7d93322	challenging	challenging	support_for_active_target	yes	adjective		1	Edge 2E 1B Unit 7 Vocabulary 2	0		needs_teacher_approval
+classic-290b7518	classic	classic	support_for_active_target	yes	adjective		1	Edge 2E 1B Unit 7 Vocabulary 2	0		needs_teacher_approval
+deals-out-the-cards-88336033	deals out the cards	deals out the cards	target_candidate	no	verb|verb phrase		1	Edge 2E 1B Unit 7 Vocabulary 1	0		needs_teacher_approval
+draws-a-card-7b3db839	draws a card	draws a card	target_candidate	no	verb|verb phrase		1	Edge 2E 1B Unit 7 Vocabulary 1	0		needs_teacher_approval
+entertaining-648a04ab	entertaining	entertaining	support_for_active_target	yes	adjective		1	Edge 2E 1B Unit 7 Vocabulary 2	0		needs_teacher_approval
+family-friendly-9a258d6c	family-friendly	family-friendly	target_candidate	no	adjective		1	Edge 2E 1B Unit 7 Vocabulary 2	0		needs_teacher_approval
+miss-a-turn-7976ac1b	miss a turn	miss a turn	target_candidate	no	verb|verb phrase		1	Edge 2E 1B Unit 7 Vocabulary 1	0		needs_teacher_approval
+multi-player-c6b4a438	multi-player	multi-player	target_candidate	no	adjective		1	Edge 2E 1B Unit 7 Vocabulary 2	0		needs_teacher_approval
+rolled-the-dice-ba59ee5b	rolled the dice	rolled the dice	target_candidate	no	verb|verb phrase		1	Edge 2E 1B Unit 7 Vocabulary 1	0		needs_teacher_approval
+shuffle-the-cards-516d14db	shuffle the cards	shuffle the cards	target_candidate	no	verb|verb phrase		1	Edge 2E 1B Unit 7 Vocabulary 1	0		needs_teacher_approval
+tossed-a-coin-4b6a123a	tossed a coin	tossed a coin	target_candidate	no	verb|verb phrase		1	Edge 2E 1B Unit 7 Vocabulary 1	0		needs_teacher_approval
+turned-the-card-over-fb246474	turned the card over	turned the card over	target_candidate	no	verb|verb phrase		1	Edge 2E 1B Unit 7 Vocabulary 1	0		needs_teacher_approval

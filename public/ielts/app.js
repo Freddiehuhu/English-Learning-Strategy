@@ -28,6 +28,21 @@
     forms: '词形与构词',
     sentence: '搭配到表达',
   };
+  // Visual tasks feed the same word × skill repair queue as the four core gates.
+  // Meaning/context relations return to sentence use; sound–spelling relations
+  // return to spelling; part-of-speech and morphology relations return to forms.
+  var VISUAL_REPAIR_SKILLS = {
+    pos: 'forms',
+    family: 'forms',
+    synonym: 'sentence',
+    antonym: 'sentence',
+    guess: 'sentence',
+    homophone: 'spell',
+    homograph: 'forms',
+    analogy: 'forms',
+    taxonomy: 'sentence',
+    collocation: 'sentence',
+  };
   var POS_LABELS = {
     'n.': '名词',
     'v.': '动词',
@@ -664,7 +679,7 @@
 
   function defaultVisualState() {
     return {
-      version: 3,
+      version: 4,
       tasks: {},
       history: [],
     };
@@ -680,7 +695,65 @@
       gameIndices: {},
       gameAnswered: {},
       gameReplay: {},
+      repairRecorded: {},
     };
+  }
+
+  function visualTaskMetadata(taskId) {
+    var id = String(taskId || '');
+    if (VISUAL_LAB.posScene && VISUAL_LAB.posScene.id === id) {
+      return {
+        targetWordId: String(VISUAL_LAB.posScene.targetWordId || ''),
+        gameType: 'pos',
+        repairSkill: VISUAL_REPAIR_SKILLS.pos,
+      };
+    }
+    var familyTask = visualFamilyAtlases().find(function (task) {
+      return task && task.id === id;
+    });
+    if (familyTask) {
+      return {
+        targetWordId: String(familyTask.targetWordId || ''),
+        gameType: 'family',
+        repairSkill: VISUAL_REPAIR_SKILLS.family,
+      };
+    }
+    var comparisonTask = Array.isArray(VISUAL_LAB.groups)
+      ? VISUAL_LAB.groups.find(function (task) {
+          return task && task.id === id;
+        })
+      : null;
+    if (comparisonTask) {
+      var relation = comparisonTask.relation === 'antonym' ? 'antonym' : 'synonym';
+      return {
+        targetWordId: String(comparisonTask.targetWordId || ''),
+        gameType: relation,
+        repairSkill: VISUAL_REPAIR_SKILLS[relation],
+      };
+    }
+    var gameMetadata = null;
+    visualGameModes().some(function (mode) {
+      var task =
+        mode &&
+        Array.isArray(mode.tasks) &&
+        mode.tasks.find(function (candidate) {
+          return candidate && candidate.id === id;
+        });
+      if (!task) return false;
+      gameMetadata = {
+        targetWordId: String(task.targetWordId || ''),
+        gameType: String(mode.id || 'game'),
+        repairSkill: VISUAL_REPAIR_SKILLS[mode.id] || 'sentence',
+      };
+      return true;
+    });
+    return (
+      gameMetadata || {
+        targetWordId: '',
+        gameType: 'unknown',
+        repairSkill: '',
+      }
+    );
   }
 
   function normaliseVisualState(saved) {
@@ -692,10 +765,14 @@
       Object.keys(saved.tasks).forEach(function (taskId) {
         if (!allowedIds.has(taskId)) return;
         var task = saved.tasks[taskId] || {};
+        var mastered = Boolean(task.mastered);
         tasks[taskId] = {
           attempts: Math.max(0, Number(task.attempts) || 0),
           correct: Math.max(0, Number(task.correct) || 0),
-          mastered: Boolean(task.mastered),
+          mastered: mastered,
+          completed: task.completed === undefined ? mastered : Boolean(task.completed),
+          needsReview: Boolean(task.needsReview) && !mastered,
+          hadError: Boolean(task.hadError),
           last: Math.max(0, Number(task.last) || 0),
           step: Math.max(0, Number(task.step) || 0),
           skipped: Boolean(task.skipped),
@@ -707,10 +784,26 @@
           .filter(function (item) {
             return item && allowedIds.has(String(item.taskId || ''));
           })
+          .map(function (item) {
+            var taskId = String(item.taskId || '');
+            var metadata = visualTaskMetadata(taskId);
+            return {
+              taskId: taskId,
+              targetWordId: String(item.targetWordId || metadata.targetWordId || ''),
+              gameType: String(item.gameType || metadata.gameType || 'unknown'),
+              repairSkill:
+                SKILLS.indexOf(item.repairSkill) >= 0
+                  ? item.repairSkill
+                  : metadata.repairSkill || '',
+              correct: Boolean(item.correct),
+              choice: String(item.choice || ''),
+              at: Math.max(0, Number(item.at) || 0),
+            };
+          })
           .slice(-240)
       : [];
     return {
-      version: 3,
+      version: 4,
       tasks: tasks,
       history: history.slice(-240),
     };
@@ -739,6 +832,9 @@
         attempts: 0,
         correct: 0,
         mastered: false,
+        completed: false,
+        needsReview: false,
+        hadError: false,
         last: 0,
         step: 0,
         skipped: false,
@@ -749,18 +845,64 @@
 
   function recordVisualResult(taskId, correct, choice) {
     var taskState = getVisualTaskState(taskId);
+    var metadata = visualTaskMetadata(taskId);
     var now = Date.now();
     taskState.attempts += 1;
     if (correct) taskState.correct += 1;
+    if (!correct) {
+      taskState.hadError = true;
+      taskState.mastered = false;
+      taskState.completed = false;
+      taskState.needsReview = true;
+    }
     taskState.last = now;
     visualState.history.push({
       taskId: taskId,
+      targetWordId: metadata.targetWordId,
+      gameType: metadata.gameType,
+      repairSkill: metadata.repairSkill,
       correct: Boolean(correct),
       choice: String(choice || ''),
       at: now,
     });
     visualState.history = visualState.history.slice(-240);
     saveVisualState();
+    if (!correct) bridgeVisualError(taskId, choice, metadata);
+    return metadata;
+  }
+
+  function bridgeVisualError(taskId, choice, metadata) {
+    if (!metadata.targetWordId || SKILLS.indexOf(metadata.repairSkill) < 0) return;
+    if (visualRuntime.repairRecorded[taskId]) return;
+    var word = WORDS.find(function (candidate) {
+      return candidate.id === metadata.targetWordId;
+    });
+    if (!word) return;
+    visualRuntime.repairRecorded[taskId] = true;
+    recordResult(
+      word,
+      metadata.repairSkill,
+      false,
+      '图像错因 · ' +
+        metadata.gameType +
+        (String(choice || '') === 'skip' ? ' · 主动跳过' : ' · 判断错误'),
+      {
+        source: 'visual',
+        visualTaskId: String(taskId),
+        visualGameType: metadata.gameType,
+      },
+    );
+  }
+
+  function completeVisualTask(taskId) {
+    var taskState = getVisualTaskState(taskId);
+    var needsReview = Boolean(taskState.hadError);
+    taskState.completed = true;
+    taskState.mastered = !needsReview;
+    taskState.needsReview = needsReview;
+    taskState.hadError = false;
+    taskState.last = Date.now();
+    return taskState;
   }
 
   function validateVisualLab(wordIds) {
@@ -1007,7 +1149,7 @@
     return wordState.skills[skill];
   }
 
-  function recordResult(word, skill, correct, detail) {
+  function recordResult(word, skill, correct, detail, source) {
     var skillState = getSkillState(word.id, skill);
     var now = Date.now();
     skillState.attempts += 1;
@@ -1021,14 +1163,20 @@
     }
     skillState.last = now;
 
-    state.history.push({
+    var historyItem = {
       wordId: word.id,
       word: word.word,
       skill: skill,
       correct: Boolean(correct),
       detail: detail || (correct ? '首次完成' : '需要复习'),
       at: now,
-    });
+    };
+    if (source && typeof source === 'object') {
+      historyItem.source = String(source.source || '');
+      historyItem.visualTaskId = String(source.visualTaskId || '');
+      historyItem.visualGameType = String(source.visualGameType || '');
+    }
+    state.history.push(historyItem);
     state.history = state.history.slice(-240);
     saveState();
 
@@ -1114,7 +1262,7 @@
       '>' +
       (queue.length ? '开始今日训练 →' : '今日任务已完成') +
       '</button>' +
-      '<button class="secondary-button" type="button" data-action="start-weak">只练薄弱词</button>' +
+      '<button class="secondary-button" type="button" data-action="start-weak">智能补弱（按错因）</button>' +
       '<span class="mini-metric">' +
       dueCount +
       ' 项能力待复习</span>' +
@@ -1295,7 +1443,7 @@
       ' / ' +
       summary.total +
       '</strong>' +
-      '<span>组已完成</span>' +
+      '<span>关卡无提示完成</span>' +
       '</div>' +
       '<div class="visual-overview-accuracy"><strong data-visual-accuracy>' +
       summary.accuracy +
@@ -1389,7 +1537,7 @@
     var scene = VISUAL_LAB.posScene;
     var taskState = getVisualTaskState(scene.id);
     var retrying = Boolean(visualRuntime.unlockedTasks[scene.id]);
-    var complete = taskState.mastered && !retrying;
+    var complete = taskState.completed && !retrying;
     var step = Math.min(visualRuntime.posStep, scene.questions.length - 1);
     var question = scene.questions[step];
     return (
@@ -1442,7 +1590,7 @@
         .join(' ') +
       '</div>' +
       (complete
-        ? renderVisualPosComplete(scene)
+        ? renderVisualPosComplete(scene, taskState)
         : '<section class="visual-question" aria-labelledby="visualPosPrompt">' +
           '<div class="visual-question-meta"><span>第 ' +
           (step + 1) +
@@ -1460,7 +1608,7 @@
     );
   }
 
-  function renderVisualPosComplete(scene) {
+  function renderVisualPosComplete(scene, taskState) {
     return (
       '<section class="visual-pos-result"><div class="visual-pos-role-grid">' +
       scene.questions
@@ -1476,7 +1624,11 @@
           );
         })
         .join('') +
-      '</div><div class="visual-result-actions"><span>✓ 四种实词已经全部找对</span>' +
+      '</div><div class="visual-result-actions"><span>' +
+      (taskState.needsReview
+        ? '✓ 已完成待复习；下次再做一次无提示判断'
+        : '✓ 四种实词已经全部找对，本关无提示完成') +
+      '</span>' +
       '<button class="secondary-button" type="button" data-action="visual-retry" data-task-id="' +
       esc(scene.id) +
       '">再挑战一次</button></div></section>'
@@ -1529,7 +1681,7 @@
     var taskState = getVisualTaskState(task.id);
     var retrying = Boolean(visualRuntime.unlockedTasks[task.id]);
     var skipped = Boolean(taskState.skipped || visualRuntime.skippedTasks[task.id]);
-    var complete = taskState.mastered && !retrying;
+    var complete = taskState.completed && !retrying;
     var practiceSlots = visualFamilyPracticeSlots(task);
     var step = Math.min(Number(taskState.step) || 0, practiceSlots.length - 1);
     var activeSlot = practiceSlots[step];
@@ -1603,7 +1755,7 @@
           : '先观察高亮画格，再根据词性和句子完成拼写。') +
       '</figcaption></figure>' +
       (complete
-        ? renderVisualFamilyResult(task, foundation)
+        ? renderVisualFamilyResult(task, foundation, taskState)
         : skipped
           ? '<div class="visual-skipped"><strong>本轮已跳过</strong><p>答案仍然隐藏，可以稍后从动词重新开始。</p>' +
             '<button class="secondary-button" type="button" data-action="visual-retry" data-task-id="' +
@@ -1648,7 +1800,7 @@
     );
   }
 
-  function renderVisualFamilyResult(task, foundation) {
+  function renderVisualFamilyResult(task, foundation, taskState) {
     return (
       '<section class="visual-family-result"><p class="eyebrow">FULL FAMILY UNLOCKED</p>' +
       '<div class="visual-family-answer-grid">' +
@@ -1667,7 +1819,11 @@
         .join('') +
       '</div>' +
       renderVisualFamilyMemory(task) +
-      '<div class="visual-result-actions"><span>✓ 三个变形全部独立拼对</span>' +
+      '<div class="visual-result-actions"><span>' +
+      (taskState.needsReview
+        ? '✓ 已完成待复习；本轮用过构词提示'
+        : '✓ 三个变形全部独立拼对，本关无提示完成') +
+      '</span>' +
       '<button class="secondary-button" type="button" data-action="visual-retry" data-task-id="' +
       esc(task.id) +
       '">遮住答案再练一次</button></div></section>'
@@ -1726,7 +1882,7 @@
     var taskState = getVisualTaskState(task.id);
     var retrying = Boolean(visualRuntime.unlockedTasks[task.id]);
     var skipped = Boolean(visualRuntime.skippedTasks && visualRuntime.skippedTasks[task.id]);
-    var complete = taskState.mastered && !retrying;
+    var complete = taskState.completed && !retrying;
     var step = Math.min(Number(visualRuntime.taskSteps[task.id]) || 0, task.scenes.length - 1);
     var scene = task.scenes[step];
     var relationLabel = task.relation === 'synonym' ? '近义辨析' : '反义对照';
@@ -1776,7 +1932,7 @@
       esc(task.alt) +
       '</figcaption></figure>' +
       (complete
-        ? renderVisualComparisonResult(task)
+        ? renderVisualComparisonResult(task, taskState)
         : skipped
           ? '<div class="visual-skipped"><strong>本轮已跳过</strong><p>答案没有直接显示，可以稍后重新判断。</p>' +
             '<button class="secondary-button" type="button" data-action="visual-retry" data-task-id="' +
@@ -1821,7 +1977,7 @@
     );
   }
 
-  function renderVisualComparisonResult(task) {
+  function renderVisualComparisonResult(task, taskState) {
     return (
       '<section class="visual-comparison-result"><div class="visual-meaning-pair">' +
       '<div><span>左图</span><strong>' +
@@ -1836,7 +1992,11 @@
       '</p></div></div>' +
       '<p class="visual-rule"><strong>辨析边界：</strong>' +
       esc(task.rule) +
-      '</p><div class="visual-result-actions"><span>✓ 两个场景都已判断正确</span>' +
+      '</p><div class="visual-result-actions"><span>' +
+      (taskState.needsReview
+        ? '✓ 已完成待复习；下次不看提示再判断'
+        : '✓ 两个场景都已判断正确，本关无提示完成') +
+      '</span>' +
       '<button class="secondary-button" type="button" data-action="visual-retry" data-task-id="' +
       esc(task.id) +
       '">再挑战一次</button></div></section>'
@@ -1927,6 +2087,7 @@
     }
 
     var task = tasks[index];
+    var taskState = getVisualTaskState(task.id);
     var answered = Boolean(visualRuntime.gameAnswered[task.id]);
     var progress = visualGameModeProgress(mode);
     var imageFocus = ['left', 'right', 'all'].indexOf(task.focus) >= 0 ? task.focus : 'left';
@@ -1989,7 +2150,7 @@
       tasks.length +
       ' 题</p></div><div class="visual-game-score"><strong>' +
       progress.completed +
-      '</strong><span>已掌握</span></div></header>' +
+      '</strong><span>无提示完成</span></div></header>' +
       '<div class="visual-game-track" aria-hidden="true"><span style="--game-progress:' +
       Math.round((index / tasks.length) * 100) +
       '%"></span></div>' +
@@ -2025,6 +2186,8 @@
           esc(task.answer) +
           '</strong><p>' +
           esc(task.feedback) +
+          '</p><p><strong>学习状态：</strong>' +
+          (taskState.needsReview ? '已完成待复习；下次再做一次无提示判断。' : '本关无提示完成。') +
           '</p></div><div class="visual-game-actions"><button class="primary-button" type="button" data-action="visual-game-next" data-mode-id="' +
           esc(mode.id) +
           '">下一题 →</button></div>'
@@ -2048,13 +2211,15 @@
       '</span><div><p class="eyebrow">' +
       (remaining ? 'ROUND REVIEW' : 'MODE COMPLETE') +
       '</p><h3>' +
-      (remaining ? '这一轮已经走完' : esc(mode.label) + ' 已全部掌握') +
+      (remaining ? '这一轮已经走完' : esc(mode.label) + ' 已全部无提示完成') +
       '</h3><p>' +
       (remaining
-        ? '还有 ' + remaining + ' 题没有答对；跳过的题没有显示答案，可以继续回来判断。'
+        ? '还有 ' +
+          remaining +
+          ' 题需要再做一次无提示判断；跳过或提示后答对的题只记为“已完成待复习”。'
         : replaying
-          ? '复习轮完成。已掌握记录会保留，仍可再玩一轮巩固。'
-          : '这一类词义关系已经全部答对，可以重玩来巩固速度。') +
+          ? '复习轮完成。无提示完成记录会保留，仍可再玩一轮巩固。'
+          : '这一类词义关系已经全部无提示答对，可以重玩来巩固速度。') +
       '</p></div><div class="visual-game-finish-actions">' +
       (remaining
         ? '<button class="primary-button" type="button" data-action="visual-game-continue" data-mode-id="' +
@@ -2439,7 +2604,11 @@
     var nextCard = document.querySelector('[data-visual-task-id="' + task.id + '"]');
     if (!nextCard) return;
     var input = nextCard.querySelector('[data-visual-family-control][name="answer"]');
-    if (input) input.focus({ preventScroll: true });
+    focusElement(
+      input ||
+        nextCard.querySelector('[data-action="visual-retry"]') ||
+        nextCard.querySelector('h3, h4'),
+    );
   }
 
   function replaceVisualComparisonCard(task) {
@@ -2449,8 +2618,55 @@
     var nextCard = document.querySelector('[data-visual-task-id="' + task.id + '"]');
     if (nextCard) {
       var firstChoice = nextCard.querySelector('[data-action="visual-choice"]');
-      if (firstChoice) firstChoice.focus({ preventScroll: true });
+      focusElement(
+        firstChoice ||
+          nextCard.querySelector('[data-action="visual-retry"]') ||
+          nextCard.querySelector('h3, h4'),
+      );
     }
+  }
+
+  function focusElement(element) {
+    if (!element) return;
+    if (!element.matches('button, input, textarea, select, a[href], [tabindex]')) {
+      element.setAttribute('tabindex', '-1');
+    }
+    element.focus({ preventScroll: true });
+  }
+
+  function focusVisualSectionTask() {
+    var container = document.getElementById('visualContent');
+    if (!container) return;
+    focusElement(
+      container.querySelector(
+        '[data-action="visual-pos-token"]:not(:disabled), [data-visual-family-control]:not(:disabled), [data-action="visual-choice"]:not(:disabled), [data-action="visual-retry"], h2, h3, h4',
+      ),
+    );
+  }
+
+  function focusVisualGameStage(answered) {
+    var stage = document.querySelector('.visual-game-stage, .visual-game-finish');
+    if (!stage) return;
+    focusElement(
+      (answered && stage.querySelector('[data-action="visual-game-next"]')) ||
+        stage.querySelector('[data-action="visual-game-choice"]:not(:disabled)') ||
+        stage.querySelector('button:not(:disabled)') ||
+        stage.querySelector('h3'),
+    );
+  }
+
+  function focusCurrentSessionTask() {
+    var panel = main.querySelector('.training-panel');
+    focusElement(
+      (panel &&
+        (panel.querySelector(
+          'input:not(:disabled), textarea:not(:disabled), select:not(:disabled)',
+        ) ||
+          panel.querySelector('[data-collocation-recall] summary') ||
+          panel.querySelector('button:not(:disabled)') ||
+          panel.querySelector('h2, h3'))) ||
+        main.querySelector('.session-complete h1, .session-complete h2, .page-heading h1'),
+    );
   }
 
   function startDailySession() {
@@ -2475,23 +2691,23 @@
   }
 
   function startWeakSession() {
-    var weak = WORDS.slice()
-      .sort(function (a, b) {
-        return overallWordScore(a.id) - overallWordScore(b.id);
-      })
-      .filter(function (word) {
-        return hasAnyAttempt(word.id);
-      })
-      .slice(0, 8);
-    if (!weak.length) {
-      weak = seededWords(WORDS).slice(0, Number(state.settings.dailyNew) || 6);
+    var repairItems = buildRepairQueue(10);
+    if (!repairItems.length) {
+      showToast('还没有足够的错题记录，先完成一轮今日训练。');
+      startDailySession();
+      return;
     }
     session = {
-      type: 'daily',
-      words: weak,
+      type: 'repair',
+      words: repairItems.map(function (item) {
+        return item.word;
+      }),
+      repairSkills: repairItems.map(function (item) {
+        return item.skill;
+      }),
       wordIndex: 0,
       stageIndex: 0,
-      stages: SKILLS.slice(),
+      stages: [],
       stats: {},
       taskState: {},
       token: Date.now(),
@@ -2615,6 +2831,7 @@
 
   function renderQueuePanel() {
     var wordPosition = session.wordIndex + 1;
+    var isRepair = session.type === 'repair';
     var stageText =
       session.type === 'daily'
         ? '第 ' +
@@ -2627,14 +2844,16 @@
     return (
       '<article class="panel queue-panel">' +
       '<h3>' +
-      (session.type === 'daily' ? '本词学习链' : '当前队列') +
+      (session.type === 'daily' ? '本词学习链' : isRepair ? '本轮错误修复' : '当前队列') +
       '</h3>' +
       '<p>' +
       (session.type === 'daily'
         ? '同一个词一直保留到第四关；图片和故事只在相应复盘节点解锁。'
-        : currentSkill() === 'forms'
-          ? '基础词族与薄弱词交替，题型不会连续重复。'
-          : '到期和薄弱项目优先。') +
+        : isRepair
+          ? '系统只安排这个词真正薄弱的能力，不把已经稳定的关卡机械重做。'
+          : currentSkill() === 'forms'
+            ? '基础词族与薄弱词交替，题型不会连续重复。'
+            : '到期和薄弱项目优先。') +
       '</p>' +
       renderLearningStageTrack() +
       '<div class="queue-progress"><span>' +
@@ -3205,6 +3424,9 @@
       '</span><span class="source-badge">' +
       esc(word.zh) +
       '</span></div>' +
+      (task.evaluated
+        ? ''
+        : '<div class="form-skip-row"><button class="secondary-button form-skip-button" type="button" data-action="skip-sentence" aria-label="先跳过表达任务，稍后复习">先跳过（稍后复习）</button></div>') +
       renderCollocationRecall(word) +
       '<section class="sentence-step">' +
       '<div class="sentence-step-header"><span class="step-number">2</span><div><h3>搭出正确句子骨架</h3><p>大小写和句末标点已隐藏；请只根据语法和语义排序。</p></div></div>' +
@@ -3569,6 +3791,7 @@
     if (action === 'chunk-reveal') return revealChunks();
     if (action === 'chunk-check') return checkChunks();
     if (action === 'start-sentence-writing') return startSentenceWriting();
+    if (action === 'skip-sentence') return skipSentenceExercise();
     if (action === 'finish-sentence') return finishSentence(button.dataset.correct === 'true');
     if (action === 'export-data') return exportData();
     if (action === 'reset-data') return resetData();
@@ -3623,15 +3846,14 @@
     setTimeout(function () {
       visualRuntime.posStep += 1;
       if (visualRuntime.posStep >= scene.questions.length) {
-        var taskState = getVisualTaskState(scene.id);
-        taskState.mastered = true;
-        taskState.last = Date.now();
+        completeVisualTask(scene.id);
         visualRuntime.posStep = 0;
         delete visualRuntime.unlockedTasks[scene.id];
         saveVisualState();
       }
       renderVisualSection();
       updateVisualProgress();
+      focusVisualSectionTask();
     }, 620);
   }
 
@@ -3692,8 +3914,7 @@
     var nextStep = step + 1;
     taskState.skipped = false;
     if (nextStep >= practiceSlots.length) {
-      taskState.mastered = true;
-      taskState.last = Date.now();
+      completeVisualTask(task.id);
       taskState.step = 0;
       visualRuntime.taskSteps[task.id] = 0;
       delete visualRuntime.unlockedTasks[task.id];
@@ -3758,9 +3979,7 @@
     setTimeout(function () {
       var nextStep = step + 1;
       if (nextStep >= task.scenes.length) {
-        var taskState = getVisualTaskState(task.id);
-        taskState.mastered = true;
-        taskState.last = Date.now();
+        completeVisualTask(task.id);
         visualRuntime.taskSteps[task.id] = 0;
         delete visualRuntime.unlockedTasks[task.id];
       } else {
@@ -3794,6 +4013,8 @@
   function retryVisualTask(taskId) {
     delete visualRuntime.unlockedTasks[taskId];
     visualRuntime.unlockedTasks[taskId] = true;
+    delete visualRuntime.repairRecorded[taskId];
+    getVisualTaskState(taskId).hadError = false;
     if (visualRuntime.skippedTasks) delete visualRuntime.skippedTasks[taskId];
     if (VISUAL_LAB.posScene && VISUAL_LAB.posScene.id === taskId) {
       visualRuntime.posStep = 0;
@@ -3837,6 +4058,7 @@
     renderVisualSection();
     var stage = document.querySelector('.visual-game-stage, .visual-game-finish');
     if (stage) stage.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    focusVisualGameStage(false);
   }
 
   function chooseVisualGameAnswer(button) {
@@ -3859,13 +4081,12 @@
       return;
     }
 
-    var taskState = getVisualTaskState(task.id);
-    taskState.mastered = true;
-    taskState.last = Date.now();
+    completeVisualTask(task.id);
     visualRuntime.gameAnswered[task.id] = true;
     saveVisualState();
     renderVisualSection();
     updateVisualProgress();
+    focusVisualGameStage(true);
   }
 
   function skipVisualGame(button) {
@@ -3880,6 +4101,8 @@
       (Number(visualRuntime.gameIndices[found.mode.id]) || 0) + 1;
     renderVisualSection();
     updateVisualProgress();
+    delete visualRuntime.repairRecorded[found.task.id];
+    focusVisualGameStage(false);
   }
 
   function advanceVisualGame(modeId) {
@@ -3888,8 +4111,10 @@
     stopAudio();
     var index = Math.max(0, Number(visualRuntime.gameIndices[mode.id]) || 0);
     if (mode.tasks[index]) delete visualRuntime.gameAnswered[mode.tasks[index].id];
+    if (mode.tasks[index]) delete visualRuntime.repairRecorded[mode.tasks[index].id];
     visualRuntime.gameIndices[mode.id] = index + 1;
     renderVisualSection();
+    focusVisualGameStage(false);
   }
 
   function continueVisualGame(modeId) {
@@ -3902,6 +4127,7 @@
     });
     visualRuntime.gameIndices[mode.id] = firstIncomplete < 0 ? mode.tasks.length : firstIncomplete;
     renderVisualSection();
+    focusVisualGameStage(false);
   }
 
   function replayVisualGame(modeId) {
@@ -3912,8 +4138,11 @@
     visualRuntime.gameIndices[mode.id] = 0;
     mode.tasks.forEach(function (task) {
       delete visualRuntime.gameAnswered[task.id];
+      delete visualRuntime.repairRecorded[task.id];
+      getVisualTaskState(task.id).hadError = false;
     });
     renderVisualSection();
+    focusVisualGameStage(false);
   }
 
   function playVisualGameAudio(button) {
@@ -4656,6 +4885,12 @@
     document.getElementById('sentenceChecklist').innerHTML = checklistHtml(checks);
     document.getElementById('modelSentence').hidden = false;
     document.getElementById('sentenceFinishActions').hidden = false;
+    var skipButton = main.querySelector('[data-action="skip-sentence"]');
+    if (skipButton) {
+      var skipRow = skipButton.closest('.form-skip-row');
+      if (skipRow) skipRow.remove();
+      else skipButton.remove();
+    }
     setFeedback('sentenceFeedback', task.sentenceFeedback, allPass ? 'is-correct' : 'is-wrong');
   }
 
@@ -4689,6 +4924,17 @@
         : '需要教师进一步帮助',
     );
     saveState();
+    advanceSession();
+  }
+
+  function skipSentenceExercise() {
+    if (!session || currentSkill() !== 'sentence') return;
+    var task = session.taskState;
+    if (task.skipping || task.evaluated) return;
+    if (!acquireSkipLock()) return;
+    task.skipping = true;
+    recordResult(currentWord(), 'sentence', false, '主动跳过搭配与造句任务；稍后复习');
+    showToast('已跳过；这道表达题已加入待复习。');
     advanceSession();
   }
 
@@ -4755,6 +5001,7 @@
     session.taskState = {};
     renderSession();
     scrollToTop();
+    focusCurrentSessionTask();
   }
 
   function scheduleAdvance(delay) {
@@ -4773,6 +5020,9 @@
   }
 
   function currentSkill() {
+    if (session.type === 'repair') {
+      return session.repairSkills[session.wordIndex];
+    }
     return session.stages[session.stageIndex];
   }
 
@@ -4820,6 +5070,46 @@
       });
     var combined = uniqueWords(due.slice(0, 6).concat(introducedButIncomplete));
     return combined.slice(0, 10);
+  }
+
+  function buildRepairQueue(limit) {
+    var today = startOfToday();
+    var recentBoundary = Date.now() - 14 * 86400000;
+    var recentErrors = {};
+    state.history.forEach(function (item) {
+      if (item.correct || item.at < recentBoundary) return;
+      var key = item.wordId + ':' + item.skill;
+      recentErrors[key] = (recentErrors[key] || 0) + 1;
+    });
+    var items = [];
+    WORDS.forEach(function (word) {
+      SKILLS.forEach(function (skill) {
+        var skillState = peekSkillState(word.id, skill);
+        if (!skillState.attempts) return;
+        var accuracy = skillState.correct / skillState.attempts;
+        var errorCount = recentErrors[word.id + ':' + skill] || 0;
+        var due = skillState.due <= today;
+        if (accuracy >= 0.8 && !errorCount) return;
+        items.push({
+          word: word,
+          skill: skill,
+          priority:
+            (1 - accuracy) * 100 +
+            errorCount * 20 +
+            (due ? 12 : 0) +
+            Math.max(0, 4 - skillState.level) * 3,
+          due: skillState.due || 0,
+        });
+      });
+    });
+    return items
+      .sort(function (a, b) {
+        if (b.priority !== a.priority) return b.priority - a.priority;
+        if (a.due !== b.due) return a.due - b.due;
+        if (a.word.id !== b.word.id) return a.word.id.localeCompare(b.word.id);
+        return SKILLS.indexOf(a.skill) - SKILLS.indexOf(b.skill);
+      })
+      .slice(0, limit);
   }
 
   function buildSkillQueue(skill, limit) {

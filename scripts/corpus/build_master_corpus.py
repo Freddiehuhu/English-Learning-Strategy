@@ -81,6 +81,35 @@ ABSTRACT_SUFFIXES = (
 )
 
 REQUIRED_COLUMNS = {"source", "raw_term", "headword"}
+SOURCE_ROLES = {
+    "target_reference",
+    "lexical_candidate",
+    "relation_reference",
+    "activity_reference",
+    "linguistic_reference",
+    "pedagogy_reference",
+}
+CORPUS_POLICIES = {
+    "target",
+    "candidate_only",
+    "enrich_only",
+    "methods_only",
+}
+SOURCE_ROLE_POLICIES = {
+    "target_reference": "target",
+    "lexical_candidate": "candidate_only",
+    "relation_reference": "enrich_only",
+    "linguistic_reference": "enrich_only",
+    "activity_reference": "methods_only",
+    "pedagogy_reference": "methods_only",
+}
+SOURCE_FORMATS = {"pdf", "docx", "epub", "other"}
+DEFAULT_SUPPLEMENTARY_REGISTRY = (
+    Path(__file__).resolve().parents[2]
+    / "data"
+    / "ielts-corpus"
+    / "supplemental-source-registry.json"
+)
 PUBLIC_SOURCE_FIELDS = (
     "source_id",
     "source",
@@ -89,6 +118,14 @@ PUBLIC_SOURCE_FIELDS = (
     "topic_or_section",
     "pdf_page",
     "source_ref",
+)
+SUPPLEMENTARY_SOURCE_FIELDS = (
+    *PUBLIC_SOURCE_FIELDS,
+    "registry_source_id",
+    "source_format",
+    "locator",
+    "source_role",
+    "corpus_policy",
 )
 
 
@@ -105,6 +142,11 @@ class SourceRow:
     definition: str
     notes: str
     source_file: str
+    source_role: str = "target_reference"
+    corpus_policy: str = "target"
+    source_format: str = "pdf"
+    locator: str = ""
+    registry_source_id: str = ""
 
     @property
     def source_id(self) -> str:
@@ -239,7 +281,11 @@ def canonical_pos(value: str) -> list[str]:
     return found or (["unspecified"] if raw else [])
 
 
-def read_tsv(path: Path) -> list[SourceRow]:
+def read_tsv(
+    path: Path,
+    *,
+    allow_legacy_target: bool = False,
+) -> list[SourceRow]:
     rows: list[SourceRow] = []
     with path.open(encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle, delimiter="\t")
@@ -247,12 +293,66 @@ def read_tsv(path: Path) -> list[SourceRow]:
         missing = REQUIRED_COLUMNS - columns
         if missing:
             raise ValueError(f"{path}: missing columns {sorted(missing)}")
+        policy_columns = {
+            "registry_source_id",
+            "source_role",
+            "corpus_policy",
+            "source_format",
+        }
+        missing_policy_columns = policy_columns - columns
+        if missing_policy_columns and not allow_legacy_target:
+            raise ValueError(
+                f"{path}: supplementary TSV is missing explicit policy "
+                f"columns {sorted(missing_policy_columns)}; only inputs named "
+                "with --legacy-target-input may use legacy defaults"
+            )
         for row in reader:
             headword = clean_text(row.get("headword"))
             raw_term = clean_text(row.get("raw_term")) or headword
             source = canonical_source_name(row.get("source")) or path.stem
             if not headword:
                 continue
+            source_role = clean_text(row.get("source_role"))
+            corpus_policy = clean_text(row.get("corpus_policy"))
+            source_format = clean_text(row.get("source_format"))
+            registry_source_id = clean_text(row.get("registry_source_id"))
+            if not allow_legacy_target and not all(
+                (
+                    registry_source_id,
+                    source_role,
+                    corpus_policy,
+                    source_format,
+                )
+            ):
+                raise ValueError(
+                    f"{path}: supplementary row {headword!r} must set "
+                    "registry_source_id, source_role, corpus_policy and "
+                    "source_format"
+                )
+            source_role = source_role or "target_reference"
+            corpus_policy = corpus_policy or "target"
+            source_format = source_format or "pdf"
+            if source_role not in SOURCE_ROLES:
+                raise ValueError(
+                    f"{path}: unknown source_role {source_role!r} for {headword!r}"
+                )
+            if corpus_policy not in CORPUS_POLICIES:
+                raise ValueError(
+                    f"{path}: unknown corpus_policy {corpus_policy!r} "
+                    f"for {headword!r}"
+                )
+            expected_policy = SOURCE_ROLE_POLICIES[source_role]
+            if corpus_policy != expected_policy:
+                raise ValueError(
+                    f"{path}: source_role {source_role!r} requires "
+                    f"corpus_policy {expected_policy!r}, not "
+                    f"{corpus_policy!r}, for {headword!r}"
+                )
+            if source_format not in SOURCE_FORMATS:
+                raise ValueError(
+                    f"{path}: unknown source_format {source_format!r} "
+                    f"for {headword!r}"
+                )
             rows.append(
                 SourceRow(
                     source=source,
@@ -266,9 +366,58 @@ def read_tsv(path: Path) -> list[SourceRow]:
                     definition=clean_text(row.get("definition")),
                     notes=clean_text(row.get("notes")),
                     source_file=path.name,
+                    source_role=source_role,
+                    corpus_policy=corpus_policy,
+                    source_format=source_format,
+                    locator=clean_text(row.get("locator")),
+                    registry_source_id=registry_source_id,
                 )
             )
     return rows
+
+
+def load_supplementary_registry(path: Path) -> dict[str, dict]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    sources = payload.get("sources")
+    if not isinstance(sources, list):
+        raise ValueError(f"{path}: registry sources must be a list")
+    registry: dict[str, dict] = {}
+    for source in sources:
+        if not isinstance(source, dict) or not source.get("id"):
+            raise ValueError(f"{path}: invalid registry source")
+        source_id = clean_text(source["id"])
+        if source_id in registry:
+            raise ValueError(f"{path}: duplicate registry id {source_id!r}")
+        registry[source_id] = source
+    return registry
+
+
+def validate_supplementary_registry_links(
+    rows: list[SourceRow],
+    registry: dict[str, dict],
+) -> None:
+    for row in rows:
+        if row.corpus_policy == "target":
+            continue
+        source = registry.get(row.registry_source_id)
+        if source is None:
+            raise ValueError(
+                f"{row.source_file}: unknown registry_source_id "
+                f"{row.registry_source_id!r}"
+            )
+        expected = {
+            "source_role": row.source_role,
+            "corpus_policy": row.corpus_policy,
+            "format": row.source_format,
+        }
+        for field_name, observed in expected.items():
+            registered = clean_text(source.get(field_name))
+            if registered != observed:
+                raise ValueError(
+                    f"{row.source_file}: registry_source_id "
+                    f"{row.registry_source_id!r} declares {field_name}="
+                    f"{registered!r}, not {observed!r}"
+                )
 
 
 def source_row_quality_issues(row: SourceRow) -> list[str]:
@@ -504,17 +653,31 @@ def image_plan(
     }
 
 
-def source_row_to_public(row: SourceRow) -> dict:
+def source_row_to_public(
+    row: SourceRow,
+    *,
+    include_policy: bool = False,
+) -> dict:
     payload = {
         "source_id": row.source_id,
         "source": row.source,
+        "registry_source_id": row.registry_source_id,
         "pos": row.pos,
         "cefr": row.cefr,
         "topic_or_section": row.topic,
+        "source_format": row.source_format,
+        "locator": row.locator,
         "pdf_page": row.pdf_page,
         "source_ref": row.source_ref,
+        "source_role": row.source_role,
+        "corpus_policy": row.corpus_policy,
     }
-    return {key: payload[key] for key in PUBLIC_SOURCE_FIELDS if payload[key] != ""}
+    fields = (
+        SUPPLEMENTARY_SOURCE_FIELDS
+        if include_policy
+        else PUBLIC_SOURCE_FIELDS
+    )
+    return {key: payload[key] for key in fields if payload[key] != ""}
 
 
 def is_audited_proper_noun_topic(row: SourceRow) -> bool:
@@ -562,12 +725,21 @@ def has_multiple_lexical_parts_of_speech(rows: list[SourceRow]) -> bool:
 
 def build_entry(group: EntryGroup) -> dict:
     all_rows = group.rows
+    target_rows = [
+        row for row in all_rows if row.corpus_policy == "target"
+    ]
+    candidate_rows = [
+        row for row in all_rows if row.corpus_policy == "candidate_only"
+    ]
+    enrichment_rows = [
+        row for row in all_rows if row.corpus_policy == "enrich_only"
+    ]
     audited_proper_group = any(
-        is_audited_proper_noun_topic(row) for row in all_rows
+        is_audited_proper_noun_topic(row) for row in target_rows
     )
     proper_noun_rows = [
         row
-        for row in all_rows
+        for row in target_rows
         if is_proper_noun_source_sense(
             row,
             audited_group=audited_proper_group,
@@ -575,14 +747,22 @@ def build_entry(group: EntryGroup) -> dict:
     ]
     learning_rows = [
         row
-        for row in all_rows
+        for row in target_rows
         if not is_proper_noun_source_sense(
             row,
             audited_group=audited_proper_group,
         )
     ]
-    excluded_proper_noun = not learning_rows
-    rows = learning_rows or all_rows
+    excluded_proper_noun = bool(target_rows) and not learning_rows
+    if target_rows:
+        rows = learning_rows or target_rows
+        status = "excluded_proper_noun" if excluded_proper_noun else "active"
+    elif candidate_rows:
+        rows = candidate_rows
+        status = "candidate_only"
+    else:
+        rows = enrichment_rows or all_rows
+        status = "support_only"
     headword = display_headword(rows)
     pos = {label for row in rows for label in canonical_pos(row.pos)}
     pos.discard("unspecified")
@@ -590,7 +770,18 @@ def build_entry(group: EntryGroup) -> dict:
     sources = sorted({row.source for row in rows})
     topics = sorted({row.topic for row in rows if row.topic})
     multi_sense_candidate = has_multiple_lexical_parts_of_speech(rows)
-    skill_profile = source_scores(rows, pos, levels)
+    if status in {"active", "excluded_proper_noun"}:
+        skill_profile = source_scores(rows, pos, levels)
+    else:
+        skill_profile = {
+            "primary": "",
+            "primary_reason": "not classified before target approval",
+            "labels": [],
+            "scores": {skill: 0 for skill in SKILLS},
+            "reasons": {},
+            "confidence": "review",
+            "method": "not-applied-to-supplementary-source",
+        }
     public_rows = []
     seen_rows = set()
     for row in learning_rows:
@@ -607,12 +798,35 @@ def build_entry(group: EntryGroup) -> dict:
             row.get("source_ref", ""),
         )
     )
+    supplementary_rows = []
+    seen_supplementary_rows = set()
+    for row in candidate_rows + enrichment_rows:
+        public = source_row_to_public(row, include_policy=True)
+        signature = json.dumps(public, ensure_ascii=False, sort_keys=True)
+        if signature in seen_supplementary_rows:
+            continue
+        seen_supplementary_rows.add(signature)
+        supplementary_rows.append(public)
+    supplementary_rows.sort(
+        key=lambda row: (
+            row.get("source", ""),
+            row.get("locator", ""),
+            row.get("source_ref", ""),
+        )
+    )
+    candidate_pos = {
+        label for row in candidate_rows for label in canonical_pos(row.pos)
+    }
+    candidate_pos.discard("unspecified")
+    candidate_levels = {
+        level for row in candidate_rows for level in canonical_cefr(row.cefr)
+    }
     content_pos = sorted(pos & CONTENT_POS)
     return {
         "id": stable_slug(group.key),
         "headword": headword,
         "normalized_key": group.key,
-        "status": "excluded_proper_noun" if excluded_proper_noun else "active",
+        "status": status,
         "is_phrase": " " in group.key,
         "parts_of_speech": sorted(pos) or ["unspecified"],
         "cefr_levels": sorted(levels, key=lambda item: CEFR_ORDER[item]),
@@ -622,6 +836,20 @@ def build_entry(group: EntryGroup) -> dict:
         "sources": sources,
         "source_count": len(sources),
         "source_rows": public_rows,
+        "supplementary_source_rows": supplementary_rows,
+        "candidate_sources": sorted({row.source for row in candidate_rows}),
+        "candidate_source_count": len({row.source for row in candidate_rows}),
+        "candidate_parts_of_speech": sorted(candidate_pos) or (
+            ["unspecified"] if candidate_rows else []
+        ),
+        "candidate_cefr_levels": sorted(
+            candidate_levels,
+            key=lambda item: CEFR_ORDER[item],
+        ),
+        "enrichment_sources": sorted({row.source for row in enrichment_rows}),
+        "enrichment_source_count": len(
+            {row.source for row in enrichment_rows}
+        ),
         "source_definition_count": len({row.definition for row in rows if row.definition}),
         "skill_profile": skill_profile,
         "image_plan": image_plan(
@@ -630,7 +858,7 @@ def build_entry(group: EntryGroup) -> dict:
             levels,
             len(sources),
             skill_profile,
-            excluded_proper_noun,
+            status != "active",
             multi_sense_candidate,
         ),
         "review_flags": {
@@ -640,7 +868,7 @@ def build_entry(group: EntryGroup) -> dict:
             "source_correction_present": any(
                 "source typo" in row.notes.casefold()
                 or "source layout" in row.notes.casefold()
-                for row in all_rows
+                for row in target_rows
             ),
         },
         "relation_flags": {
@@ -681,6 +909,22 @@ def build_source_manifest(rows: list[SourceRow]) -> list[dict]:
                 "id": stable_slug(source),
                 "name": source,
                 "source_files": sorted({row.source_file for row in source_rows}),
+                "source_formats": sorted(
+                    {row.source_format for row in source_rows}
+                ),
+                "registry_source_ids": sorted(
+                    {
+                        row.registry_source_id
+                        for row in source_rows
+                        if row.registry_source_id
+                    }
+                ),
+                "source_roles": sorted(
+                    {row.source_role for row in source_rows}
+                ),
+                "corpus_policies": sorted(
+                    {row.corpus_policy for row in source_rows}
+                ),
                 "pdf_files": sorted(
                     {
                         source_pdf_filename(row)
@@ -711,6 +955,108 @@ def build_source_manifest(rows: list[SourceRow]) -> list[dict]:
             }
         )
     return manifest
+
+
+def write_supplementary_candidate_tsv(
+    path: Path,
+    entries: list[dict],
+) -> None:
+    columns = (
+        "entry_id",
+        "headword",
+        "normalized_key",
+        "candidate_status",
+        "overlaps_active_target",
+        "candidate_parts_of_speech",
+        "candidate_cefr_levels",
+        "candidate_source_count",
+        "candidate_sources",
+        "enrichment_source_count",
+        "enrichment_sources",
+        "review_status",
+    )
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=columns,
+            delimiter="\t",
+            lineterminator="\n",
+        )
+        writer.writeheader()
+        for entry in entries:
+            if not (
+                entry["candidate_source_count"]
+                or entry["enrichment_source_count"]
+            ):
+                continue
+            if entry["status"] == "active":
+                candidate_status = "support_for_active_target"
+            elif entry["candidate_source_count"]:
+                candidate_status = "target_candidate"
+            else:
+                candidate_status = "support_only"
+            writer.writerow(
+                {
+                    "entry_id": entry["id"],
+                    "headword": entry["headword"],
+                    "normalized_key": entry["normalized_key"],
+                    "candidate_status": candidate_status,
+                    "overlaps_active_target": (
+                        "yes" if entry["status"] == "active" else "no"
+                    ),
+                    "candidate_parts_of_speech": "|".join(
+                        entry["candidate_parts_of_speech"]
+                    ),
+                    "candidate_cefr_levels": "|".join(
+                        entry["candidate_cefr_levels"]
+                    ),
+                    "candidate_source_count": entry[
+                        "candidate_source_count"
+                    ],
+                    "candidate_sources": "|".join(
+                        entry["candidate_sources"]
+                    ),
+                    "enrichment_source_count": entry[
+                        "enrichment_source_count"
+                    ],
+                    "enrichment_sources": "|".join(
+                        entry["enrichment_sources"]
+                    ),
+                    "review_status": (
+                        "not_a_target_nomination"
+                        if candidate_status == "support_only"
+                        else "needs_teacher_approval"
+                    ),
+                }
+            )
+
+
+def write_supplementary_evidence_tsv(
+    path: Path,
+    entries: list[dict],
+) -> None:
+    columns = (
+        "entry_id",
+        "headword",
+        *SUPPLEMENTARY_SOURCE_FIELDS,
+    )
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=columns,
+            delimiter="\t",
+            lineterminator="\n",
+        )
+        writer.writeheader()
+        for entry in entries:
+            for row in entry["supplementary_source_rows"]:
+                writer.writerow(
+                    {
+                        "entry_id": entry["id"],
+                        "headword": entry["headword"],
+                        **row,
+                    }
+                )
 
 
 def write_master_tsv(path: Path, entries: list[dict]) -> None:
@@ -915,10 +1261,44 @@ def write_public_evidence_tsv(path: Path, entries: list[dict]) -> None:
 
 
 def write_public_catalog(path: Path, payload: dict) -> None:
+    target_sources = [
+        source
+        for source in payload["sources"]
+        if source["corpus_policies"] == ["target"]
+    ]
+    public_statistics = dict(payload["statistics"])
+    if "target_source_rows" in public_statistics:
+        public_statistics["source_rows"] = public_statistics[
+            "target_source_rows"
+        ]
+    for private_statistic in (
+        "target_source_rows",
+        "candidate_source_rows",
+        "enrichment_source_rows",
+        "methods_only_rows",
+        "candidate_only_entries",
+        "support_only_entries",
+    ):
+        public_statistics.pop(private_statistic, None)
+    public_statistics["input_tsv_files"] = len(
+        {
+            source_file
+            for source in target_sources
+            for source_file in source["source_files"]
+        }
+    )
+    if {
+        "active_entries",
+        "excluded_proper_nouns",
+    }.issubset(public_statistics):
+        public_statistics["deduplicated_entries"] = (
+            public_statistics["active_entries"]
+            + public_statistics["excluded_proper_nouns"]
+        )
     catalog = {
         "schema_version": payload["schema_version"],
         "generated_at": payload["generated_at"],
-        "statistics": payload["statistics"],
+        "statistics": public_statistics,
         "sources": [
             {
                 "id": source["id"],
@@ -926,7 +1306,7 @@ def write_public_catalog(path: Path, payload: dict) -> None:
                 "extracted_rows": source["extracted_rows"],
                 "pdf_files": source["pdf_files"],
             }
-            for source in payload["sources"]
+            for source in target_sources
         ],
         "entries": [
             {
@@ -967,8 +1347,14 @@ def write_report(path: Path, payload: dict) -> None:
         f"- Generated: {payload['generated_at']}",
         f"- Input TSV files: {stats['input_tsv_files']}",
         f"- Extracted source rows: {stats['source_rows']}",
+        f"- Target-reference rows: {stats['target_source_rows']}",
+        f"- Candidate-only rows: {stats['candidate_source_rows']}",
+        f"- Enrichment-only rows: {stats['enrichment_source_rows']}",
+        f"- Methods-only rows ignored by the lexical merge: {stats['methods_only_rows']}",
         f"- Deduplicated entries before proper-noun exclusion: {stats['deduplicated_entries']}",
         f"- Active lexical entries: {stats['active_entries']}",
+        f"- Supplementary target candidates awaiting approval: {stats['candidate_only_entries']}",
+        f"- Supplementary support-only entries: {stats['support_only_entries']}",
         f"- Proper-noun-only entries excluded from public learning data: {stats['excluded_proper_nouns']}",
         f"- Proper-noun source senses excluded: {stats['excluded_proper_noun_source_senses']}",
         f"- Active lexemes retaining a non-proper sense after removal: {stats['mixed_entries_with_proper_noun_sense_removed']}",
@@ -1008,6 +1394,10 @@ def write_report(path: Path, payload: dict) -> None:
             "## Method notes",
             "",
             "- Entries are deduplicated by Unicode-normalized lowercase lexical form.",
+            "- Only rows with `corpus_policy=target` can create or change an active IELTS learning entry.",
+            "- New TSVs fail closed when policy fields are missing; legacy target defaults apply only to explicitly named inputs.",
+            "- Every supplementary row is linked to an inventoried source hash by `registry_source_id`, with role, policy and format checked before merging.",
+            "- Candidate-only and enrichment-only rows are written to separate review outputs and never alter target CEFR, part of speech or four-skill labels.",
             "- Parenthetical source sense labels and short glosses are removed from the public lexical form.",
             "- Different parts of speech and source attestations remain attached as senses/evidence; they are not discarded.",
             "- Audited days, months, continents, countries and languages are removed as proper-noun source senses before public queues are built.",
@@ -1026,12 +1416,78 @@ def main() -> None:
     parser.add_argument("inputs", nargs="+", type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--generated-at", default="")
+    parser.add_argument(
+        "--legacy-target-input",
+        action="append",
+        default=[],
+        type=Path,
+        help=(
+            "Explicitly trust one legacy target TSV or directory whose rows "
+            "predate source_role/corpus_policy columns. Repeat as needed."
+        ),
+    )
+    parser.add_argument(
+        "--supplementary-registry",
+        type=Path,
+        default=DEFAULT_SUPPLEMENTARY_REGISTRY,
+        help=(
+            "Registry used to verify every non-target row's source id, role, "
+            "policy and format."
+        ),
+    )
+    parser.add_argument(
+        "--public-catalog",
+        type=Path,
+        help="Optional separate destination for the minified public catalog.",
+    )
+    parser.add_argument(
+        "--omit-local-json",
+        action="store_true",
+        help="Do not write the large local master-vocabulary.json artifact.",
+    )
     args = parser.parse_args()
 
     tsv_paths = find_tsvs(args.inputs)
     if not tsv_paths:
         raise SystemExit("No TSV files found.")
-    rows = [row for path in tsv_paths for row in read_tsv(path)]
+    legacy_target_paths = {
+        path.resolve()
+        for path in find_tsvs(args.legacy_target_input)
+    }
+    input_paths = {path.resolve() for path in tsv_paths}
+    unbound_legacy_paths = legacy_target_paths - input_paths
+    if unbound_legacy_paths:
+        preview = ", ".join(
+            path.name for path in sorted(unbound_legacy_paths)
+        )
+        raise SystemExit(
+            "--legacy-target-input must also be present in positional inputs: "
+            + preview
+        )
+    rows = [
+        row
+        for path in tsv_paths
+        for row in read_tsv(
+            path,
+            allow_legacy_target=path.resolve() in legacy_target_paths,
+        )
+    ]
+    supplementary_rows = [
+        row for row in rows if row.corpus_policy != "target"
+    ]
+    if supplementary_rows:
+        try:
+            supplementary_registry = load_supplementary_registry(
+                args.supplementary_registry
+            )
+            validate_supplementary_registry_links(
+                supplementary_rows,
+                supplementary_registry,
+            )
+        except (OSError, json.JSONDecodeError, ValueError) as error:
+            raise SystemExit(
+                f"Supplementary registry gate failed: {error}"
+            ) from error
     quality_issues = validate_source_rows(rows)
     if quality_issues:
         preview = "\n".join(f"- {issue}" for issue in quality_issues[:20])
@@ -1043,6 +1499,8 @@ def main() -> None:
         )
     groups: dict[str, EntryGroup] = {}
     for row in rows:
+        if row.corpus_policy == "methods_only":
+            continue
         key = normalise_key(row.headword)
         if not key:
             continue
@@ -1076,14 +1534,32 @@ def main() -> None:
             if enabled:
                 game_candidate_counts[game_type] += 1
     payload = {
-        "schema_version": 2,
+        "schema_version": 3,
         "generated_at": generated_at,
         "classification_method": "evidence-rules-v2",
         "statistics": {
             "input_tsv_files": len(tsv_paths),
             "source_rows": len(rows),
+            "target_source_rows": sum(
+                row.corpus_policy == "target" for row in rows
+            ),
+            "candidate_source_rows": sum(
+                row.corpus_policy == "candidate_only" for row in rows
+            ),
+            "enrichment_source_rows": sum(
+                row.corpus_policy == "enrich_only" for row in rows
+            ),
+            "methods_only_rows": sum(
+                row.corpus_policy == "methods_only" for row in rows
+            ),
             "deduplicated_entries": len(entries),
             "active_entries": sum(entry["status"] == "active" for entry in entries),
+            "candidate_only_entries": sum(
+                entry["status"] == "candidate_only" for entry in entries
+            ),
+            "support_only_entries": sum(
+                entry["status"] == "support_only" for entry in entries
+            ),
             "excluded_proper_nouns": sum(
                 entry["status"] == "excluded_proper_noun" for entry in entries
             ),
@@ -1121,17 +1597,28 @@ def main() -> None:
     }
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    (args.output_dir / "master-vocabulary.json").write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    if not args.omit_local_json:
+        (args.output_dir / "master-vocabulary.json").write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
     (args.output_dir / "source-manifest.json").write_text(
         json.dumps(payload["sources"], ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     write_master_tsv(args.output_dir / "master-vocabulary.tsv", entries)
     write_public_evidence_tsv(args.output_dir / "source-evidence.tsv", entries)
-    write_public_catalog(args.output_dir / "catalog.json", payload)
+    write_supplementary_candidate_tsv(
+        args.output_dir / "supplementary-candidate-queue.tsv",
+        entries,
+    )
+    write_supplementary_evidence_tsv(
+        args.output_dir / "supplementary-source-evidence.tsv",
+        entries,
+    )
+    public_catalog = args.public_catalog or (args.output_dir / "catalog.json")
+    public_catalog.parent.mkdir(parents=True, exist_ok=True)
+    write_public_catalog(public_catalog, payload)
     write_image_queue(args.output_dir / "image-generation-queue.tsv", entries)
     write_game_editorial_queue(args.output_dir / "game-editorial-queue.tsv", entries)
     write_report(args.output_dir / "build-report.md", payload)
