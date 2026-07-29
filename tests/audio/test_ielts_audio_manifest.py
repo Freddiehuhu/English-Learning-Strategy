@@ -231,7 +231,7 @@ class IeltsAudioManifestTests(unittest.TestCase):
 
     def test_probe_measurements_allow_small_cross_ffmpeg_drift(self) -> None:
         measured = copy.deepcopy(self.manifest)
-        measured["entries"][0]["duration_seconds"] += 0.01
+        measured["entries"][0]["duration_seconds"] += 0.06
         measured["entries"][0]["integrated_lufs"] += 0.4
         self.assertEqual(
             audio_manifest.manifest_drift_messages(self.manifest, measured),
