@@ -3,8 +3,10 @@
 
 The manifest binds each checked-in MP3 to the exact vocabulary text and the
 generation contract that is expected to have produced it.  It deliberately
-contains no absolute paths, timestamps, or host-specific tool metadata, so the
-same repository state produces the same JSON on every machine.
+contains no absolute paths, timestamps, or host-specific tool metadata.
+Hashes and binding fields are compared exactly; decoded duration and EBU R128
+measurements use small tolerances because FFmpeg releases can report the same
+MP3 bytes slightly differently.
 
 This is an integrity/provenance gate.  A matching voice name in the manifest is
 not acoustic or biometric proof that a recording sounds natural or that a
@@ -60,6 +62,10 @@ PROFILE_PARAMETERS = {
         "repeat_count": 1,
     },
 }
+DURATION_DRIFT_TOLERANCE_SECONDS = 0.05
+LUFS_DRIFT_TOLERANCE_DB = 1.0
+MIN_PLAYBACK_LUFS = -26.0
+MAX_PLAYBACK_LUFS = -15.0
 
 
 class AudioManifestError(RuntimeError):
@@ -418,12 +424,16 @@ def manifest_drift_messages(
     committed: dict[str, Any],
     current: dict[str, Any],
 ) -> list[str]:
-    """Compare two already-built manifests without probing audio again."""
+    """Compare manifests, keeping integrity exact and probes version-tolerant."""
 
     if committed == current:
         return []
 
-    messages = ["audio manifest differs from vocabulary/assets/generation contract"]
+    messages = []
+    for field in sorted((set(committed) | set(current)) - {"entries"}):
+        if committed.get(field) != current.get(field):
+            messages.append(f"manifest field changed: {field}")
+
     committed_entries = {
         item.get("path"): item for item in committed.get("entries", [])
     }
@@ -436,16 +446,50 @@ def manifest_drift_messages(
         elif new is None:
             messages.append(f"manifest has unexpected entry: {path}")
         elif old != new:
-            changed = sorted(
+            changed = {
                 key
                 for key in set(old) | set(new)
+                if key not in {"duration_seconds", "integrated_lufs"}
                 if old.get(key) != new.get(key)
-            )
-            messages.append(f"{path} changed fields: {', '.join(changed)}")
-    if committed.get("generation_profiles") != current.get("generation_profiles"):
-        messages.append("generation profile changed")
-    if committed.get("coverage") != current.get("coverage"):
-        messages.append("coverage summary changed")
+            }
+
+            old_duration = old.get("duration_seconds")
+            new_duration = new.get("duration_seconds")
+            if not isinstance(old_duration, (int, float)) or not isinstance(
+                new_duration, (int, float)
+            ):
+                if old_duration != new_duration:
+                    changed.add("duration_seconds")
+            elif (
+                abs(float(old_duration) - float(new_duration))
+                > DURATION_DRIFT_TOLERANCE_SECONDS
+            ):
+                changed.add("duration_seconds")
+
+            old_lufs = old.get("integrated_lufs")
+            new_lufs = new.get("integrated_lufs")
+            if old_lufs is None or new_lufs is None:
+                if old_lufs != new_lufs:
+                    changed.add("integrated_lufs")
+            elif not isinstance(old_lufs, (int, float)) or not isinstance(
+                new_lufs, (int, float)
+            ):
+                changed.add("integrated_lufs")
+            elif (
+                abs(float(old_lufs) - float(new_lufs))
+                > LUFS_DRIFT_TOLERANCE_DB
+                or not MIN_PLAYBACK_LUFS <= float(new_lufs) <= MAX_PLAYBACK_LUFS
+            ):
+                changed.add("integrated_lufs")
+
+            if changed:
+                messages.append(f"{path} changed fields: {', '.join(sorted(changed))}")
+
+    if messages:
+        messages.insert(
+            0,
+            "audio manifest differs from vocabulary/assets/generation contract",
+        )
     return messages
 
 
@@ -454,7 +498,7 @@ def compare_manifest(
     audio_root: Path = AUDIO_ROOT,
     vocabulary_file: Path = VOCABULARY_FILE,
 ) -> list[str]:
-    """Return human-readable drift messages; an empty list means exact match."""
+    """Return drift messages; an empty list means the integrity gate passes."""
 
     try:
         committed = load_manifest(manifest_file)
