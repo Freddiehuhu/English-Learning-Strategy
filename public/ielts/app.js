@@ -5,7 +5,7 @@
   var VISUAL_LAB =
     window.IELTS_VISUAL_LAB && typeof window.IELTS_VISUAL_LAB === 'object'
       ? window.IELTS_VISUAL_LAB
-      : { posScene: null, groups: [], gameModes: [] };
+      : { posScene: null, familyAtlases: [], groups: [], gameModes: [] };
   var STORAGE_KEY = 'els-ielts-wordlab-v1';
   var VISUAL_STORAGE_KEY = 'els-ielts-visual-lab-v1';
   var AUDIO_ASSET_VERSION = 'natural-20260728';
@@ -580,6 +580,11 @@
   function visualTaskIds() {
     var ids = [];
     if (VISUAL_LAB.posScene && VISUAL_LAB.posScene.id) ids.push(VISUAL_LAB.posScene.id);
+    if (Array.isArray(VISUAL_LAB.familyAtlases)) {
+      VISUAL_LAB.familyAtlases.forEach(function (task) {
+        if (task && task.id) ids.push(task.id);
+      });
+    }
     if (Array.isArray(VISUAL_LAB.groups)) {
       VISUAL_LAB.groups.forEach(function (task) {
         if (task && task.id) ids.push(task.id);
@@ -609,6 +614,7 @@
       posStep: 0,
       taskSteps: {},
       unlockedTasks: {},
+      skippedTasks: {},
       gameMode: 'guess',
       gameIndices: {},
       gameAnswered: {},
@@ -630,6 +636,7 @@
           correct: Math.max(0, Number(task.correct) || 0),
           mastered: Boolean(task.mastered),
           last: Math.max(0, Number(task.last) || 0),
+          step: Math.max(0, Number(task.step) || 0),
         };
       });
     }
@@ -671,6 +678,7 @@
         correct: 0,
         mastered: false,
         last: 0,
+        step: 0,
       };
     }
     return visualState.tasks[taskId];
@@ -694,6 +702,11 @@
 
   function validateVisualLab(wordIds) {
     var ids = visualTaskIds();
+    var foundationIds = new Set(
+      FORM_FOUNDATIONS.map(function (foundation) {
+        return foundation.id;
+      }),
+    );
     if (!VISUAL_LAB.posScene || !Array.isArray(VISUAL_LAB.groups)) {
       console.error('WordLab visual vocabulary data is unavailable.');
       return;
@@ -701,6 +714,61 @@
     if (new Set(ids).size !== ids.length) {
       console.error('WordLab visual vocabulary data contains duplicate task IDs.');
     }
+    (Array.isArray(VISUAL_LAB.familyAtlases) ? VISUAL_LAB.familyAtlases : []).forEach(
+      function (task) {
+        var foundation = FORM_FOUNDATIONS.find(function (candidate) {
+          return candidate.id === task.targetWordId;
+        });
+        var slots =
+          foundation && foundation.formPractice && Array.isArray(foundation.formPractice.slots)
+            ? foundation.formPractice.slots
+            : [];
+        var panels = Array.isArray(task.panels) ? task.panels : [];
+        var panelSlots = panels.map(function (panel) {
+          return panel.slot;
+        });
+        var panelAreas = panels.map(function (panel) {
+          return panel.area;
+        });
+        var expectedAreas = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+        var hiddenAnswers = slots
+          .filter(function (slot) {
+            return !slot.given;
+          })
+          .map(function (slot) {
+            return String(slot.answer || '').toLowerCase();
+          });
+        var publicCopy = [task.title, task.alt]
+          .concat(
+            panels.reduce(function (copy, panel) {
+              return copy.concat([panel.sceneLabel, panel.prompt]);
+            }, []),
+          )
+          .join(' ')
+          .toLowerCase();
+        var leaksAnswer = hiddenAnswers.some(function (answer) {
+          return answer && new RegExp('\\b' + answer + '\\b').test(publicCopy);
+        });
+        if (
+          !task.id ||
+          !foundationIds.has(task.targetWordId) ||
+          slots.length !== 4 ||
+          panels.length !== 4 ||
+          new Set(panelSlots).size !== 4 ||
+          new Set(panelAreas).size !== 4 ||
+          !slots.every(function (slot) {
+            return panelSlots.indexOf(slot.key) >= 0;
+          }) ||
+          !expectedAreas.every(function (area) {
+            return panelAreas.indexOf(area) >= 0;
+          }) ||
+          String(task.image || '').indexOf('./images/semantic-lab/') !== 0 ||
+          leaksAnswer
+        ) {
+          console.error('Invalid visual word-family atlas:', task && task.id);
+        }
+      },
+    );
     VISUAL_LAB.groups.forEach(function (task) {
       var answersValid =
         Array.isArray(task.choices) &&
@@ -1093,6 +1161,11 @@
       '</section>' +
       '<nav class="visual-tabs" aria-label="图像词义课程章节">' +
       visualTab('pos', '词性入门', '名 · 动 · 形 · 副') +
+      visualTab(
+        'family',
+        '看图变词',
+        (Array.isArray(VISUAL_LAB.familyAtlases) ? VISUAL_LAB.familyAtlases.length : 0) + ' 组',
+      ) +
       visualTab('synonym', '近义辨析', '4 组') +
       visualTab('antonym', '反义对照', '4 组') +
       visualTab(
@@ -1139,6 +1212,8 @@
     });
     if (visualSection === 'pos') {
       container.innerHTML = renderVisualPosLesson();
+    } else if (visualSection === 'family') {
+      container.innerHTML = renderVisualFamilies();
     } else if (visualSection === 'games') {
       container.innerHTML = renderVisualGames();
     } else if (visualSection === 'corpus') {
@@ -1260,6 +1335,195 @@
       '<button class="secondary-button" type="button" data-action="visual-retry" data-task-id="' +
       esc(scene.id) +
       '">再挑战一次</button></div></section>'
+    );
+  }
+
+  function visualFamilyAtlases() {
+    return Array.isArray(VISUAL_LAB.familyAtlases) ? VISUAL_LAB.familyAtlases : [];
+  }
+
+  function findVisualFamilyTask(taskId) {
+    return visualFamilyAtlases().find(function (task) {
+      return task.id === taskId;
+    });
+  }
+
+  function visualFamilyFoundation(task) {
+    if (!task) return null;
+    return FORM_FOUNDATIONS.find(function (foundation) {
+      return foundation.id === task.targetWordId;
+    });
+  }
+
+  function visualFamilyPracticeSlots(task) {
+    var foundation = visualFamilyFoundation(task);
+    if (!foundation || !foundation.formPractice) return [];
+    return foundation.formPractice.slots.filter(function (slot) {
+      return !slot.given;
+    });
+  }
+
+  function renderVisualFamilies() {
+    var tasks = visualFamilyAtlases();
+    if (!tasks.length) {
+      return '<div class="empty-state">看图变词课程暂时没有载入，请刷新页面后重试。</div>';
+    }
+    return (
+      '<section class="visual-section-intro visual-family-intro">' +
+      '<div><p class="eyebrow">WORD FAMILY ATLAS</p><h2>同一幅图，练会完整词族</h2></div>' +
+      '<p>名词作为题面，动词、形容词和副词必须自己拼写。答错只给构词线索；全部拼对以后才显示完整词族。</p></section>' +
+      '<div class="visual-family-grid">' +
+      tasks.map(renderVisualFamilyCard).join('') +
+      '</div>'
+    );
+  }
+
+  function renderVisualFamilyCard(task) {
+    var foundation = visualFamilyFoundation(task);
+    if (!foundation || !foundation.formPractice) return '';
+    var taskState = getVisualTaskState(task.id);
+    var retrying = Boolean(visualRuntime.unlockedTasks[task.id]);
+    var skipped = Boolean(visualRuntime.skippedTasks[task.id]);
+    var complete = taskState.mastered && !retrying;
+    var practiceSlots = visualFamilyPracticeSlots(task);
+    var step = Math.min(Number(taskState.step) || 0, practiceSlots.length - 1);
+    var activeSlot = practiceSlots[step];
+    var activePanel = activeSlot
+      ? task.panels.find(function (panel) {
+          return panel.slot === activeSlot.key;
+        })
+      : null;
+    var stateClass = complete ? ' is-complete' : skipped ? ' is-skipped' : '';
+    return (
+      '<article class="panel visual-family-card' +
+      stateClass +
+      '" data-visual-task-id="' +
+      esc(task.id) +
+      '" data-complete="' +
+      String(complete) +
+      '">' +
+      '<header class="visual-family-head"><div><span class="relation-chip family">看图变词</span><h3>' +
+      esc(task.title) +
+      '</h3></div><span class="visual-family-base"><small>题面名词</small><strong>' +
+      esc(foundation.word) +
+      '</strong></span></header>' +
+      '<div class="visual-family-status" aria-label="词族完成进度">' +
+      foundation.formPractice.slots
+        .map(function (slot, index) {
+          var answered = slot.given || complete || (!skipped && index > 0 && index <= step);
+          return (
+            '<span class="' +
+            (slot.given ? 'is-given' : answered ? 'is-done' : '') +
+            '"><small>' +
+            esc(slot.label) +
+            '</small><strong>' +
+            (slot.given
+              ? esc(slot.answer)
+              : complete
+                ? esc(slot.answer)
+                : answered
+                  ? '已拼对 ✓'
+                  : '待拼写') +
+            '</strong></span>'
+          );
+        })
+        .join('') +
+      '</div>' +
+      '<figure class="visual-figure visual-family-figure">' +
+      '<div class="visual-image-frame">' +
+      '<img src="' +
+      esc(task.image) +
+      '" data-src="' +
+      esc(task.image) +
+      '" data-visual-image alt="' +
+      esc(task.alt) +
+      '" width="' +
+      Number(task.width || 1200) +
+      '" height="' +
+      Number(task.height || 800) +
+      '" loading="lazy" decoding="async">' +
+      (!complete && !skipped && activePanel
+        ? '<span class="visual-family-focus is-' +
+          esc(activePanel.area) +
+          '" aria-hidden="true"></span><span class="visual-family-cue">观察高亮画格</span>'
+        : '') +
+      '<div class="visual-image-error" data-image-error hidden role="status">图片暂时没有载入。' +
+      '<button type="button" data-action="visual-retry-image">重新加载图片</button></div>' +
+      '</div>' +
+      '<figcaption>' +
+      (complete
+        ? '四格场景与完整词族现已同时解锁。'
+        : skipped
+          ? '本轮没有显示完整词族，稍后可重新挑战。'
+          : '先观察高亮画格，再根据词性和句子完成拼写。') +
+      '</figcaption></figure>' +
+      (complete
+        ? renderVisualFamilyResult(task, foundation)
+        : skipped
+          ? '<div class="visual-skipped"><strong>本轮已跳过</strong><p>答案仍然隐藏，可以稍后从动词重新开始。</p>' +
+            '<button class="secondary-button" type="button" data-action="visual-retry" data-task-id="' +
+            esc(task.id) +
+            '">重新挑战</button></div>'
+          : renderVisualFamilyQuestion(task, activeSlot, activePanel, step, practiceSlots.length)) +
+      '</article>'
+    );
+  }
+
+  function renderVisualFamilyQuestion(task, slot, panel, step, total) {
+    if (!slot || !panel) return '';
+    return (
+      '<section class="visual-question visual-family-question">' +
+      '<div class="visual-question-meta"><span>变形 ' +
+      (step + 1) +
+      ' / ' +
+      total +
+      '</span><strong>' +
+      esc(slot.label) +
+      '</strong></div>' +
+      '<h4>' +
+      esc(panel.prompt) +
+      '</h4><p class="visual-family-scene-clue">画面线索：' +
+      esc(panel.sceneLabel) +
+      '</p>' +
+      '<form class="visual-family-form" data-visual-family-form data-task-id="' +
+      esc(task.id) +
+      '"><label for="visualFamilyInput-' +
+      esc(task.id) +
+      '">直接输入英文变形</label><div><input id="visualFamilyInput-' +
+      esc(task.id) +
+      '" name="answer" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" inputmode="text" data-visual-family-control aria-describedby="visualFamilyFeedback-' +
+      esc(task.id) +
+      '"><button class="primary-button" type="submit" data-visual-family-control>检查拼写</button></div></form>' +
+      '<p id="visualFamilyFeedback-' +
+      esc(task.id) +
+      '" class="visual-feedback" role="status" aria-live="polite">答案不会从大写、选项或图片说明中泄露。</p>' +
+      '<button class="visual-skip-link" type="button" data-action="visual-family-skip" data-task-id="' +
+      esc(task.id) +
+      '">这组不会 · 先跳过且不看答案</button></section>'
+    );
+  }
+
+  function renderVisualFamilyResult(task, foundation) {
+    return (
+      '<section class="visual-family-result"><p class="eyebrow">FULL FAMILY UNLOCKED</p>' +
+      '<div class="visual-family-answer-grid">' +
+      foundation.formPractice.slots
+        .map(function (slot) {
+          return (
+            '<article><span>' +
+            esc(slot.label) +
+            '</span><strong>' +
+            esc(slot.answer) +
+            '</strong><p>' +
+            esc(slot.gloss) +
+            '</p></article>'
+          );
+        })
+        .join('') +
+      '</div><div class="visual-result-actions"><span>✓ 三个变形全部独立拼对</span>' +
+      '<button class="secondary-button" type="button" data-action="visual-retry" data-task-id="' +
+      esc(task.id) +
+      '">遮住答案再练一次</button></div></section>'
     );
   }
 
@@ -1956,6 +2220,16 @@
         (summary.total ? Math.round((summary.completed / summary.total) * 100) : 0) + '%',
       );
     }
+  }
+
+  function replaceVisualFamilyCard(task) {
+    var card = document.querySelector('[data-visual-task-id="' + task.id + '"]');
+    if (!card) return;
+    card.outerHTML = renderVisualFamilyCard(task);
+    var nextCard = document.querySelector('[data-visual-task-id="' + task.id + '"]');
+    if (!nextCard) return;
+    var input = nextCard.querySelector('[data-visual-family-control][name="answer"]');
+    if (input) input.focus({ preventScroll: true });
   }
 
   function replaceVisualComparisonCard(task) {
@@ -2967,6 +3241,7 @@
     if (action === 'leave-session') return navigate('today');
     if (action === 'visual-section') return changeVisualSection(button.dataset.section);
     if (action === 'visual-pos-token') return chooseVisualPosToken(button);
+    if (action === 'visual-family-skip') return skipVisualFamily(button);
     if (action === 'visual-choice') return chooseVisualWord(button);
     if (action === 'visual-skip') return skipVisualWord(button);
     if (action === 'visual-retry') return retryVisualTask(button.dataset.taskId);
@@ -3013,7 +3288,7 @@
   }
 
   function changeVisualSection(section) {
-    if (['pos', 'synonym', 'antonym', 'games', 'corpus'].indexOf(section) < 0) return;
+    if (['pos', 'family', 'synonym', 'antonym', 'games', 'corpus'].indexOf(section) < 0) return;
     stopAudio();
     visualSection = section;
     renderVisualSection();
@@ -3077,6 +3352,88 @@
     return VISUAL_LAB.groups.find(function (task) {
       return task.id === taskId;
     });
+  }
+
+  function checkVisualFamilyAnswer(form) {
+    var task = findVisualFamilyTask(form.dataset.taskId);
+    var card = form.closest('[data-visual-task-id]');
+    if (!task || !card || card.dataset.locked === 'true') return;
+    var taskState = getVisualTaskState(task.id);
+    var practiceSlots = visualFamilyPracticeSlots(task);
+    var step = Math.min(Number(taskState.step) || 0, practiceSlots.length - 1);
+    var slot = practiceSlots[step];
+    var input = form.querySelector('input[name="answer"]');
+    var answer = String(new FormData(form).get('answer') || '').trim();
+    if (!slot || !input) return;
+    if (!answer) {
+      input.setAttribute('aria-invalid', 'true');
+      setFeedback(
+        'visualFamilyFeedback-' + task.id,
+        '先写出一个英文词形；空白不会计次。',
+        'is-wrong',
+      );
+      input.focus();
+      return;
+    }
+
+    var correct = normaliseAnswer(answer) === normaliseAnswer(slot.answer);
+    card.dataset.locked = 'true';
+    recordVisualResult(task.id, correct, answer);
+    if (!correct) {
+      input.setAttribute('aria-invalid', 'true');
+      setFeedback(
+        'visualFamilyFeedback-' + task.id,
+        '还不对。构词线索：' + slot.hint + ' 正确拼写仍然隐藏。',
+        'is-wrong',
+      );
+      setTimeout(function () {
+        card.dataset.locked = 'false';
+      }, 0);
+      updateVisualProgress();
+      return;
+    }
+
+    input.removeAttribute('aria-invalid');
+    card.querySelectorAll('[data-visual-family-control]').forEach(function (control) {
+      control.disabled = true;
+    });
+    setFeedback(
+      'visualFamilyFeedback-' + task.id,
+      '拼写正确。这个形式先保持隐藏，全部完成后再一起核对。',
+      'is-correct',
+    );
+    var nextStep = step + 1;
+    if (nextStep >= practiceSlots.length) {
+      taskState.mastered = true;
+      taskState.last = Date.now();
+      taskState.step = 0;
+      visualRuntime.taskSteps[task.id] = 0;
+      delete visualRuntime.unlockedTasks[task.id];
+    } else {
+      taskState.step = nextStep;
+      visualRuntime.taskSteps[task.id] = nextStep;
+    }
+    delete visualRuntime.skippedTasks[task.id];
+    saveVisualState();
+    setTimeout(function () {
+      replaceVisualFamilyCard(task);
+      updateVisualProgress();
+    }, 560);
+  }
+
+  function skipVisualFamily(button) {
+    var task = findVisualFamilyTask(button.dataset.taskId);
+    var card = button.closest('[data-visual-task-id]');
+    if (!task || !card || card.dataset.locked === 'true') return;
+    card.dataset.locked = 'true';
+    recordVisualResult(task.id, false, 'skip');
+    var taskState = getVisualTaskState(task.id);
+    taskState.step = 0;
+    visualRuntime.skippedTasks[task.id] = true;
+    visualRuntime.taskSteps[task.id] = 0;
+    saveVisualState();
+    replaceVisualFamilyCard(task);
+    updateVisualProgress();
   }
 
   function chooseVisualWord(button) {
@@ -3152,6 +3509,15 @@
     if (VISUAL_LAB.posScene && VISUAL_LAB.posScene.id === taskId) {
       visualRuntime.posStep = 0;
       renderVisualSection();
+      return;
+    }
+    var familyTask = findVisualFamilyTask(taskId);
+    if (familyTask) {
+      var familyState = getVisualTaskState(taskId);
+      familyState.step = 0;
+      visualRuntime.taskSteps[taskId] = 0;
+      saveVisualState();
+      replaceVisualFamilyCard(familyTask);
       return;
     }
     var task = findVisualTask(taskId);
@@ -3295,7 +3661,7 @@
     if (error) error.hidden = false;
     card
       .querySelectorAll(
-        '[data-action="visual-choice"], [data-action="visual-pos-token"], [data-action="visual-game-choice"]',
+        '[data-action="visual-choice"], [data-action="visual-pos-token"], [data-action="visual-game-choice"], [data-visual-family-control]',
       )
       .forEach(function (answerButton) {
         answerButton.disabled = true;
@@ -3314,7 +3680,7 @@
     if (card.dataset.complete !== 'true') {
       card
         .querySelectorAll(
-          '[data-action="visual-choice"], [data-action="visual-pos-token"], [data-action="visual-game-choice"]',
+          '[data-action="visual-choice"], [data-action="visual-pos-token"], [data-action="visual-game-choice"], [data-visual-family-control]',
         )
         .forEach(function (answerButton) {
           answerButton.disabled = false;
@@ -3323,6 +3689,12 @@
   }
 
   function handleMainSubmit(event) {
+    var familyForm = event.target.closest('[data-visual-family-form]');
+    if (familyForm) {
+      event.preventDefault();
+      checkVisualFamilyAnswer(familyForm);
+      return;
+    }
     var form = event.target.closest('[data-skill-form]');
     if (!form) return;
     event.preventDefault();

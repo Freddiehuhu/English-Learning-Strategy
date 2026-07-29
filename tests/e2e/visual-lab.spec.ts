@@ -49,6 +49,108 @@ test('teaches noun, verb, adjective and adverb without changing core progress', 
   expect(progress.historyLength).toBe(4);
 });
 
+test('uses four-panel images for word-family spelling without leaking skipped answers', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  const coreBefore = await page.evaluate(() => localStorage.getItem('els-ielts-wordlab-v1'));
+  await page.locator('[data-view-link="visual"]:visible').first().click();
+  await page.getByRole('button', { name: /看图变词/ }).click();
+
+  await expect(page.getByRole('heading', { name: '同一幅图，练会完整词族' })).toBeVisible();
+  await expect(page.locator('.visual-family-card')).toHaveCount(4);
+  const card = page.locator('[data-visual-task-id="family-atlas-beauty"]');
+  const image = card.locator('img');
+  await expect(image).toHaveAttribute('alt', /校园花园的四格无文字场景/);
+  await expect
+    .poll(() => image.evaluate((element: HTMLImageElement) => element.naturalWidth))
+    .toBe(1200);
+
+  const hiddenAnswers = ['beautify', 'beautiful', 'beautifully'];
+  const expectAnswersHidden = async () => {
+    const html = (await card.evaluate((element) => element.outerHTML)).toLowerCase();
+    hiddenAnswers.forEach((answer) => expect(html).not.toContain(answer));
+  };
+  await expectAnswersHidden();
+
+  const input = card.getByLabel('直接输入英文变形');
+  await input.fill('beautifull');
+  await card.getByRole('button', { name: '检查拼写' }).click();
+  await expect(card.getByText(/构词线索.*-ify/)).toBeVisible();
+  await expectAnswersHidden();
+
+  await card.getByRole('button', { name: /这组不会/ }).click();
+  await expect(card.getByText('本轮已跳过')).toBeVisible();
+  await expectAnswersHidden();
+
+  await card.getByRole('button', { name: '重新挑战' }).click();
+  await expect(card.getByText(/把 beauty 变成动词/)).toBeVisible();
+  await expectAnswersHidden();
+
+  await card.getByLabel('直接输入英文变形').fill('beautify');
+  await card.locator('[data-visual-family-form]').evaluate((form) => {
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+  await expect(card.getByText(/The completed garden looks/)).toBeVisible();
+  await expectAnswersHidden();
+
+  await page.reload();
+  await page.locator('[data-view-link="visual"]:visible').first().click();
+  await page.getByRole('button', { name: /看图变词/ }).click();
+  await expect(card.getByText(/The completed garden looks/)).toBeVisible();
+  await expectAnswersHidden();
+
+  await card.getByLabel('直接输入英文变形').fill('beautiful');
+  await card.getByRole('button', { name: '检查拼写' }).click();
+  await expect(card.getByText(/arranged the flowers/)).toBeVisible();
+  await expectAnswersHidden();
+
+  await card.getByLabel('直接输入英文变形').fill('beautifully');
+  await card.locator('[data-visual-family-form]').evaluate((form) => {
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+  await page.reload();
+  await page.locator('[data-view-link="visual"]:visible').first().click();
+  await page.getByRole('button', { name: /看图变词/ }).click();
+  const answers = card.locator('.visual-family-answer-grid');
+  await expect(answers.getByText('beauty', { exact: true })).toBeVisible();
+  await expect(answers.getByText('beautify', { exact: true })).toBeVisible();
+  await expect(answers.getByText('beautiful', { exact: true })).toBeVisible();
+  await expect(answers.getByText('beautifully', { exact: true })).toBeVisible();
+
+  const progress = await page.evaluate(() => {
+    const visual = JSON.parse(localStorage.getItem('els-ielts-visual-lab-v1') || '{}');
+    return {
+      core: localStorage.getItem('els-ielts-wordlab-v1'),
+      task: visual.tasks?.['family-atlas-beauty'],
+      attempts:
+        visual.history?.filter((item: { taskId: string }) => item.taskId === 'family-atlas-beauty')
+          .length || 0,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  expect(progress.core).toBe(coreBefore);
+  expect(progress.task.mastered).toBe(true);
+  expect(progress.task.attempts).toBe(5);
+  expect(progress.task.correct).toBe(3);
+  expect(progress.attempts).toBe(5);
+  expect(progress.overflow).toBeLessThanOrEqual(1);
+
+  await expect(card.getByText('三个变形全部独立拼对')).toBeVisible();
+  await card.getByRole('button', { name: '遮住答案再练一次' }).click();
+  await expectAnswersHidden();
+
+  await image.evaluate((element: HTMLImageElement) => {
+    element.src = './images/semantic-lab/does-not-exist.webp';
+  });
+  await expect(card.getByText('图片暂时没有载入。')).toBeVisible();
+  await expect(card.getByLabel('直接输入英文变形')).toBeDisabled();
+  await expect(card.getByRole('button', { name: '检查拼写' })).toBeDisabled();
+  await card.getByRole('button', { name: '重新加载图片' }).click();
+  await expect(card.getByLabel('直接输入英文变形')).toBeEnabled();
+});
+
 test('uses pictures to distinguish precise synonyms and prevents double scoring', async ({
   page,
 }) => {

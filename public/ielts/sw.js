@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wordlab-50-v10-corpus-map';
+const CACHE_NAME = 'wordlab-50-v11-family-atlas';
 const CORE_ASSETS = [
   './',
   './index.html',
