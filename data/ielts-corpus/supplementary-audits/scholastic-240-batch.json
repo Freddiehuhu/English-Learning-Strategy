@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "scope": "Explicit Scholastic 240 word-list targets; all rows remain candidate-only pending editorial review.",
+  "sources": [
+    {
+      "id": "scholastic-240-vocabulary-grade-1",
+      "status": "candidate_extracted_needs_editorial_review",
+      "extracted_row_count": 240,
+      "extraction_method": "sha256_gated_explicit_word_list_with_visual_exact_repairs",
+      "pages_parsed": [
+        80
+      ],
+      "visual_sample_pages": [
+        80
+      ],
+      "editorial_review_complete": false,
+      "rights_boundary": "Explicit lexical targets and sanitized lesson locators only; definitions, examples, exercises, answers and images excluded."
+    },
+    {
+      "id": "scholastic-240-vocabulary-grade-3",
+      "status": "candidate_extracted_needs_editorial_review",
+      "extracted_row_count": 240,
+      "extraction_method": "sha256_gated_explicit_word_list_with_visual_exact_repairs",
+      "pages_parsed": [
+        80
+      ],
+      "visual_sample_pages": [
+        80
+      ],
+      "editorial_review_complete": false,
+      "rights_boundary": "Explicit lexical targets and sanitized lesson locators only; definitions, examples, exercises, answers and images excluded."
+    },
+    {
+      "id": "scholastic-240-vocabulary-grade-4",
+      "status": "candidate_extracted_needs_editorial_review",
+      "extracted_row_count": 240,
+      "extraction_method": "sha256_gated_explicit_word_list_with_visual_exact_repairs",
+      "pages_parsed": [
+        79
+      ],
+      "visual_sample_pages": [
+        7,
+        31,
+        61,
+        76,
+        79
+      ],
+      "editorial_review_complete": false,
+      "rights_boundary": "Explicit lexical targets and sanitized lesson locators only; definitions, examples, exercises, answers and images excluded."
+    }
+  ]
+}

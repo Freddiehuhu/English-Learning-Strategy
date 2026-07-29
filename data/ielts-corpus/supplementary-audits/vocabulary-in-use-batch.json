@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "scope": "Headword-only candidate extraction from the alphabetical indexes of four English Vocabulary in Use sources; no entry is promoted to the active IELTS target corpus.",
+  "sources": [
+    {
+      "id": "english-vocabulary-in-use-elementary-3e",
+      "status": "candidate_extracted_needs_editorial_review",
+      "extracted_row_count": 1505,
+      "extraction_method": "sha256_gated_poppler_xml_alphabetical_index_headwords",
+      "pages_parsed": [161, 162, 163, 164, 165, 166, 167, 168, 169, 170, 171],
+      "visual_sample_pages": [161, 171],
+      "rights_boundary": "Retained index headwords, unit locators and the source-level CEFR band only; excluded pronunciations, definitions, examples, exercises and page body text."
+    },
+    {
+      "id": "english-vocabulary-in-use-pre-intermediate-intermediate",
+      "status": "candidate_extracted_needs_editorial_review",
+      "extracted_row_count": 2552,
+      "extraction_method": "sha256_gated_poppler_xml_alphabetical_index_headwords",
+      "pages_parsed": [247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 261, 262],
+      "visual_sample_pages": [247, 262],
+      "rights_boundary": "Retained index headwords, unit locators and the source-level CEFR band only; excluded pronunciations, definitions, examples, exercises and page body text."
+    },
+    {
+      "id": "english-vocabulary-in-use-upper-intermediate-4e",
+      "status": "candidate_extracted_needs_editorial_review",
+      "extracted_row_count": 3261,
+      "extraction_method": "sha256_gated_poppler_xml_alphabetical_index_headwords",
+      "pages_parsed": [259, 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 275, 276, 277, 278, 279],
+      "visual_sample_pages": [259, 260, 275, 279],
+      "rights_boundary": "Retained index headwords, unit locators and the source-level CEFR band only; excluded pronunciations, definitions, examples, exercises and page body text."
+    },
+    {
+      "id": "english-vocabulary-in-use-advanced-3e",
+      "status": "candidate_extracted_needs_editorial_review",
+      "extracted_row_count": 3320,
+      "extraction_method": "sha256_gated_poppler_xml_alphabetical_index_headwords",
+      "pages_parsed": [279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293, 294, 295, 296, 297, 298, 299, 300],
+      "visual_sample_pages": [279, 300],
+      "rights_boundary": "Retained index headwords, unit locators and the source-level CEFR band only; excluded pronunciations, definitions, examples, exercises and page body text."
+    }
+  ]
+}

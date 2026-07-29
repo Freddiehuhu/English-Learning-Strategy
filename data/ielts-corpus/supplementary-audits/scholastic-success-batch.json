@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "scope": "Candidate-only extraction from explicit lexical targets in five Scholastic Success with Vocabulary workbooks.",
+  "sources": [
+    {
+      "id": "scholastic-success-vocabulary-grade-1",
+      "status": "candidate_extracted_needs_editorial_review",
+      "extracted_row_count": 112,
+      "extraction_method": "sha256_gated_page_specific_explicit_word_banks_and_target_lists",
+      "pages_parsed": [
+        2,
+        4,
+        16,
+        22,
+        24,
+        30,
+        32,
+        40,
+        42,
+        46,
+        48,
+        52,
+        54,
+        68,
+        82
+      ],
+      "visual_sample_pages": [
+        2,
+        32,
+        52,
+        82
+      ],
+      "all_pages_parsed": false,
+      "editorial_review_complete": false,
+      "limitations": "No consolidated index is present. Only explicit word banks, labelled lists, charts and lesson target tables on whitelisted pages were retained; exercise prose, definitions and answer pages were excluded.",
+      "rights_boundary": "lexical_forms_and_sanitized_page_locators_only_no_definitions_examples_exercises_answers_or_page_images"
+    },
+    {
+      "id": "scholastic-success-vocabulary-grade-2",
+      "status": "candidate_extracted_needs_editorial_review",
+      "extracted_row_count": 201,
+      "extraction_method": "sha256_gated_page_specific_explicit_word_banks_and_target_lists",
+      "pages_parsed": [
+        2,
+        4,
+        8,
+        14,
+        22,
+        24,
+        30,
+        32,
+        34,
+        50,
+        52,
+        54,
+        56,
+        64,
+        66,
+        70,
+        82,
+        84,
+        86
+      ],
+      "visual_sample_pages": [
+        4,
+        30,
+        54,
+        86
+      ],
+      "all_pages_parsed": false,
+      "editorial_review_complete": false,
+      "limitations": "No consolidated index is present. Only explicit word banks, labelled lists, charts and lesson target tables on whitelisted pages were retained; exercise prose, definitions and answer pages were excluded.",
+      "rights_boundary": "lexical_forms_and_sanitized_page_locators_only_no_definitions_examples_exercises_answers_or_page_images"
+    },
+    {
+      "id": "scholastic-success-vocabulary-grade-3",
+      "status": "candidate_extracted_needs_editorial_review",
+      "extracted_row_count": 301,
+      "extraction_method": "sha256_gated_page_specific_explicit_word_banks_and_target_lists",
+      "pages_parsed": [
+        6,
+        8,
+        10,
+        22,
+        26,
+        30,
+        32,
+        34,
+        44,
+        46,
+        50,
+        54,
+        56,
+        66,
+        68,
+        80,
+        82,
+        84,
+        86
+      ],
+      "visual_sample_pages": [
+        8,
+        32,
+        66,
+        86
+      ],
+      "all_pages_parsed": false,
+      "editorial_review_complete": false,
+      "limitations": "No consolidated index is present. Only explicit word banks, labelled lists, charts and lesson target tables on whitelisted pages were retained; exercise prose, definitions and answer pages were excluded.",
+      "rights_boundary": "lexical_forms_and_sanitized_page_locators_only_no_definitions_examples_exercises_answers_or_page_images"
+    },
+    {
+      "id": "scholastic-success-vocabulary-grade-4",
+      "status": "candidate_extracted_needs_editorial_review",
+      "extracted_row_count": 257,
+      "extraction_method": "sha256_gated_page_specific_explicit_word_banks_and_target_lists",
+      "pages_parsed": [
+        12,
+        30,
+        36,
+        42,
+        44,
+        48,
+        56,
+        58,
+        64,
+        66,
+        68,
+        70,
+        74
+      ],
+      "visual_sample_pages": [
+        12,
+        42,
+        56,
+        74
+      ],
+      "all_pages_parsed": false,
+      "editorial_review_complete": false,
+      "limitations": "No consolidated index is present. Only explicit word banks, labelled lists, charts and lesson target tables on whitelisted pages were retained; exercise prose, definitions and answer pages were excluded.",
+      "rights_boundary": "lexical_forms_and_sanitized_page_locators_only_no_definitions_examples_exercises_answers_or_page_images"
+    },
+    {
+      "id": "scholastic-success-vocabulary-grade-5",
+      "status": "candidate_extracted_needs_editorial_review",
+      "extracted_row_count": 494,
+      "extraction_method": "sha256_gated_page_specific_explicit_word_banks_and_target_lists",
+      "pages_parsed": [
+        2,
+        6,
+        8,
+        12,
+        24,
+        26,
+        28,
+        31,
+        41,
+        45,
+        47,
+        52,
+        54,
+        58,
+        62,
+        64,
+        66,
+        71,
+        73,
+        75,
+        79
+      ],
+      "visual_sample_pages": [
+        2,
+        31,
+        45,
+        75
+      ],
+      "all_pages_parsed": false,
+      "editorial_review_complete": false,
+      "limitations": "No consolidated index is present. Only explicit word banks, labelled lists, charts and lesson target tables on whitelisted pages were retained; exercise prose, definitions and answer pages were excluded.",
+      "rights_boundary": "lexical_forms_and_sanitized_page_locators_only_no_definitions_examples_exercises_answers_or_page_images"
+    }
+  ]
+}

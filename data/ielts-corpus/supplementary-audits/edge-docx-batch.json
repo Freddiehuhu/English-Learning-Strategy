@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "scope": "edge_unit7_docx_word_boxes",
+  "sources": [
+    {
+      "id": "edge-2e-1bu7-vocabulary-moves",
+      "status": "candidate_extracted_needs_editorial_review",
+      "extracted_row_count": 7,
+      "extraction_method": "docx_word_box_cells",
+      "pages_parsed": 0,
+      "visual_sample_pages": [],
+      "rights_boundary": "lexical_forms_only_no_book_body_content"
+    },
+    {
+      "id": "edge-2e-1bu7-vocabulary-adjectives",
+      "status": "candidate_extracted_needs_editorial_review",
+      "extracted_row_count": 7,
+      "extraction_method": "docx_word_box_cells",
+      "pages_parsed": 0,
+      "visual_sample_pages": [],
+      "rights_boundary": "lexical_forms_only_no_book_body_content"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wordlab-50-v14-family-stories';
+const CACHE_NAME = 'wordlab-50-v16-evidence-safe';
 const CORE_ASSETS = [
   './',
   './index.html',
