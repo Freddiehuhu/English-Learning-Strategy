@@ -51,6 +51,30 @@ const FAMILY_ATLASES = [
     image: './images/semantic-lab/family-creation-v1.webp',
     answers: ['create', 'creative', 'creatively'],
   },
+  {
+    id: 'family-atlas-safety',
+    targetWordId: 'foundation-safety',
+    image: './images/semantic-lab/family-safety-v1.webp',
+    answers: ['save', 'safe', 'safely'],
+  },
+  {
+    id: 'family-atlas-extension',
+    targetWordId: 'foundation-extension',
+    image: './images/semantic-lab/family-extension-v1.webp',
+    answers: ['extend', 'extensive', 'extensively'],
+  },
+  {
+    id: 'family-atlas-equality',
+    targetWordId: 'foundation-equality',
+    image: './images/semantic-lab/family-equality-v1.webp',
+    answers: ['equal', 'equal', 'equally'],
+  },
+  {
+    id: 'family-atlas-completion',
+    targetWordId: 'foundation-completion',
+    image: './images/semantic-lab/family-completion-v1.webp',
+    answers: ['complete', 'complete', 'completely'],
+  },
 ] as const;
 
 function capturePageErrors(page: Page) {
@@ -143,7 +167,7 @@ test('teaches noun, verb, adjective and adverb without changing core progress', 
   expect(progress.historyLength).toBe(4);
 });
 
-test('validates all eight word-family atlases, images and hidden-answer DOM', async ({ page }) => {
+test('validates all twelve word-family atlases, images and hidden-answer DOM', async ({ page }) => {
   const pageErrors = capturePageErrors(page);
   await openFamilyAtlases(page);
 
@@ -151,7 +175,24 @@ test('validates all eight word-family atlases, images and hidden-answer DOM', as
     const lab = (
       window as Window & {
         IELTS_VISUAL_LAB?: {
-          familyAtlases?: Array<{ id?: unknown; targetWordId?: unknown; image?: unknown }>;
+          familyAtlases?: Array<{
+            id?: unknown;
+            targetWordId?: unknown;
+            image?: unknown;
+            story?: {
+              title?: unknown;
+              english?: unknown;
+              chinese?: unknown;
+              retellPrompt?: unknown;
+            };
+            etymology?: {
+              level?: unknown;
+              fact?: unknown;
+              memoryHook?: unknown;
+              modernRule?: unknown;
+              sources?: unknown[];
+            };
+          }>;
         };
       }
     ).IELTS_VISUAL_LAB;
@@ -159,14 +200,26 @@ test('validates all eight word-family atlases, images and hidden-answer DOM', as
       id: String(atlas.id || ''),
       targetWordId: String(atlas.targetWordId || ''),
       image: String(atlas.image || ''),
+      hasStory: [
+        atlas.story?.title,
+        atlas.story?.english,
+        atlas.story?.chinese,
+        atlas.story?.retellPrompt,
+      ].every((copy) => typeof copy === 'string' && copy.length > 0),
+      hasEtymology:
+        ['剧情卡', '来源彩蛋'].includes(String(atlas.etymology?.level || '')) &&
+        [atlas.etymology?.fact, atlas.etymology?.memoryHook, atlas.etymology?.modernRule].every(
+          (copy) => typeof copy === 'string' && copy.length > 0,
+        ),
+      sourceCount: Array.isArray(atlas.etymology?.sources) ? atlas.etymology.sources.length : 0,
     }));
   });
 
-  expect(atlasData).toHaveLength(8);
-  await expect(page.locator('.visual-family-card')).toHaveCount(8);
-  expect(new Set(atlasData.map(({ id }) => id)).size).toBe(8);
-  expect(new Set(atlasData.map(({ targetWordId }) => targetWordId)).size).toBe(8);
-  expect(new Set(atlasData.map(({ image }) => image)).size).toBe(8);
+  expect(atlasData).toHaveLength(12);
+  await expect(page.locator('.visual-family-card')).toHaveCount(12);
+  expect(new Set(atlasData.map(({ id }) => id)).size).toBe(12);
+  expect(new Set(atlasData.map(({ targetWordId }) => targetWordId)).size).toBe(12);
+  expect(new Set(atlasData.map(({ image }) => image)).size).toBe(12);
 
   const safeId = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
   const safeImage = /^\.\/images\/semantic-lab\/family-[a-z0-9-]+-v\d+\.webp$/;
@@ -174,13 +227,20 @@ test('validates all eight word-family atlases, images and hidden-answer DOM', as
     expect(atlas.id).toMatch(safeId);
     expect(atlas.targetWordId).toMatch(safeId);
     expect(atlas.image).toMatch(safeImage);
+    expect(atlas.hasStory).toBe(true);
+    expect(atlas.hasEtymology).toBe(true);
+    expect(atlas.sourceCount).toBeGreaterThan(0);
   }
   for (const expectedAtlas of FAMILY_ATLASES) {
-    expect(atlasData).toContainEqual({
-      id: expectedAtlas.id,
-      targetWordId: expectedAtlas.targetWordId,
-      image: expectedAtlas.image,
-    });
+    expect(atlasData).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: expectedAtlas.id,
+          targetWordId: expectedAtlas.targetWordId,
+          image: expectedAtlas.image,
+        }),
+      ]),
+    );
   }
 
   for (const atlas of FAMILY_ATLASES) {
@@ -198,6 +258,7 @@ test('validates all eight word-family atlases, images and hidden-answer DOM', as
       )
       .toEqual({ width: 1200, height: 800 });
     await expectFamilyAnswersHidden(card, atlas.answers);
+    await expect(card.getByText('词源故事与记忆钩子')).toHaveCount(0);
   }
 
   const overflow = await page.evaluate(
@@ -327,6 +388,51 @@ test('persists strength progress and prevents a double submit from scoring twice
   expect(pageErrors).toEqual([]);
 });
 
+test('uses sentence position to practise equal as both a verb and an adjective', async ({
+  page,
+}) => {
+  const pageErrors = capturePageErrors(page);
+  await openFamilyAtlases(page);
+
+  const card = page.locator('[data-visual-task-id="family-atlas-equality"]');
+  await expect(card.getByText(/Four small bags/)).toBeVisible();
+  await card.getByLabel('直接输入英文变形').fill('equal');
+  await card.getByRole('button', { name: '检查拼写' }).click();
+
+  await expect(card.getByText(/Each family received/)).toBeVisible();
+  await card.getByLabel('直接输入英文变形').fill('equal');
+  await card.getByRole('button', { name: '检查拼写' }).click();
+
+  await expect(card.getByText(/divided the fruit/)).toBeVisible();
+  await card.getByLabel('直接输入英文变形').fill('equally');
+  await card.getByRole('button', { name: '检查拼写' }).click();
+
+  const answers = card.locator('.visual-family-answer-grid');
+  await expect(answers.getByText('equal', { exact: true })).toHaveCount(2);
+  await expect(answers.getByText('equally', { exact: true })).toBeVisible();
+  await expect(card.getByText('四格故事链')).toBeVisible();
+  await expect(card.getByText(/Equality guided the food-sharing event/)).toBeVisible();
+  await card.getByText('词源故事与记忆钩子').click();
+  await expect(card.getByText(/aequalis/)).toBeVisible();
+  await expect(
+    card.getByRole('link', { name: 'Merriam-Webster: equal', exact: true }),
+  ).toHaveAttribute('href', 'https://www.merriam-webster.com/dictionary/equal');
+  await expect(card.getByText('三个变形全部独立拼对')).toBeVisible();
+
+  const progress = await page.evaluate(() => {
+    const visual = JSON.parse(localStorage.getItem('els-ielts-visual-lab-v1') || '{}');
+    return visual.tasks?.['family-atlas-equality'];
+  });
+  expect(progress).toMatchObject({
+    attempts: 3,
+    correct: 3,
+    mastered: true,
+    step: 0,
+    skipped: false,
+  });
+  expect(pageErrors).toEqual([]);
+});
+
 test('recovers a failed word-family atlas image without recording an attempt', async ({ page }) => {
   const pageErrors = capturePageErrors(page);
   await openFamilyAtlases(page);
@@ -439,6 +545,7 @@ test('keeps image failures recoverable and mobile navigation usable', async ({ p
 test('supports homophone, homograph, analogy and taxonomy games without revealing skipped answers', async ({
   page,
 }) => {
+  const pageErrors = capturePageErrors(page);
   await openVisualLab(page);
   const coreBefore = await page.evaluate(() => localStorage.getItem('els-ielts-wordlab-v1'));
 
@@ -450,6 +557,18 @@ test('supports homophone, homograph, analogy and taxonomy games without revealin
   const firstTask = page.locator('[data-visual-task-id="game-homophone-fir"]');
   await expect(firstTask).toBeVisible();
   await expect(firstTask.getByRole('button', { name: '播放同音词语音' })).toBeVisible();
+  await expect(firstTask.locator('.visual-image-frame')).toHaveClass(/focus-left/);
+  await expect(firstTask.locator('figcaption')).toHaveText(
+    '先观察对应画面，再结合句子选择正确拼写。',
+  );
+  await expect
+    .poll(() =>
+      firstTask.locator('img').evaluate((image: HTMLImageElement) => ({
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      })),
+    )
+    .toEqual({ width: 1200, height: 800 });
 
   await firstTask.getByRole('button', { name: 'fur', exact: true }).click();
   await expect(firstTask.getByText(/句中说的是一种常绿树/)).toBeVisible();
@@ -462,18 +581,29 @@ test('supports homophone, homograph, analogy and taxonomy games without revealin
 
   const secondTask = page.locator('[data-visual-task-id="game-homophone-fur"]');
   await expect(secondTask).toBeVisible();
+  await expect(secondTask.locator('.visual-image-frame')).toHaveClass(/focus-right/);
   await secondTask.getByRole('button', { name: /先跳过/ }).click();
   await expect(page.locator('[data-visual-task-id="game-homophone-prey"]')).toBeVisible();
   await expect(page.getByText(/fur 是“动物的软毛/)).toHaveCount(0);
 
   await page.getByRole('button', { name: /同形词分身/ }).click();
-  await expect(page.locator('[data-visual-task-id="game-homograph-hide-noun"]')).toContainText(
-    'hide',
-  );
+  const homograph = page.locator('[data-visual-task-id="game-homograph-hide-noun"]');
+  await expect(homograph).toContainText('hide');
+  await expect(homograph.getByRole('button', { name: '播放听这个词的读音' })).toBeVisible();
+  await expect(homograph).toContainText('结合读音、词性和句法判断本句词义。');
+  await expect(homograph).not.toContainText('同音词要靠句子决定拼写');
   await page.getByRole('button', { name: /类比接龙/ }).click();
   await expect(page.getByText(/ecology : ecologist/)).toBeVisible();
   await page.getByRole('button', { name: /分类与上下义/ }).click();
-  await expect(page.getByRole('heading', { name: '找共同上义词' })).toBeVisible();
+  const taxonomy = page.locator('[data-visual-task-id="game-taxonomy-tree"]');
+  await expect(taxonomy.getByRole('heading', { name: '找共同上义词' })).toBeVisible();
+  await expect(taxonomy.locator('.visual-image-frame')).toHaveClass(/focus-all/);
+  await expect(taxonomy.getByText('观察整图')).toBeVisible();
+  const taxonomyMask = await taxonomy.locator('.visual-image-frame').evaluate((frame) => ({
+    before: getComputedStyle(frame, '::before').content,
+    after: getComputedStyle(frame, '::after').content,
+  }));
+  expect(taxonomyMask).toEqual({ before: 'none', after: 'none' });
 
   const saved = await page.evaluate(() => {
     const visual = JSON.parse(localStorage.getItem('els-ielts-visual-lab-v1') || '{}');
@@ -490,6 +620,11 @@ test('supports homophone, homograph, analogy and taxonomy games without revealin
   expect(saved.skipped.mastered).toBe(false);
   expect(saved.skipped.attempts).toBe(1);
   expect(saved.skipped.correct).toBe(0);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
+  expect(pageErrors).toEqual([]);
 });
 
 test('loads the full corpus only on demand and filters its auditable index', async ({ page }) => {
