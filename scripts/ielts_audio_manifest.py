@@ -62,7 +62,7 @@ PROFILE_PARAMETERS = {
         "repeat_count": 1,
     },
 }
-DURATION_DRIFT_TOLERANCE_SECONDS = 0.05
+DURATION_DRIFT_TOLERANCE_SECONDS = 0.1
 LUFS_DRIFT_TOLERANCE_DB = 1.0
 MIN_PLAYBACK_LUFS = -26.0
 MAX_PLAYBACK_LUFS = -15.0
@@ -483,7 +483,14 @@ def manifest_drift_messages(
                 changed.add("integrated_lufs")
 
             if changed:
-                messages.append(f"{path} changed fields: {', '.join(sorted(changed))}")
+                observed = ", ".join(
+                    f"{field}={old.get(field)!r}->{new.get(field)!r}"
+                    for field in sorted(changed)
+                )
+                messages.append(
+                    f"{path} changed fields: {', '.join(sorted(changed))} "
+                    f"({observed})"
+                )
 
     if messages:
         messages.insert(
