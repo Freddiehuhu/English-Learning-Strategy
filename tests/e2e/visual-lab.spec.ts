@@ -485,18 +485,48 @@ test('uses pictures to distinguish precise synonyms and prevents double scoring'
 
   await card.getByRole('button', { name: 'interested', exact: true }).dblclick();
   await expect(card.getByText(/live jellyfish held Mia’s attention/)).toBeVisible();
+  await card.getByRole('button', { name: 'interested', exact: true }).click();
+  await expect(card.getByText(/还不够贴切/)).toBeVisible();
+  await page.waitForTimeout(300);
   await card.getByRole('button', { name: 'fascinated', exact: true }).click();
 
-  await expect(card.getByText('两个场景都已判断正确')).toBeVisible();
+  await expect(card.locator('.visual-comparison-result')).toBeVisible();
+  await expect(card.getByText(/已完成待复习/)).toBeVisible();
   await expect(card.getByText(/区别主要是程度/)).toBeVisible();
+  await expect(page.locator('#visualContent')).not.toContainText(/已掌握|已稳定|全部稳定/);
 
   const saved = await page.evaluate(() => {
     const visual = JSON.parse(localStorage.getItem('els-ielts-visual-lab-v1') || '{}');
-    return visual.tasks?.['syn-interest-fascinate'];
+    const core = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return {
+      task: visual.tasks?.['syn-interest-fascinate'],
+      visualError: visual.history?.find(
+        (item: { taskId?: string; correct?: boolean }) =>
+          item.taskId === 'syn-interest-fascinate' && !item.correct,
+      ),
+      repair: core.history?.find(
+        (item: { visualTaskId?: string }) => item.visualTaskId === 'syn-interest-fascinate',
+      ),
+    };
   });
-  expect(saved.mastered).toBe(true);
-  expect(saved.attempts).toBe(2);
-  expect(saved.correct).toBe(2);
+  expect(saved.task).toMatchObject({
+    mastered: false,
+    completed: true,
+    needsReview: true,
+    attempts: 3,
+    correct: 2,
+  });
+  expect(saved.visualError).toMatchObject({
+    targetWordId: 'fascinate',
+    gameType: 'synonym',
+    repairSkill: 'sentence',
+  });
+  expect(saved.repair).toMatchObject({
+    wordId: 'fascinate',
+    skill: 'sentence',
+    source: 'visual',
+    visualGameType: 'synonym',
+  });
 });
 
 test('keeps image failures recoverable and mobile navigation usable', async ({ page }) => {
@@ -547,7 +577,6 @@ test('supports homophone, homograph, analogy and taxonomy games without revealin
 }) => {
   const pageErrors = capturePageErrors(page);
   await openVisualLab(page);
-  const coreBefore = await page.evaluate(() => localStorage.getItem('els-ielts-wordlab-v1'));
 
   await page.getByRole('button', { name: /词网游戏/ }).click();
   await expect(page.getByRole('heading', { name: '把单词连成一张会思考的网' })).toBeVisible();
@@ -575,15 +604,22 @@ test('supports homophone, homograph, analogy and taxonomy games without revealin
   await expect(firstTask.getByText(/fir 是“冷杉”/)).toHaveCount(0);
 
   await page.waitForTimeout(300);
+  await firstTask.getByRole('button', { name: 'fur', exact: true }).click();
+  await expect(firstTask.getByText(/句中说的是一种常绿树/)).toBeVisible();
+  await page.waitForTimeout(300);
   await firstTask.getByRole('button', { name: 'fir', exact: true }).click();
   await expect(firstTask.getByText(/fir 是“冷杉”/)).toBeVisible();
+  await expect(firstTask.getByText(/已完成待复习/)).toBeVisible();
+  await expect(firstTask.getByRole('button', { name: '下一题 →' })).toBeFocused();
   await firstTask.getByRole('button', { name: '下一题 →' }).click();
 
   const secondTask = page.locator('[data-visual-task-id="game-homophone-fur"]');
   await expect(secondTask).toBeVisible();
   await expect(secondTask.locator('.visual-image-frame')).toHaveClass(/focus-right/);
   await secondTask.getByRole('button', { name: /先跳过/ }).click();
-  await expect(page.locator('[data-visual-task-id="game-homophone-prey"]')).toBeVisible();
+  const thirdTask = page.locator('[data-visual-task-id="game-homophone-prey"]');
+  await expect(thirdTask).toBeVisible();
+  await expect(thirdTask.locator('[data-action="visual-game-choice"]').first()).toBeFocused();
   await expect(page.getByText(/fur 是“动物的软毛/)).toHaveCount(0);
 
   await page.getByRole('button', { name: /同形词分身/ }).click();
@@ -607,23 +643,365 @@ test('supports homophone, homograph, analogy and taxonomy games without revealin
 
   const saved = await page.evaluate(() => {
     const visual = JSON.parse(localStorage.getItem('els-ielts-visual-lab-v1') || '{}');
+    const core = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
     return {
-      core: localStorage.getItem('els-ielts-wordlab-v1'),
       first: visual.tasks?.['game-homophone-fir'],
       skipped: visual.tasks?.['game-homophone-fur'],
+      firstHistory: visual.history?.filter(
+        (item: { taskId: string }) => item.taskId === 'game-homophone-fir',
+      ),
+      repairHistory: core.history?.filter((item: { source?: string }) => item.source === 'visual'),
+      spellState: core.words?.fir?.skills?.spell,
     };
   });
-  expect(saved.core).toBe(coreBefore);
-  expect(saved.first.mastered).toBe(true);
-  expect(saved.first.attempts).toBe(2);
+  expect(saved.first).toMatchObject({
+    mastered: false,
+    completed: true,
+    needsReview: true,
+  });
+  expect(saved.first.attempts).toBe(3);
   expect(saved.first.correct).toBe(1);
-  expect(saved.skipped.mastered).toBe(false);
+  expect(saved.skipped).toMatchObject({
+    mastered: false,
+    completed: false,
+    needsReview: true,
+  });
   expect(saved.skipped.attempts).toBe(1);
   expect(saved.skipped.correct).toBe(0);
+  expect(saved.firstHistory).toHaveLength(3);
+  expect(saved.firstHistory).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        targetWordId: 'fir',
+        gameType: 'homophone',
+        repairSkill: 'spell',
+      }),
+    ]),
+  );
+  expect(saved.repairHistory).toHaveLength(2);
+  expect(saved.repairHistory).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        wordId: 'fir',
+        skill: 'spell',
+        visualTaskId: 'game-homophone-fir',
+        visualGameType: 'homophone',
+      }),
+      expect.objectContaining({
+        wordId: 'fir',
+        skill: 'spell',
+        visualTaskId: 'game-homophone-fur',
+        visualGameType: 'homophone',
+      }),
+    ]),
+  );
+  expect(saved.spellState).toMatchObject({ attempts: 2, correct: 0 });
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(1);
+  await page.locator('[data-view-link="today"]:visible').first().click();
+  await page.getByRole('button', { name: '智能补弱（按错因）' }).click();
+  await expect(page.getByRole('heading', { name: '听写拼词' })).toBeVisible();
+  await expect(page.locator('.training-count')).toHaveText('1 / 1');
+  expect(pageErrors).toEqual([]);
+});
+
+test('extends the semantic network with expert roles, word-form analogies and taxonomy', async ({
+  page,
+}) => {
+  const pageErrors = capturePageErrors(page);
+  await openVisualLab(page);
+
+  const targetAudit = await page.evaluate(() => {
+    const lab = (
+      window as Window & {
+        IELTS_VISUAL_LAB?: {
+          gameModes?: Array<{
+            tasks?: Array<{ id?: string; targetWordId?: string }>;
+          }>;
+        };
+        IELTS_VOCABULARY?: Array<{ id?: string }>;
+      }
+    ).IELTS_VISUAL_LAB;
+    const vocabulary = new Set(
+      (
+        window as Window & {
+          IELTS_VOCABULARY?: Array<{ id?: string }>;
+        }
+      ).IELTS_VOCABULARY?.map((word) => word.id) || [],
+    );
+    const expected = new Set([
+      'game-homograph-expert-noun',
+      'game-homograph-expert-adjective',
+      'game-analogy-rescuer-logger',
+      'game-analogy-distance-importance',
+      'game-analogy-bacterium-criterion',
+      'game-taxonomy-acre',
+      'game-taxonomy-organ-lung',
+    ]);
+    const tasks =
+      lab?.gameModes
+        ?.flatMap((mode) => mode.tasks || [])
+        .filter((task) => expected.has(task.id || '')) || [];
+    return {
+      taskCount: tasks.length,
+      targetIds: tasks.map((task) => task.targetWordId),
+      allTargetsInLocalVocabulary: tasks.every((task) => vocabulary.has(task.targetWordId)),
+    };
+  });
+  expect(targetAudit).toEqual({
+    taskCount: 7,
+    targetIds: ['expert', 'expert', 'rescue', 'distant', 'bacteria', 'acre', 'lung'],
+    allTargetsInLocalVocabulary: true,
+  });
+
+  await page.getByRole('button', { name: /词网游戏/ }).click();
+  await page.getByRole('button', { name: /同形词分身/ }).click();
+  for (let index = 0; index < 6; index += 1) {
+    await page
+      .locator('.visual-game-stage')
+      .getByRole('button', { name: '先跳过 · 不看答案' })
+      .click();
+  }
+
+  const expertNoun = page.locator('[data-visual-task-id="game-homograph-expert-noun"]');
+  await expect(expertNoun).toContainText('called in an expert');
+  await expect(expertNoun).not.toContainText('an expert 指一个拥有专业知识或技能的人');
+  await expertNoun.getByRole('button', { name: '形容词 · 专业的' }).click();
+  await expect(expertNoun.getByText(/an 后面需要单数可数名词/)).toBeVisible();
+  await expect(expertNoun).not.toContainText('an expert 指一个拥有专业知识或技能的人');
+  await page.waitForTimeout(300);
+  await expertNoun.getByRole('button', { name: '名词 · 专家' }).click();
+  await expect(expertNoun.getByText(/an expert 指一个拥有专业知识或技能的人/)).toBeVisible();
+  await expect(expertNoun.getByText(/已完成待复习/)).toBeVisible();
+  await expect(expertNoun.getByRole('button', { name: '下一题 →' })).toBeFocused();
+  await expertNoun.getByRole('button', { name: '下一题 →' }).click();
+
+  const expertAdjective = page.locator('[data-visual-task-id="game-homograph-expert-adjective"]');
+  await expect(expertAdjective).toContainText('expert advice');
+  await expect(expertAdjective).not.toContainText('expert advice 指由专业知识或技能支持的意见');
+  await expertAdjective.getByRole('button', { name: '形容词 · 专业的' }).click();
+  await expect(
+    expertAdjective.getByText(/expert advice 指由专业知识或技能支持的意见/),
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: /类比接龙/ }).click();
+  for (let index = 0; index < 4; index += 1) {
+    await page
+      .locator('.visual-game-stage')
+      .getByRole('button', { name: '先跳过 · 不看答案' })
+      .click();
+  }
+
+  const rescuerLogger = page.locator('[data-visual-task-id="game-analogy-rescuer-logger"]');
+  await expect(rescuerLogger).toContainText('rescue : rescuer');
+  await expect(rescuerLogger).not.toContainText('logger 另有“记录设备”义');
+  await rescuerLogger.getByRole('button', { name: 'logger', exact: true }).click();
+  await expect(rescuerLogger.getByText(/logger 另有“记录设备”义/)).toBeVisible();
+  await rescuerLogger.getByRole('button', { name: '下一题 →' }).click();
+
+  const distanceImportance = page.locator(
+    '[data-visual-task-id="game-analogy-distance-importance"]',
+  );
+  await expect(distanceImportance).not.toContainText('两组都把 -ant 变为 -ance');
+  await distanceImportance.getByRole('button', { name: 'important', exact: true }).click();
+  await expect(distanceImportance.getByText(/由形容词变成表示“这种性质”的名词/)).toBeVisible();
+  await page.waitForTimeout(300);
+  await distanceImportance.getByRole('button', { name: 'importance', exact: true }).click();
+  await expect(distanceImportance.getByText(/两组都把 -ant 变为 -ance/)).toBeVisible();
+  await expect(distanceImportance.getByText(/已完成待复习/)).toBeVisible();
+  await distanceImportance.getByRole('button', { name: '下一题 →' }).click();
+
+  const bacteriumCriterion = page.locator(
+    '[data-visual-task-id="game-analogy-bacterium-criterion"]',
+  );
+  await expect(bacteriumCriterion).not.toContainText('criterion 的标准复数是 criteria');
+  await bacteriumCriterion.getByRole('button', { name: 'criteria', exact: true }).click();
+  await expect(bacteriumCriterion.getByText(/criterion 的标准复数是 criteria/)).toBeVisible();
+
+  await page.getByRole('button', { name: /分类与上下义/ }).click();
+  for (let index = 0; index < 5; index += 1) {
+    await page
+      .locator('.visual-game-stage')
+      .getByRole('button', { name: '先跳过 · 不看答案' })
+      .click();
+  }
+
+  const acre = page.locator('[data-visual-task-id="game-taxonomy-acre"]');
+  await expect(acre).not.toContainText('因此它的上义类别是');
+  await acre.getByRole('button', { name: 'unit of area', exact: true }).click();
+  await expect(acre.getByText(/上义类别是 unit of area/)).toBeVisible();
+  await acre.getByRole('button', { name: '下一题 →' }).click();
+
+  const organLung = page.locator('[data-visual-task-id="game-taxonomy-organ-lung"]');
+  await expect(organLung).not.toContainText('肺）是 organ');
+  await organLung.getByRole('button', { name: 'blood', exact: true }).click();
+  await expect(organLung.getByText(/执行呼吸功能的身体器官/)).toBeVisible();
+  await expect(organLung).not.toContainText('肺）是 organ');
+  await page.waitForTimeout(300);
+  await organLung.getByRole('button', { name: 'lung', exact: true }).click();
+  await expect(organLung.getByText(/lung（肺）是 organ/)).toBeVisible();
+  await expect(organLung.getByText(/已完成待复习/)).toBeVisible();
+
+  const repairMappings = await page.evaluate(() => {
+    const core = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    const visual = JSON.parse(localStorage.getItem('els-ielts-visual-lab-v1') || '{}');
+    const ids = [
+      'game-homograph-expert-noun',
+      'game-analogy-distance-importance',
+      'game-taxonomy-organ-lung',
+    ];
+    return {
+      core: core.history
+        ?.filter((item: { visualTaskId?: string }) => ids.includes(item.visualTaskId || ''))
+        .map(
+          (item: {
+            visualTaskId?: string;
+            wordId?: string;
+            skill?: string;
+            visualGameType?: string;
+          }) => ({
+            taskId: item.visualTaskId,
+            wordId: item.wordId,
+            skill: item.skill,
+            gameType: item.visualGameType,
+          }),
+        ),
+      visual: visual.history
+        ?.filter((item: { taskId?: string; correct?: boolean }) => {
+          return ids.includes(item.taskId || '') && !item.correct;
+        })
+        .map(
+          (item: {
+            taskId?: string;
+            targetWordId?: string;
+            repairSkill?: string;
+            gameType?: string;
+          }) => ({
+            taskId: item.taskId,
+            wordId: item.targetWordId,
+            skill: item.repairSkill,
+            gameType: item.gameType,
+          }),
+        ),
+    };
+  });
+  expect(repairMappings.core).toEqual([
+    {
+      taskId: 'game-homograph-expert-noun',
+      wordId: 'expert',
+      skill: 'forms',
+      gameType: 'homograph',
+    },
+    {
+      taskId: 'game-analogy-distance-importance',
+      wordId: 'distant',
+      skill: 'forms',
+      gameType: 'analogy',
+    },
+    {
+      taskId: 'game-taxonomy-organ-lung',
+      wordId: 'lung',
+      skill: 'sentence',
+      gameType: 'taxonomy',
+    },
+  ]);
+  expect(repairMappings.visual).toEqual(repairMappings.core);
+
+  expect(pageErrors).toEqual([]);
+});
+
+test('uses original scene clues for insulate, blubber and logger without early answer reveal', async ({
+  page,
+}) => {
+  const pageErrors = capturePageErrors(page);
+  await openVisualLab(page);
+  await page.getByRole('button', { name: /词网游戏/ }).click();
+  await page.getByRole('button', { name: /看图猜词/ }).click();
+
+  for (let index = 0; index < 4; index += 1) {
+    await page
+      .locator('.visual-game-stage')
+      .getByRole('button', { name: '先跳过 · 不看答案' })
+      .click();
+  }
+
+  const insulate = page.locator('[data-visual-task-id="game-guess-insulate"]');
+  await expect(insulate).toBeVisible();
+  await expect
+    .poll(() =>
+      insulate.locator('img').evaluate((image: HTMLImageElement) => ({
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      })),
+    )
+    .toEqual({ width: 1200, height: 800 });
+  await expect(insulate).not.toContainText('用材料阻止热、声音或电通过');
+  await insulate.getByRole('button', { name: 'isolate', exact: true }).click();
+  await expect(insulate.getByText(/墙里的材料阻止热量穿过/)).toBeVisible();
+  await expect(insulate).not.toContainText('用材料阻止热、声音或电通过');
+  await page.waitForTimeout(300);
+  await insulate.getByRole('button', { name: 'insulate', exact: true }).click();
+  await expect(insulate.getByText(/用材料阻止热、声音或电通过/)).toBeVisible();
+  await expect(insulate.getByText(/已完成待复习/)).toBeVisible();
+  await expect(insulate.getByRole('button', { name: '下一题 →' })).toBeFocused();
+  await insulate.getByRole('button', { name: '下一题 →' }).click();
+
+  const blubber = page.locator('[data-visual-task-id="game-guess-blubber"]');
+  await expect(blubber).toBeVisible();
+  await expect
+    .poll(() =>
+      blubber.locator('img').evaluate((image: HTMLImageElement) => ({
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      })),
+    )
+    .toEqual({ width: 1200, height: 800 });
+  await expect(blubber).not.toContainText('帮助它们在冷水中保存体温');
+  await blubber.getByRole('button', { name: 'blubber', exact: true }).click();
+  await expect(blubber.getByText(/帮助它们在冷水中保存体温/)).toBeVisible();
+  await blubber.getByRole('button', { name: '下一题 →' }).click();
+
+  const logger = page.locator('[data-visual-task-id="game-guess-logger"]');
+  await expect(logger).toBeVisible();
+  await expect
+    .poll(() =>
+      logger.locator('img').evaluate((image: HTMLImageElement) => ({
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      })),
+    )
+    .toEqual({ width: 1200, height: 800 });
+  await expect(logger).not.toContainText('也可指记录数据的设备或程序');
+  await logger.getByRole('button', { name: 'logger', exact: true }).click();
+  await expect(logger.getByText(/也可指记录数据的设备或程序/)).toBeVisible();
+
+  const guessRepair = await page.evaluate(() => {
+    const visual = JSON.parse(localStorage.getItem('els-ielts-visual-lab-v1') || '{}');
+    const core = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return {
+      visual: visual.history?.find(
+        (item: { taskId?: string; correct?: boolean }) =>
+          item.taskId === 'game-guess-insulate' && !item.correct,
+      ),
+      core: core.history?.find(
+        (item: { visualTaskId?: string }) => item.visualTaskId === 'game-guess-insulate',
+      ),
+    };
+  });
+  expect(guessRepair.visual).toMatchObject({
+    targetWordId: 'insulate',
+    gameType: 'guess',
+    repairSkill: 'sentence',
+  });
+  expect(guessRepair.core).toMatchObject({
+    wordId: 'insulate',
+    skill: 'sentence',
+    source: 'visual',
+    visualGameType: 'guess',
+  });
+
   expect(pageErrors).toEqual([]);
 });
 

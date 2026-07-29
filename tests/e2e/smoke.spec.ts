@@ -413,6 +413,81 @@ test('keeps collocation recall unprompted until the learner opens the three-step
   await expect(answer).toBeVisible();
 });
 
+test('lets learners skip the sentence workshop without revealing an answer', async ({ page }) => {
+  await page.goto('/ielts/index.html');
+  await page.getByRole('button', { name: /04 句子工坊/ }).click();
+
+  const skipButton = page.getByRole('button', {
+    name: '先跳过表达任务，稍后复习',
+  });
+  await expect(skipButton).toBeVisible();
+  await expect(page.locator('#modelSentence')).toBeHidden();
+  await skipButton.click();
+
+  await expect(page.locator('.training-count')).toHaveText('2 / 10');
+  await expect(page.locator('[data-collocation-recall] summary')).toBeFocused();
+  const history = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return saved.history?.at(-1);
+  });
+  expect(history.skill).toBe('sentence');
+  expect(history.correct).toBe(false);
+  expect(history.detail).toBe('主动跳过搭配与造句任务；稍后复习');
+});
+
+test('smart repair practises only the weak ability recorded for a word', async ({ page }) => {
+  await page.goto('/ielts/index.html');
+  const word = await page.evaluate(() => window.IELTS_VOCABULARY[0]);
+  await page.evaluate((target) => {
+    localStorage.setItem(
+      'els-ielts-wordlab-v1',
+      JSON.stringify({
+        version: 1,
+        settings: { accent: 'uk', dailyNew: 6 },
+        daily: { date: '', newIds: [] },
+        words: {
+          [target.id]: {
+            skills: {
+              sound: {
+                attempts: 3,
+                correct: 3,
+                level: 3,
+                due: 0,
+                last: Date.now(),
+              },
+              spell: {
+                attempts: 2,
+                correct: 0,
+                level: 0,
+                due: 0,
+                last: Date.now(),
+              },
+            },
+          },
+        },
+        history: [
+          {
+            wordId: target.id,
+            word: target.word,
+            skill: 'spell',
+            correct: false,
+            detail: '主动跳过；未显示答案',
+            at: Date.now(),
+          },
+        ],
+        journal: [],
+      }),
+    );
+  }, word);
+  await page.reload();
+
+  await page.getByRole('button', { name: '智能补弱（按错因）' }).click();
+  await expect(page.getByRole('heading', { name: '听写拼词' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '本轮错误修复' })).toBeVisible();
+  await expect(page.locator('.learning-stage-track')).toHaveCount(0);
+  await expect(page.locator('.training-count')).toHaveText('1 / 1');
+});
+
 test('hides sentence-order capitalization and punctuation until reveal', async ({ page }) => {
   await page.goto('/ielts/index.html');
 
@@ -444,6 +519,7 @@ test('hides sentence-order capitalization and punctuation until reveal', async (
   await writingInput.fill('test.');
   await page.getByRole('button', { name: '检查并对照' }).click();
   await expect(page.locator('#modelSentence')).toBeVisible();
+  await expect(page.getByRole('button', { name: '先跳过表达任务，稍后复习' })).toHaveCount(0);
 
   await page.getByRole('button', { name: '重新排序' }).click();
   await page.getByRole('button', { name: '显示骨架' }).click();
