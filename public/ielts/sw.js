@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wordlab-v18-corpus-merge';
+const CACHE_NAME = 'wordlab-v19-adaptive-local';
 const CORE_ASSETS = [
   './',
   './index.html',
