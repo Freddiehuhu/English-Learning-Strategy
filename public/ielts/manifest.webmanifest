@@ -1,7 +1,7 @@
 {
-  "name": "WordLab 50 · 雅思薄弱词专项训练",
-  "short_name": "WordLab 50",
-  "description": "发音、拼写、词形和造句综合词汇训练",
+  "name": "WordLab · 雅思听力薄弱词训练",
+  "short_name": "WordLab",
+  "description": "听音、辨义、拼写、词形和句子迁移训练",
   "lang": "zh-CN",
   "start_url": "./",
   "scope": "./",

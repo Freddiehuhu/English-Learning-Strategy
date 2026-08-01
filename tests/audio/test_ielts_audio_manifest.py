@@ -27,21 +27,21 @@ class IeltsAudioManifestTests(unittest.TestCase):
         cls.specs = audio_manifest.expected_assets()
         cls.specs_by_path = {spec["path"]: spec for spec in cls.specs}
 
-    def test_exact_50_by_2_by_2_coverage(self) -> None:
+    def test_exact_86_by_2_by_2_coverage(self) -> None:
         self.assertEqual(
             self.manifest["coverage"],
             {
                 "accents": 2,
-                "assets": 200,
+                "assets": 344,
                 "kinds_per_word": 2,
-                "words": 50,
+                "words": 86,
             },
         )
-        self.assertEqual(len(self.entries), 200)
-        self.assertEqual(len(self.by_path), 200)
+        self.assertEqual(len(self.entries), 344)
+        self.assertEqual(len(self.by_path), 344)
 
         word_ids = {entry["word_id"] for entry in self.entries}
-        self.assertEqual(len(word_ids), 50)
+        self.assertEqual(len(word_ids), 86)
         expected_combinations = {
             (word_id, accent, kind)
             for word_id in word_ids
@@ -114,7 +114,7 @@ class IeltsAudioManifestTests(unittest.TestCase):
         ]
         if not measured:
             self.skipTest("ffmpeg loudness measurements are not available")
-        self.assertEqual(len(measured), 200)
+        self.assertEqual(len(measured), 344)
         for entry in measured:
             self.assertGreaterEqual(
                 entry["integrated_lufs"], -26.0, entry["path"]

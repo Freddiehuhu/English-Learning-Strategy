@@ -212,7 +212,8 @@ def check() -> None:
         for message in messages:
             print(f"ERROR: {message}")
         raise SystemExit(1)
-    print("IELTS audio manifest is current: 200/200 assets verified")
+    total = len(expected_assets())
+    print(f"IELTS audio manifest is current: {total}/{total} assets verified")
 
 
 def main() -> None:

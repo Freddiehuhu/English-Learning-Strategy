@@ -3,12 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta
-      name="description"
-      content="面向雅思学习者的发音、拼写、词形、图像词义辨析、标准句复现与待评表达训练工具。"
-    />
+    <meta name="description" content="面向雅思学习者的听音、辨义、拼写、词形与句子迁移训练工具。" />
     <meta name="theme-color" content="#17324d" />
-    <title>WordLab 50 · 雅思薄弱词专项训练</title>
+    <title>WordLab · 雅思听力薄弱词训练</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
@@ -21,16 +18,12 @@
         <button class="brand" type="button" data-view-link="today" aria-label="返回今日训练">
           <span class="brand-mark" aria-hidden="true">W</span>
           <span>
-            <strong>WordLab 50</strong>
-            <small>IELTS 综合词汇训练</small>
+            <strong>WordLab</strong>
+            <small>IELTS 听力薄弱词</small>
           </span>
         </button>
 
         <div class="topbar-actions">
-          <button class="quiet-button" id="openAudit" type="button">
-            <span aria-hidden="true">✓</span>
-            词表清洗
-          </button>
           <button
             class="icon-button"
             id="openSettings"
@@ -49,39 +42,15 @@
             <span class="nav-icon" aria-hidden="true">⌂</span>
             <span>今日</span>
           </button>
-          <button class="nav-item" type="button" data-view-link="learn">
-            <span class="nav-icon" aria-hidden="true">◉</span>
-            <span>音节听辨</span>
-          </button>
-          <button class="nav-item" type="button" data-view-link="spell">
-            <span class="nav-icon" aria-hidden="true">⌨</span>
-            <span>听写拼词</span>
-          </button>
-          <button class="nav-item" type="button" data-view-link="forms">
-            <span class="nav-icon" aria-hidden="true">⇄</span>
-            <span>词形变换</span>
-          </button>
-          <button class="nav-item" type="button" data-view-link="visual">
-            <span class="nav-icon" aria-hidden="true">◫</span>
-            <span>图像词义</span>
-          </button>
-          <button class="nav-item" type="button" data-view-link="sentence">
-            <span class="nav-icon" aria-hidden="true">¶</span>
-            <span>句子工坊</span>
+          <button class="nav-item" type="button" data-view-link="practice">
+            <span class="nav-icon" aria-hidden="true">◎</span>
+            <span>专项练习</span>
           </button>
           <button class="nav-item" type="button" data-view-link="progress">
             <span class="nav-icon" aria-hidden="true">↗</span>
             <span>错题与进度</span>
           </button>
         </nav>
-
-        <div class="sidebar-note">
-          <span class="status-dot" aria-hidden="true"></span>
-          <p>
-            <strong>进度只保存在本机</strong>
-            <span>可在“错题与进度”中导出备份</span>
-          </p>
-        </div>
       </aside>
 
       <main id="mainContent" class="main-content" tabindex="-1"></main>
@@ -91,21 +60,9 @@
           <span aria-hidden="true">⌂</span>
           <small>今日</small>
         </button>
-        <button class="bottom-nav-item" type="button" data-view-link="spell">
-          <span aria-hidden="true">⌨</span>
-          <small>听写</small>
-        </button>
-        <button class="bottom-nav-item" type="button" data-view-link="visual">
-          <span aria-hidden="true">◫</span>
-          <small>图义</small>
-        </button>
-        <button class="bottom-nav-item" type="button" data-view-link="forms">
-          <span aria-hidden="true">⇄</span>
-          <small>词形</small>
-        </button>
-        <button class="bottom-nav-item" type="button" data-view-link="sentence">
-          <span aria-hidden="true">¶</span>
-          <small>句架</small>
+        <button class="bottom-nav-item" type="button" data-view-link="practice">
+          <span aria-hidden="true">◎</span>
+          <small>专项</small>
         </button>
         <button class="bottom-nav-item" type="button" data-view-link="progress">
           <span aria-hidden="true">↗</span>
@@ -124,10 +81,18 @@
       </div>
       <div class="dialog-body">
         <div class="audit-summary" aria-label="清洗统计">
-          <p><strong>53</strong><span>原始条目</span></p>
+          <p><strong>89</strong><span>两批原始条目</span></p>
           <p><strong>3</strong><span>已剔除专名</span></p>
-          <p><strong>50</strong><span>进入训练</span></p>
+          <p><strong>86</strong><span>进入训练</span></p>
         </div>
+
+        <section class="audit-section">
+          <h3>听力新批次</h3>
+          <p class="fine-print">
+            2026-08-01 新增 36
+            个学生听力生词。多义词会保留语境待确认，不因单独词形擅自锁定唯一义项。
+          </p>
+        </section>
 
         <section class="audit-section">
           <h3>已剔除</h3>
@@ -200,6 +165,9 @@
         </label>
       </form>
       <div class="dialog-actions">
+        <button class="quiet-button settings-audit-button" id="openAudit" type="button">
+          词表与来源说明
+        </button>
         <button class="primary-button" id="saveSettings" type="button">保存设置</button>
       </div>
     </dialog>
@@ -211,6 +179,7 @@
     </noscript>
 
     <script src="./vocabulary.js" defer></script>
+    <script src="./listening-vocabulary.js" defer></script>
     <script src="./visual-data.js" defer></script>
     <script src="./app.js" defer></script>
   </body>

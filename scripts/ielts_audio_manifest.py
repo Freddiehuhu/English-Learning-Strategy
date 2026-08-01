@@ -29,6 +29,9 @@ from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 VOCABULARY_FILE = ROOT / "public" / "ielts" / "vocabulary.js"
+LISTENING_VOCABULARY_FILE = (
+    ROOT / "public" / "ielts" / "listening-vocabulary.js"
+)
 AUDIO_ROOT = ROOT / "public" / "ielts" / "audio"
 MANIFEST_FILE = AUDIO_ROOT / "manifest.json"
 
@@ -115,7 +118,10 @@ def generation_profiles() -> dict[str, dict[str, Any]]:
     }
 
 
-def read_vocabulary(vocabulary_file: Path = VOCABULARY_FILE) -> list[dict[str, str]]:
+def read_vocabulary(
+    vocabulary_file: Path = VOCABULARY_FILE,
+    supplementary_file: Path = LISTENING_VOCABULARY_FILE,
+) -> list[dict[str, str]]:
     """Read the executable vocabulary data without duplicating its contents."""
 
     if not shutil.which("node"):
@@ -125,6 +131,9 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const context = { window: {} };
 vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), context);
+if (process.argv[2] && fs.existsSync(process.argv[2])) {
+  vm.runInNewContext(fs.readFileSync(process.argv[2], 'utf8'), context);
+}
 const entries = context.window.IELTS_VOCABULARY.map((entry) => ({
   id: entry.id,
   word: entry.word,
@@ -133,16 +142,14 @@ const entries = context.window.IELTS_VOCABULARY.map((entry) => ({
 process.stdout.write(JSON.stringify(entries));
 """
     result = subprocess.run(
-        ["node", "-e", extractor, str(vocabulary_file)],
+        ["node", "-e", extractor, str(vocabulary_file), str(supplementary_file)],
         check=True,
         capture_output=True,
         text=True,
     )
     entries = json.loads(result.stdout)
-    if len(entries) != 50:
-        raise AudioManifestError(
-            f"Expected 50 vocabulary entries, found {len(entries)}"
-        )
+    if not entries:
+        raise AudioManifestError("Vocabulary is empty")
     if len({entry["id"] for entry in entries}) != len(entries):
         raise AudioManifestError("Vocabulary IDs must be unique")
     if any(not entry.get("word") or not entry.get("sentence") for entry in entries):
@@ -155,7 +162,7 @@ process.stdout.write(JSON.stringify(entries));
 def expected_assets(
     vocabulary_file: Path = VOCABULARY_FILE,
 ) -> list[dict[str, Any]]:
-    """Return the 200 stable text/voice/generation contracts."""
+    """Return the stable text/voice/generation contracts for every word."""
 
     specs: list[dict[str, Any]] = []
     vocabulary = read_vocabulary(vocabulary_file)
@@ -583,7 +590,8 @@ def main() -> None:
             for message in messages:
                 print(f"ERROR: {message}", file=sys.stderr)
             raise SystemExit(1)
-        print("IELTS audio manifest is current: 200/200 assets verified")
+        total = len(expected_assets())
+        print(f"IELTS audio manifest is current: {total}/{total} assets verified")
     except (AudioManifestError, subprocess.CalledProcessError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         raise SystemExit(1) from error
