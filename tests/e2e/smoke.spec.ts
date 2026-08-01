@@ -245,6 +245,7 @@ test('loads the 36-word listening batch into one unique 86-word vocabulary', asy
       word: string;
       sourceBatch?: string;
       sourceSkill?: string;
+      pos?: string;
       alternatePronunciation?: unknown;
     }>;
     const batch = vocabulary.filter(
@@ -267,6 +268,8 @@ test('loads the 36-word listening batch into one unique 86-word vocabulary', asy
           | undefined;
         return [wind?.ipaUk, wind?.alternatePronunciation?.ipaUk];
       })(),
+      empirePos: batch.find((entry) => entry.id === 'empire')?.pos,
+      prayerPos: batch.find((entry) => entry.id === 'prayer')?.pos,
     };
   });
 
@@ -276,6 +279,8 @@ test('loads the 36-word listening batch into one unique 86-word vocabulary', asy
   expect(audit.sourceSkills).toEqual(['listening']);
   expect(audit.windHasAlternatePronunciation).toBe(true);
   expect(audit.windPronunciations).toEqual(['/wɪnd/', '/waɪnd/']);
+  expect(audit.empirePos).toBe('n. [C]');
+  expect(audit.prayerPos).toBe('n. [C/U]');
 });
 
 test('normalises plural and past-tense form prompts to the four visible part-of-speech choices', async ({
@@ -1284,7 +1289,7 @@ test('service worker caches the on-demand corpus for offline reuse', async ({ pa
         const response = await fetch('./corpus/catalog.json');
         const payload = await response.json();
         const cached = await caches.match('./corpus/catalog.json');
-        return response.ok && payload.entries.length === 7229 && Boolean(cached);
+        return response.ok && payload.entries.length === 7242 && Boolean(cached);
       }),
     )
     .toBe(true);
@@ -1293,7 +1298,7 @@ test('service worker caches the on-demand corpus for offline reuse', async ({ pa
   await openPracticeHub(page);
   await page.locator('[data-action="go-view"][data-view="visual"]').click();
   await page.getByRole('button', { name: /词库地图/ }).click();
-  await expect(page.locator('.corpus-stat-grid')).toContainText('7,229');
+  await expect(page.locator('.corpus-stat-grid')).toContainText('7,242');
   await expect(page.locator('[data-corpus-results] .corpus-entry')).toHaveCount(60);
   await context.setOffline(false);
 });

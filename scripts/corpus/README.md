@@ -105,7 +105,13 @@ python3 scripts/corpus/build_master_corpus.py \
   tmp/pdfs/first_fixed/first_first_for_schools.tsv \
   tmp/pdfs/batch_listening/ielts_listening_1200.tsv \
   tmp/pdfs/cae-all \
+  data/ielts-corpus/target-input/student-listening-unknowns-2026-08-01.tsv \
+  data/ielts-corpus/supplementary-input/curated-native-candidates.tsv \
+  data/ielts-corpus/supplementary-input/edge-pdf-candidates.tsv \
   data/ielts-corpus/supplementary-input/edge-unit7-candidates.tsv \
+  data/ielts-corpus/supplementary-input/scholastic-240-candidates.tsv \
+  data/ielts-corpus/supplementary-input/scholastic-success-candidates.tsv \
+  data/ielts-corpus/supplementary-input/vocabulary-in-use-candidates.tsv \
   --legacy-target-input tmp/pdfs/batch_foundation/oxford_3000.tsv \
   --legacy-target-input tmp/pdfs/batch_foundation/oxford_5000.tsv \
   --legacy-target-input tmp/pdfs/batch_foundation/ket_schools.tsv \
@@ -120,9 +126,10 @@ python3 scripts/corpus/build_master_corpus.py \
 
 The four foundation files are listed explicitly so a stale experimental TSV
 in the local output directory can never enter the build by accident. The seven
-legacy target inputs are also named again as trusted legacy sources; the new
-Edge candidate file is deliberately not trusted and must carry
-`lexical_candidate` + `candidate_only` on every row.
+legacy target inputs are also named again as trusted legacy sources. The
+committed student batch is an explicit `target_reference`; every supplementary
+candidate file remains fail-closed and must carry `lexical_candidate` +
+`candidate_only` on every row.
 
 The builder stops instead of producing a corpus when it detects a likely
 alphabetical-section mismatch, wrapped example fragment or accidental

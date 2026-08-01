@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wordlab-v17-listening-cohort';
+const CACHE_NAME = 'wordlab-v18-corpus-merge';
 const CORE_ASSETS = [
   './',
   './index.html',

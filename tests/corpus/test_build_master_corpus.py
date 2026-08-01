@@ -558,6 +558,43 @@ class CorpusBuilderTests(unittest.TestCase):
             ["Edge Vocabulary"],
         )
 
+    def test_candidate_overlap_cannot_reactivate_an_excluded_proper_noun(self):
+        target = self.row(
+            source="IELTS Listening",
+            headword="Africa",
+            pos="proper noun",
+            cefr="",
+        )
+        candidate = corpus.SourceRow(
+            **{
+                **self.row(
+                    source="Supplementary Vocabulary",
+                    headword="Africa",
+                    pos="n.",
+                    cefr="A1",
+                ).__dict__,
+                "source_role": "lexical_candidate",
+                "corpus_policy": "candidate_only",
+                "source_format": "pdf",
+            }
+        )
+        entry = corpus.build_entry(corpus.EntryGroup("africa", [target, candidate]))
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "queue.tsv"
+            corpus.write_supplementary_candidate_tsv(path, [entry])
+            with path.open(encoding="utf-8", newline="") as handle:
+                rows = list(csv.DictReader(handle, delimiter="\t"))
+
+        self.assertEqual(entry["status"], "excluded_proper_noun")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["candidate_status"], "excluded_proper_noun")
+        self.assertEqual(rows[0]["overlaps_active_target"], "no")
+        self.assertEqual(
+            rows[0]["review_status"],
+            "excluded_from_target_promotion",
+        )
+
     def test_reader_validates_and_preserves_supplementary_policy(self):
         fields = (
             "source",

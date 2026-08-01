@@ -1154,7 +1154,7 @@ test('loads the full corpus only on demand and filters its auditable index', asy
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
-test('browses the published 21-PDF corpus on desktop and mobile', async ({ page }) => {
+test('browses the published target corpus on desktop and mobile', async ({ page }) => {
   let corpusRequests = 0;
   page.on('request', (request) => {
     if (request.url().endsWith('/ielts/corpus/catalog.json')) corpusRequests += 1;
@@ -1165,15 +1165,15 @@ test('browses the published 21-PDF corpus on desktop and mobile', async ({ page 
   await page.getByRole('button', { name: /词库地图/ }).click();
 
   await expect(page.getByRole('heading', { name: '从 PDF 词表到可审核的学习地图' })).toBeVisible();
-  await expect(page.locator('.corpus-stat-grid')).toContainText('7,229');
-  await expect(page.locator('.corpus-stat-grid')).toContainText('12,316');
+  await expect(page.locator('.corpus-stat-grid')).toContainText('7,242');
+  await expect(page.locator('.corpus-stat-grid')).toContainText('12,352');
   expect(corpusRequests).toBe(1);
   await expect(page.locator('.corpus-entry')).toHaveCount(60);
   await page.getByRole('button', { name: /再显示 60 个/ }).click();
   await expect(page.locator('.corpus-entry')).toHaveCount(120);
 
   await page.locator('[data-action="corpus-quick-skill"][data-skill="listening"]').click();
-  await expect(page.locator('[data-corpus-match-count]')).toHaveText('853');
+  await expect(page.locator('[data-corpus-match-count]')).toHaveText('888');
   await expect(page.locator('[data-action="corpus-filter"][data-filter="skill"]')).toHaveValue(
     'listening',
   );

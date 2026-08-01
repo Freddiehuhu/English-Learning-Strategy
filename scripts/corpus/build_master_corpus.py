@@ -991,6 +991,8 @@ def write_supplementary_candidate_tsv(
                 continue
             if entry["status"] == "active":
                 candidate_status = "support_for_active_target"
+            elif entry["status"] == "excluded_proper_noun":
+                candidate_status = "excluded_proper_noun"
             elif entry["candidate_source_count"]:
                 candidate_status = "target_candidate"
             else:
@@ -1025,7 +1027,11 @@ def write_supplementary_candidate_tsv(
                     "review_status": (
                         "not_a_target_nomination"
                         if candidate_status == "support_only"
-                        else "needs_teacher_approval"
+                        else (
+                            "excluded_from_target_promotion"
+                            if candidate_status == "excluded_proper_noun"
+                            else "needs_teacher_approval"
+                        )
                     ),
                 }
             )

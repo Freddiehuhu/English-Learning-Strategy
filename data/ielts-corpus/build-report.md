@@ -1,50 +1,50 @@
 # IELTS corpus build report
 
-- Generated: 2026-07-29T12:34:55+00:00
-- Input TSV files: 22
-- Extracted source rows: 12330
-- Target-reference rows: 12316
-- Candidate-only rows: 14
+- Generated: 2026-08-01T05:17:46+00:00
+- Input TSV files: 28
+- Extracted source rows: 27360
+- Target-reference rows: 12352
+- Candidate-only rows: 15008
 - Enrichment-only rows: 0
 - Methods-only rows ignored by the lexical merge: 0
-- Deduplicated entries before proper-noun exclusion: 7302
-- Active lexical entries: 7229
-- Supplementary target candidates awaiting approval: 11
+- Deduplicated entries before proper-noun exclusion: 14213
+- Active lexical entries: 7242
+- Supplementary target candidates awaiting approval: 6909
 - Supplementary support-only entries: 0
 - Proper-noun-only entries excluded from public learning data: 62
 - Proper-noun source senses excluded: 87
 - Active lexemes retaining a non-proper sense after removal: 4
-- Image-eligible entries: 6590
+- Image-eligible entries: 6604
 
 ## Primary four-skill index
 
-- listening: 853
+- listening: 888
 - speaking: 511
-- reading: 4409
-- writing: 1456
+- reading: 4392
+- writing: 1451
 
 ## Coverage and review queues
 
-- Entries without a confirmed part of speech: 370
-- Skill profiles requiring teacher review: 1790
+- Entries without a confirmed part of speech: 369
+- Skill profiles requiring teacher review: 1785
 - Source corrections retained for audit: 14
 
 ### Content-word coverage
 
-- noun: 3891
-- verb: 1814
-- adjective: 1413
+- noun: 3903
+- verb: 1817
+- adjective: 1417
 - adverb: 420
 
 ### Game editorial candidates
 
-- image guessing: 6590
-- synonym/antonym: 6590
-- homophone: 6094
-- homograph: 868
-- analogy: 6590
-- category/taxonomy: 3891
-- collocation: 3503
+- image guessing: 6604
+- synonym/antonym: 6604
+- homophone: 6107
+- homograph: 872
+- analogy: 6604
+- category/taxonomy: 3903
+- collocation: 3509
 
 ## Method notes
 

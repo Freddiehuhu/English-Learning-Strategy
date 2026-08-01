@@ -49,6 +49,11 @@
   "master_merge": {
     "existing_lemma_count": 23,
     "new_lemma_count": 13,
+    "status": "merged_into_active_corpus",
+    "target_input": "data/ielts-corpus/target-input/student-listening-unknowns-2026-08-01.tsv",
+    "active_corpus_total_after_merge": 7242,
+    "primary_skill": "listening",
+    "cefr_policy": "The student report authorizes target inclusion, not a CEFR claim. This batch contributes no CEFR level until source-specific evidence is linked; existing target sources retain their verified levels.",
     "new_lemmas": [
       "sketchy",
       "pamphlet",
