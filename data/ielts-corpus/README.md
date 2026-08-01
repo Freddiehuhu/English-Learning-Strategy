@@ -6,33 +6,41 @@ book definitions, example sentences, IPA notes, exercises or illustrations.
 
 ## Current build
 
-- 12,316 extracted source rows
-- 7,229 deduplicated public learning entries
-- 6,590 noun, verb, adjective or adverb entries queued for sense review and
+- 12,352 approved target-source rows: 12,316 from the 21 target PDFs plus 36
+  learner-reported listening unknowns
+- 7,242 deduplicated public learning entries
+- 15,008 candidate-source rows from 20 supplementary PDFs and 2 DOCX files,
+  deduplicated into 10,967 editorial-review rows
+- 6,604 noun, verb, adjective or adverb entries queued for sense review and
   possible image generation
 - 62 proper-noun-only entries and 87 proper-noun source senses removed from
   public learning data
-- 21 input TSVs, corresponding to all 21 supplied PDFs
+- 22 target inputs: 21 TSVs corresponding to the 21 supplied target PDFs,
+  plus one committed learner-reported listening batch
 - 46 supplementary resources registered and inventoried: 42 PDFs, 3 DOCX
   files and 1 unpacked EPUB
 - 24 supplementary PDFs routed to native-text extraction; 18 routed to OCR
 - 30 supplementary resources may nominate review candidates, 8 may only enrich
   relations and 8 may only inform teaching design
-- The first DOCX pilot retains 14 printed word-box rows as review evidence:
-  11 new normalized candidates and 3 overlaps with active target entries
+- All currently extracted supplementary batches are connected to the unified
+  candidate queue: 6,909 candidate-only lexical entries remain blocked from
+  target promotion, 46 candidate-backed proper nouns stay explicitly excluded,
+  and 4,012 rows provide support for existing targets
 
-The 7,229 active learning entries have deliberately not increased. Registration
-and inventory are complete; full lexical extraction and editorial review of
-all 42 supplementary PDFs are still in progress.
+The active corpus increased by exactly 13 new lemmas from the explicitly
+approved 36-word student batch; its 23 existing lemmas were merged as new
+listening evidence. Supplementary candidates did not alter the active catalog.
+Registration and inventory are complete; full lexical extraction and editorial
+review of all 42 supplementary PDFs are still in progress.
 
 The four-skill primary browsing index currently contains:
 
 | Primary index | Entries |
 | ------------- | ------: |
-| Listening     |     853 |
+| Listening     |     888 |
 | Speaking      |     511 |
-| Reading       |   4,409 |
-| Writing       |   1,456 |
+| Reading       |   4,392 |
+| Writing       |   1,451 |
 
 Listening, speaking, reading and writing are overlapping labels. The primary
 index is navigation metadata, not a claim that a word belongs to only one
@@ -49,10 +57,13 @@ skill.
 - `supplemental-source-inventory.json`: verified hashes, format metadata and
   extraction/OCR routes, without body text, filenames, local paths or embedded
   author/title metadata.
-- `supplementary-input/edge-unit7-candidates.tsv`: the first source-specific
-  DOCX candidate extraction.
-- `supplementary-candidate-queue.tsv`: normalized target candidates and active
-  overlaps awaiting teacher review.
+- `target-input/student-listening-unknowns-2026-08-01.tsv`: the 36-item,
+  teacher-approved student listening batch. It deliberately withholds CEFR
+  claims that do not yet have source-specific evidence.
+- `supplementary-input/*.tsv`: fail-closed candidate extracts from the 22
+  supplementary sources processed so far.
+- `supplementary-candidate-queue.tsv`: 10,967 normalized review rows: 6,909
+  target candidates, 46 excluded proper nouns and 4,012 active-target overlaps.
 - `supplementary-source-evidence.tsv`: sanitized candidate/enrichment
   provenance.
 - `image-generation-queue.tsv`: image candidates; every row remains blocked

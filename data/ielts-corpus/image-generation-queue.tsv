@@ -200,6 +200,7 @@ weekend-505eabdf	weekend	noun	A1|A2|B1	listening	object-or-context-scene	high	ne
 well-bd848328	well	adjective|adverb|exclamation|noun	A1|A2|B1|C1	writing	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 wet-c8e275e6	wet	adjective	A2|B1	listening	contrast-pair	high	needs_teacher_approved_sense		pending	no
 white-528cef87	white	adjective|noun	A1|A2|B1	listening	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
+wind-e70091e7	wind	noun|verb	A2|B1|B2	listening	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 wood-e8002c16	wood	noun	A2|B1	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 wool-a7a60b68	wool	noun	A2|B1	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 world-7c211433	world	adjective|noun	A1|A2|B1|B2	writing	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
@@ -750,6 +751,7 @@ large-5296d5cc	large	adjective	A1|A2|B1	reading	contrast-pair	high	needs_teacher
 late-5d6200f8	late	adjective|adverb	A1|A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 later-3f14ecc8	later	adjective|adverb	A1|A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 laugh-dea45512	laugh	noun|verb	A1|A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
+lay-b455d385	lay	verb	B1	listening	action-scene	high	needs_teacher_approved_sense		pending	no
 lazy-1078cf41	lazy	adjective	A2|B1|B2	writing	contrast-pair	high	needs_teacher_approved_sense		pending	no
 leave-31aed9e3	leave	noun|verb	A1|A2|B1|B2	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 left-12c0f1fb	left	adjective|adverb|noun	A1|A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
@@ -903,6 +905,7 @@ passport-a3404013	passport	noun	A1|A2|B1	reading	object-or-context-scene	high	ne
 past-dc52f279	past	adjective|adverb|noun|preposition	A1|A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 pasta-46139b0b	pasta	noun	A2|B1	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 path-3150ecd5	path	noun	A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
+pattern-91cc2e92	pattern	noun	A2|B1	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 pay-bfc95e50	pay	noun|verb	A1|A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 peaceful-bab4c3db	peaceful	adjective	B1|B2	writing	contrast-pair	high	needs_teacher_approved_sense		pending	no
 peak-6a28d069	peak	noun	B1|B2|C1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
@@ -913,6 +916,7 @@ pepper-64356bcf	pepper	noun	A1|A2|B1	reading	object-or-context-scene	high	needs_
 performance-476ee0f6	performance	noun	B1|B2	writing	concept-metaphor	high	needs_teacher_approved_sense		pending	no
 perhaps-b81f4a81	perhaps	adverb	A2|B1	reading	manner-sequence	high	needs_teacher_approved_sense		pending	no
 person-d39a4750	person	noun	A1|A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
+perspective-aa6af31d	perspective	noun	B2|C1	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 persuade-cd0de7c9	persuade	verb	B1	listening	action-scene	high	needs_teacher_approved_sense		pending	no
 pet-1b034c38	pet	noun	A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 petrol-477c1c92	petrol	noun	A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
@@ -954,6 +958,7 @@ pound-dad7d5e0	pound	noun	A1|A2|B1	reading	object-or-context-scene	high	needs_te
 pour-03c988f5	pour	verb|verb phrase	B1|B2	speaking	context-scene	high	needs_teacher_approved_sense		pending	no
 practical-7f55aa89	practical	adjective	B1|B2	listening	contrast-pair	high	needs_teacher_approved_sense		pending	no
 practise-2c5199d4	practise	verb	A1|A2|B1	reading	action-scene	high	needs_teacher_approved_sense		pending	no
+prayer-12df55df	prayer	noun	B1	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 prefer-866e90df	prefer	verb	A1|A2|B1	reading	action-scene	high	needs_teacher_approved_sense		pending	no
 prescription-9fd01ae4	prescription	noun	B1|B2|C1	writing	concept-metaphor	high	needs_teacher_approved_sense		pending	no
 present-50644481	present	adjective|noun|verb	A1|A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
@@ -1037,6 +1042,7 @@ same-ff339055	same	adjective|adverb|pronoun	A1|A2|B1	reading	multi-sense-panel	h
 sandwich-579db7d6	sandwich	noun	A1|A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 satisfied-a34b2d93	satisfied	adjective	B1|B2	listening	contrast-pair	high	needs_teacher_approved_sense		pending	no
 save-13a4a113	save	verb	A2|B1	reading	action-scene	high	needs_teacher_approved_sense		pending	no
+scale-60020d1b	scale	noun	B2|C1	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 scared-34305c61	scared	adjective	A2|B1|B2	writing	contrast-pair	high	needs_teacher_approved_sense		pending	no
 school-655f83be	school	noun	A1|A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 science-b92336a2	science	noun	A1|B1	listening	concept-metaphor	high	needs_teacher_approved_sense		pending	no
@@ -1222,6 +1228,7 @@ tram-aaf2dd34	tram	noun	A2|B1	listening	object-or-context-scene	high	needs_teach
 travel-f7956b27	travel	noun|verb	A1|A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 treatment-532735d1	treatment	noun	B1|B2	listening	concept-metaphor	high	needs_teacher_approved_sense		pending	no
 tree-80655da8	tree	noun	A1|A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
+tribe-c9a7eef6	tribe	noun	B2	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 trouble-bee38fbc	trouble	noun|verb	A2|B1|B2	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 trousers-432e9fa2	trousers	noun	A1|A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 truck-7a4d63b1	truck	noun	A2|B1	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
@@ -1285,7 +1292,6 @@ wild-0ce0cb68	wild	adjective	A2|B1	reading	contrast-pair	high	needs_teacher_appr
 wildlife-bdd9876c	wildlife	noun	B1|B2	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 will-37d41699	will	modal verb|noun|verb	A1|A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 win-c76ac2e9	win	noun|verb	A1|A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
-wind-e70091e7	wind	noun|verb	A2|B1|B2	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 window-320ad267	window	noun	A1|A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 windsurfing-abf2187a	windsurfing	noun	A2|B1	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 woman-edb1f42a	woman	noun	A1|A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
@@ -1321,6 +1327,7 @@ acid-rain-a0821474	acid rain	noun	B2	listening	context-scene	high	needs_teacher_
 action-34eb4c4e	action	noun	A1|B1	reading	concept-metaphor	high	needs_teacher_approved_sense		pending	no
 active-2bb6b986	active	adjective	A2|B1	reading	contrast-pair	high	needs_teacher_approved_sense		pending	no
 actress-99176a9c	actress	noun	A1|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
+actual-50f46198	actual	adjective	B2	listening	contrast-pair	high	needs_teacher_approved_sense		pending	no
 ad-4aeb195c	ad	noun	B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 addition-c3805175	addition	noun	B1	reading	concept-metaphor	high	needs_teacher_approved_sense		pending	no
 administration-056cbe59	administration	noun	B2	writing	concept-metaphor	high	needs_teacher_approved_sense		pending	no
@@ -1587,6 +1594,7 @@ conference-089f6953	conference	noun	A2|B1	reading	concept-metaphor	high	needs_te
 confidence-01656883	confidence	noun	B2	listening	concept-metaphor	high	needs_teacher_approved_sense		pending	no
 confirm-d0c4047c	confirm	verb	B1	reading	action-scene	high	needs_teacher_approved_sense		pending	no
 confused-bc622619	confused	adjective	B1	reading	contrast-pair	high	needs_teacher_approved_sense		pending	no
+confusion-cfc8b23a	confusion	noun	B2	listening	concept-metaphor	high	needs_teacher_approved_sense		pending	no
 connect-f11a107f	connect	verb	A2|B1	reading	action-scene	high	needs_teacher_approved_sense		pending	no
 connection-814605c6	connection	noun	B1	reading	concept-metaphor	high	needs_teacher_approved_sense		pending	no
 consider-9cef6dd4	consider	verb	A2|B1	reading	action-scene	high	needs_teacher_approved_sense		pending	no
@@ -1606,6 +1614,7 @@ cooking-c2c1a106	cooking	noun	A1|B1	reading	object-or-context-scene	high	needs_t
 copy-f84e2e2d	copy	noun|verb	A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 core-94a0426e	core	adjective|noun	B2	listening	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 correction-fb5246f0	correction	noun	B1|C1	writing	concept-metaphor	high	needs_teacher_approved_sense		pending	no
+corridor-381f6eaa	corridor	noun	B2	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 count-ee9f38e1	count	noun|verb	A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 courage-a2d90f4e	courage	noun	B1|B2	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 cover-a28100fa	cover	noun|verb	A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
@@ -1618,6 +1627,7 @@ creep-5f008f9f	creep	verb	B2|C1	reading	action-scene	high	needs_teacher_approved
 cricket-4f8ef089	cricket	noun	B1	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 crime-cdde326f	crime	noun	A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 criminal-dcff95ac	criminal	adjective|noun	A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
+crisis-58076e41	crisis	noun	B2	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 critic-cb6c38de	critic	noun	B2	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 crossing-a275805e	crossing	noun	A2|B1	speaking	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 crossroads-625f5f0e	crossroads	noun	A2|B1	speaking	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
@@ -1746,6 +1756,7 @@ embarrassment-c6fabd2a	embarrassment	noun	B2|C1	writing	concept-metaphor	high	ne
 emerge-053b84de	emerge	verb	B2	reading	action-scene	high	needs_teacher_approved_sense		pending	no
 emergency-a4b7517f	emergency	noun	B1	reading	concept-metaphor	high	needs_teacher_approved_sense		pending	no
 emission-b5da25e0	emission	noun	B2	writing	concept-metaphor	high	needs_teacher_approved_sense		pending	no
+empire-91c15fd5	empire	noun	B2	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 employ-8915865c	employ	verb	A2|B1	reading	action-scene	high	needs_teacher_approved_sense		pending	no
 encourage-808cae8b	encourage	verb	B1	reading	action-scene	high	needs_teacher_approved_sense		pending	no
 ending-5bd4bf68	ending	noun	A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
@@ -1929,7 +1940,9 @@ hardware-608cb271	hardware	noun	B1|C1	reading	object-or-context-scene	high	needs
 harmony-5343a781	harmony	noun	B2|C1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 headache-9023bc9b	headache	noun	A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 headline-9cd7c186	headline	noun	B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
+heal-0d19b4a6	heal	verb	B2	listening	action-scene	high	needs_teacher_approved_sense		pending	no
 heat-853911dc	heat	noun|verb	A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
+hedge-1bbe6dd1	hedge	noun|verb	B2	listening	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 heel-9ab5da88	heel	noun	B1|B2	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 hello-aaf4c61d	hello	exclamation|noun	A1|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 herb-9e12a3d2	herb	noun	B1|B2	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
@@ -2042,7 +2055,6 @@ lane-d2c5d61a	lane	noun	B2	listening	object-or-context-scene	high	needs_teacher_
 lately-e39e8b7c	lately	adverb	B1|B2	writing	manner-sequence	high	needs_teacher_approved_sense		pending	no
 latest-1481d0a0	latest	adjective|noun	B1|B2	writing	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 lawyer-3a16417e	lawyer	noun	A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
-lay-b455d385	lay	verb	B1	reading	action-scene	high	needs_teacher_approved_sense		pending	no
 leader-b25f5987	leader	noun	A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 leadership-911224d5	leadership	noun	B2	listening	concept-metaphor	high	needs_teacher_approved_sense		pending	no
 leaf-98798241	leaf	noun	B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
@@ -2114,6 +2126,7 @@ memory-81c5d49b	memory	noun	A2|B1	reading	object-or-context-scene	high	needs_tea
 mention-7ee02fc6	mention	noun|verb	A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 mess-ad367612	mess	noun	B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 messy-fd278a35	messy	adjective	B1|B2	writing	contrast-pair	high	needs_teacher_approved_sense		pending	no
+metaphor-b231b8df	metaphor	noun	B2	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 method-bfbaf8b2	method	noun	A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 midday-8dc90b4f	midday	noun	B1	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 might-13f29965	might	modal verb|verb	A2|B1	reading	action-scene	high	needs_teacher_approved_sense		pending	no
@@ -2212,7 +2225,6 @@ partly-446855cd	partly	adverb	B1|B2	writing	manner-sequence	high	needs_teacher_a
 passionate-26c3d35a	passionate	adjective	B2	writing	contrast-pair	high	needs_teacher_approved_sense		pending	no
 password-5baa61e4	password	noun	B1|B2	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 patient-b1b0b8de	patient	adjective|noun	A2|B1|B2	writing	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
-pattern-91cc2e92	pattern	noun	A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 pause-ef8d2995	pause	noun|verb	B1|B2	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 peace-d7c50a08	peace	noun	A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 peel-9e858e75	peel	verb	B1|B2	reading	action-scene	high	needs_teacher_approved_sense		pending	no
@@ -2230,7 +2242,6 @@ permission-6d244f58	permission	noun	A2|B1	reading	concept-metaphor	high	needs_te
 permit-cf0f3f41	permit	noun|verb	B1|B2	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 personal-db69db5f	personal	adjective	A1|B1	reading	contrast-pair	high	needs_teacher_approved_sense		pending	no
 personally-396be4c7	personally	adverb	B1	reading	manner-sequence	high	needs_teacher_approved_sense		pending	no
-perspective-aa6af31d	perspective	noun	B2|C1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 petrol-station-f3869d4f	petrol station	noun	A2|B1	speaking	context-scene	high	needs_teacher_approved_sense		pending	no
 pharmacy-adfa59cc	pharmacy	noun	A2|B1	speaking	concept-metaphor	high	needs_teacher_approved_sense		pending	no
 philosophy-00b32f65	philosophy	noun	B2	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
@@ -2276,7 +2287,6 @@ powder-823fafde	powder	noun	B1	reading	object-or-context-scene	high	needs_teache
 power-b573f24e	power	noun|verb	A2|B1|B2	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 powerful-0e1ce4b9	powerful	adjective	B1	reading	contrast-pair	high	needs_teacher_approved_sense		pending	no
 pray-77973d44	pray	verb	B1	reading	action-scene	high	needs_teacher_approved_sense		pending	no
-prayer-12df55df	prayer	noun	B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 predict-5226c875	predict	verb	A2|B1	reading	action-scene	high	needs_teacher_approved_sense		pending	no
 predictable-254ed7b8	predictable	adjective	B2	writing	contrast-pair	high	needs_teacher_approved_sense		pending	no
 pregnant-cc5d56ab	pregnant	adjective	B1|B2	writing	contrast-pair	high	needs_teacher_approved_sense		pending	no
@@ -2429,7 +2439,6 @@ sandal-5e8aa201	sandal	noun	B1|B2	reading	object-or-context-scene	high	needs_tea
 satellite-36293200	satellite	noun	B2	listening	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 satisfactory-c4800c64	satisfactory	adjective	B1	listening	contrast-pair	high	needs_teacher_approved_sense		pending	no
 sauce-80e6e79c	sauce	noun	A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
-scale-60020d1b	scale	noun	B2|C1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 scary-10e0b28d	scary	adjective	A2|B1	reading	contrast-pair	high	needs_teacher_approved_sense		pending	no
 scene-ea5e0445	scene	noun	A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 schedule-11e9ba26	schedule	noun|verb	A2|B2	listening	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
@@ -2544,6 +2553,7 @@ speed-92b63208	speed	noun|verb	A2|B1|B2	reading	multi-sense-panel	high	needs_tea
 spelling-d3c00bb4	spelling	noun	A1|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 spice-7c05204d	spice	noun	B1|B2	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 spill-c97bf254	spill	verb	B1|B2	reading	action-scene	high	needs_teacher_approved_sense		pending	no
+spiritual-5b742e15	spiritual	adjective	B2	listening	contrast-pair	high	needs_teacher_approved_sense		pending	no
 spite-9b42e50f	spite	noun	B1|B2	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 spoil-de4030a2	spoil	verb	B1|B2	reading	action-scene	high	needs_teacher_approved_sense		pending	no
 spy-3e6a7174	spy	noun|verb	B1|C1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
@@ -2651,7 +2661,6 @@ translation-efd7fd7f	translation	noun	B1	reading	concept-metaphor	high	needs_tea
 transport-a8e6012e	transport	noun|verb	A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 travel-agent-2c81e33e	travel agent	noun	A2|B1	speaking	context-scene	high	needs_teacher_approved_sense		pending	no
 trend-48075864	trend	noun	B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
-tribe-c9a7eef6	tribe	noun	B2	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 trick-1cb0f0d6	trick	noun|verb	B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 trophy-1f5bbe7f	trophy	noun	B2|C1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 tropical-4a073902	tropical	adjective	B2	writing	contrast-pair	high	needs_teacher_approved_sense		pending	no
@@ -2681,6 +2690,7 @@ unfortunately-bf9d6230	unfortunately	adverb	A2|B1	reading	manner-sequence	high	n
 unhappy-8c643cce	unhappy	adjective|noun	A2|B1	reading	multi-sense-panel	high	needs_teacher_approved_sense		pending	no
 union-67ad5a07	union	noun	B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 unit-0df9eea0	unit	noun	A2|B1	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
+universal-da5f51a1	universal	adjective	B2	listening	contrast-pair	high	needs_teacher_approved_sense		pending	no
 universe-244fb75b	universe	noun	B1|B2	reading	object-or-context-scene	high	needs_teacher_approved_sense		pending	no
 unknown-50d8b4a9	unknown	adjective	B1|B2	writing	contrast-pair	high	needs_teacher_approved_sense		pending	no
 unlikely-eff8ec10	unlikely	adjective	B1	reading	contrast-pair	high	needs_teacher_approved_sense		pending	no
@@ -2785,6 +2795,7 @@ break-up-sth-f3c908b7	break up sth	verb	C1	reading	context-scene	medium	needs_te
 cafe-984e18fe	cafe	noun	A1	listening	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 call-for-sth-48f7d8c8	call for sth	verb	C1	reading	context-scene	medium	needs_teacher_approved_sense		pending	no
 call-sth-off-f1b4efa6	call sth off	verb	C1	reading	context-scene	medium	needs_teacher_approved_sense		pending	no
+carve-3131fcd7	carve	verb	C1	listening	action-scene	medium	needs_teacher_approved_sense		pending	no
 church-2f1899f2	church	noun	A2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 citizenship-f067337d	citizenship	noun	C1	writing	concept-metaphor	medium	needs_teacher_approved_sense		pending	no
 cluster-da68bf3a	cluster	noun	C1	listening	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
@@ -2854,7 +2865,9 @@ lot-dcf6aa54	lot	adverb|determiner|noun|pronoun	A1|A2	reading	multi-sense-panel	
 maintain-eb15f8d0	maintain	verb|verb phrase	B2	reading	context-scene	medium	needs_teacher_approved_sense		pending	no
 mandatory-cd357c16	mandatory	adjective	C1	listening	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 mathematics-860afcbe	mathematics	noun	A2	listening	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
+meditation-6e77a66b	meditation	noun	C1	listening	concept-metaphor	medium	needs_teacher_approved_sense		pending	no
 meet-up-with-sb-95ce0fc7	meet up with sb	verb	C1	reading	context-scene	medium	needs_teacher_approved_sense		pending	no
+midst-0915537f	midst	noun	C1	listening	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 mob-b56a7ce4	mob	noun	C1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 move-on-1b4660e4	move on	verb	C1	reading	context-scene	medium	needs_teacher_approved_sense		pending	no
 move-out-43939d5e	move out	verb	C1	reading	context-scene	medium	needs_teacher_approved_sense		pending	no
@@ -2877,6 +2890,7 @@ put-sth-off-04f783a7	put sth off	verb	C1	reading	context-scene	medium	needs_teac
 recipient-dc00fa84	recipient	noun	C1	listening	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 regime-814189e5	regime	noun	C1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 remedy-201bd9db	remedy	noun	C1	listening	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
+reminder-348be0ed	reminder	noun	C1	listening	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 resign-8d4ae7a0	resign	verb|verb phrase	B2	reading	context-scene	medium	needs_teacher_approved_sense		pending	no
 set-off-sth-6789dd9e	set off sth	verb	C1	reading	context-scene	medium	needs_teacher_approved_sense		pending	no
 set-sth-out-45cb1a9b	set sth out	verb|verb phrase	C1	reading	context-scene	medium	needs_teacher_approved_sense		pending	no
@@ -2887,6 +2901,7 @@ settle-up-771e1959	settle up	verb	C1	reading	context-scene	medium	needs_teacher_
 sheer-92bf0ede	sheer	adjective	C1	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 shrink-b083875b	shrink	verb	C1	reading	action-scene	medium	needs_teacher_approved_sense		pending	no
 simultaneously-2b29c3ce	simultaneously	adverb	C1	writing	manner-sequence	medium	needs_teacher_approved_sense		pending	no
+spiral-6869707d	spiral	adjective|noun|verb		listening	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
 spouse-ed2786f7	spouse	noun	C1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 stay-behind-2884fddf	stay behind	phrasal verb|verb	B1|C1	reading	context-scene	medium	needs_teacher_approved_sense		pending	no
 stem-e1d3fe39	stem	noun|verb	C1	listening	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
@@ -2908,6 +2923,7 @@ treadmill-97a4cba3	treadmill	noun	C1	listening	object-or-context-scene	medium	ne
 tuition-faca8625	tuition	noun	C1	writing	concept-metaphor	medium	needs_teacher_approved_sense		pending	no
 turn-out-98637279	turn out	verb	C1	reading	context-scene	medium	needs_teacher_approved_sense		pending	no
 turn-over-f2b227b6	turn over	verb	C1	reading	context-scene	medium	needs_teacher_approved_sense		pending	no
+twist-d84b8620	twist	noun|verb	C1	listening	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
 utterly-4ced1e69	utterly	adverb	C1	writing	manner-sequence	medium	needs_teacher_approved_sense		pending	no
 veteran-c3313183	veteran	adjective|noun	C1	writing	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
 vote-sb-off-9e9de58b	vote sb off	verb	C1	reading	context-scene	medium	needs_teacher_approved_sense		pending	no
@@ -2953,7 +2969,6 @@ acknowledge-4f6c0a36	acknowledge	verb	B2	reading	action-scene	medium	needs_teach
 acquaintance-5695170f	acquaintance	noun	B2	writing	concept-metaphor	medium	needs_teacher_approved_sense		pending	no
 acquire-657d3c77	acquire	verb	B2	reading	action-scene	medium	needs_teacher_approved_sense		pending	no
 activate-2c1e2b1d	activate	verb	B2	reading	action-scene	medium	needs_teacher_approved_sense		pending	no
-actual-50f46198	actual	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 adapt-40fe84e6	adapt	verb	B2	reading	action-scene	medium	needs_teacher_approved_sense		pending	no
 addiction-ad38cf55	addiction	noun	B2	writing	concept-metaphor	medium	needs_teacher_approved_sense		pending	no
 additional-20412476	additional	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
@@ -3241,7 +3256,6 @@ conclude-5c187656	conclude	verb	B1	reading	action-scene	medium	needs_teacher_app
 confess-62d2b1f3	confess	verb	B2	reading	action-scene	medium	needs_teacher_approved_sense		pending	no
 conflict-ae214513	conflict	noun|verb	B2	reading	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
 confuse-27d748cf	confuse	verb	B1	reading	action-scene	medium	needs_teacher_approved_sense		pending	no
-confusion-cfc8b23a	confusion	noun	B2	writing	concept-metaphor	medium	needs_teacher_approved_sense		pending	no
 conscious-eeb6ad95	conscious	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 consequence-f4475dac	consequence	noun	B1	reading	concept-metaphor	medium	needs_teacher_approved_sense		pending	no
 consequently-97332beb	consequently	adverb	B2	writing	manner-sequence	medium	needs_teacher_approved_sense		pending	no
@@ -3284,7 +3298,7 @@ cope-d0bf3889	cope	verb	B2	reading	action-scene	medium	needs_teacher_approved_se
 corn-7cacb75c	corn	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 corporate-e276d18d	corporate	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 corporation-626a8be2	corporation	noun	B2	writing	concept-metaphor	medium	needs_teacher_approved_sense		pending	no
-corridor-381f6eaa	corridor	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
+cosmology-fae762e7	cosmology	noun		listening	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 cosmopolitan-8c8ebcc4	cosmopolitan	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 cosy-2b80b6df	cosy	adjective	B1	reading	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 cough-1b9bcbed	cough	noun|verb	B1	speaking	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
@@ -3298,7 +3312,6 @@ coverage-6dafbcf6	coverage	noun	B2	reading	object-or-context-scene	medium	needs_
 covered-af3bc6c2	covered	adjective	B1	reading	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 crack-e8521910	crack	noun|verb	B2	reading	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
 craft-8e3e95f3	craft	noun|verb	B2|C1	reading	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
-crisis-58076e41	crisis	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 criterion-ad3bcfda	criterion	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 critical-1210cdff	critical	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 critically-65400a1d	critically	adverb	B2	writing	manner-sequence	medium	needs_teacher_approved_sense		pending	no
@@ -3454,7 +3467,6 @@ emotional-a62089c7	emotional	adjective	B2	writing	contrast-pair	medium	needs_tea
 emotionally-5f599dae	emotionally	adverb	B2	writing	manner-sequence	medium	needs_teacher_approved_sense		pending	no
 emphasis-ace10743	emphasis	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 emphasize-a71b3683	emphasize	verb	B2	reading	action-scene	medium	needs_teacher_approved_sense		pending	no
-empire-91c15fd5	empire	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 employed-f9cf6f58	employed	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 enable-9905c339	enable	verb	B2	reading	action-scene	medium	needs_teacher_approved_sense		pending	no
 encounter-434a1a10	encounter	noun|verb	B2	reading	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
@@ -3535,6 +3547,7 @@ fed-up-355a76fa	fed up	adjective	B2	writing	context-scene	medium	needs_teacher_a
 federal-e47db9a1	federal	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 feel-like-b32a2981	feel like	verb	B1	speaking	context-scene	medium	needs_teacher_approved_sense		pending	no
 fertile-e674e470	fertile	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
+fertility-8f562fd6	fertility	noun		listening	concept-metaphor	medium	needs_teacher_approved_sense		pending	no
 fetch-ad8cee67	fetch	verb	B1	speaking	action-scene	medium	needs_teacher_approved_sense		pending	no
 fighting-fb02dcc0	fighting	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 fill-up-8ee498eb	fill up	phrasal verb|verb	B1	speaking	context-scene	medium	needs_teacher_approved_sense		pending	no
@@ -3685,14 +3698,12 @@ headphones-355bf1cb	headphones	noun	B1	reading	object-or-context-scene	medium	ne
 headquarters-66fe0da6	headquarters	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 headset-d67dd5a2	headset	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 headteacher-43cecd8e	headteacher	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
-heal-0d19b4a6	heal	verb	B2	reading	action-scene	medium	needs_teacher_approved_sense		pending	no
 health-centre-b001a968	health centre	noun	B2	reading	context-scene	medium	needs_teacher_approved_sense		pending	no
 healthcare-1e8f514d	healthcare	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 hearing-33b9bc37	hearing	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 heater-39eef303	heater	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 heaven-66da9f3b	heaven	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 heavily-b5e2d75a	heavily	adverb	B1	reading	manner-sequence	medium	needs_teacher_approved_sense		pending	no
-hedge-1bbe6dd1	hedge	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 hell-a5cec7af	hell	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 hence-af9e3b8b	hence	adverb	B2	writing	manner-sequence	medium	needs_teacher_approved_sense		pending	no
 heroine-e99ba87d	heroine	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
@@ -3803,6 +3814,7 @@ internal-9f33a7c7	internal	adjective	B2	writing	contrast-pair	medium	needs_teach
 interpret-14889e12	interpret	verb	B2	reading	action-scene	medium	needs_teacher_approved_sense		pending	no
 interpretation-b0fa3893	interpretation	noun	B2	writing	concept-metaphor	medium	needs_teacher_approved_sense		pending	no
 interviewer-100370da	interviewer	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
+intricate-b0192ae0	intricate	adjective		listening	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 inventor-8468d586	inventor	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 invest-72527848	invest	verb	B1	reading	action-scene	medium	needs_teacher_approved_sense		pending	no
 investigate-ff2ccd73	investigate	verb	B1	reading	action-scene	medium	needs_teacher_approved_sense		pending	no
@@ -3848,6 +3860,7 @@ knit-668166ef	knit	verb	B1	speaking	action-scene	medium	needs_teacher_approved_s
 knock-down-5ef89a42	knock down	phrasal verb|verb	B1	speaking	context-scene	medium	needs_teacher_approved_sense		pending	no
 knowledgeable-9baaac29	knowledgeable	adjective		listening	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 labour-411cd345	labour	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
+labyrinth-357de8f6	labyrinth	noun		listening	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 lamb-ac0bb7d6	lamb	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 largely-10165f61	largely	adverb	B2	writing	manner-sequence	medium	needs_teacher_approved_sense		pending	no
 launch-f7c91fef	launch	noun|verb	B2	reading	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
@@ -3932,11 +3945,11 @@ medication-a6fafcf1	medication	noun	B2	writing	concept-metaphor	medium	needs_tea
 melon-d5c29d70	melon	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 mend-12ea3a5e	mend	verb	B1	speaking	action-scene	medium	needs_teacher_approved_sense		pending	no
 mental-1fcbe512	mental	adjective	B1	reading	contrast-pair	medium	needs_teacher_approved_sense		pending	no
-metaphor-b231b8df	metaphor	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 microphone-17d39602	microphone	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 middle-aged-9a94618b	middle-aged	adjective	B1	reading	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 military-ed357bbb	military	adjective|noun	B2	writing	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
 millimetre-80cf5471	millimetre	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
+mindfulness-294903cd	mindfulness	noun		listening	concept-metaphor	medium	needs_teacher_approved_sense		pending	no
 miner-1c40b245	miner	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 mineral-558d9ebf	mineral	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 minister-be786cc8	minister	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
@@ -3951,6 +3964,7 @@ modify-e2ebc205	modify	verb	B2	reading	action-scene	medium	needs_teacher_approve
 monitor-9796809f	monitor	noun|verb	B2	reading	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
 moral-12d79c83	moral	adjective|noun	B2	writing	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
 moreover-5331e327	moreover	adverb	B2	writing	manner-sequence	medium	needs_teacher_approved_sense		pending	no
+mosaic-4396119e	mosaic	adjective|noun		listening	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
 mosquito-a0d889b9	mosquito	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 motion-2b5c42f2	motion	noun	B2	writing	concept-metaphor	medium	needs_teacher_approved_sense		pending	no
 motivate-00108964	motivate	verb	B2	reading	action-scene	medium	needs_teacher_approved_sense		pending	no
@@ -4053,6 +4067,7 @@ ownership-9fea7940	ownership	noun	B2	writing	concept-metaphor	medium	needs_teach
 pace-4c1e65d6	pace	noun|verb	B2	reading	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
 package-582681c2	package	noun|verb	B1|B2	reading	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
 palm-747a7c98	palm	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
+pamphlet-6d5eb4ad	pamphlet	noun		listening	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 parade-28e532d5	parade	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 parallel-1a925201	parallel	adjective|noun	B2	writing	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
 parcel-58906f65	parcel	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
@@ -4277,6 +4292,7 @@ ring-back-20d80248	ring back	phrasal verb|verb	B1	speaking	context-scene	medium	
 ring-up-2e671796	ring up	phrasal verb|verb	B1	speaking	context-scene	medium	needs_teacher_approved_sense		pending	no
 risk-11a110bb	risk	noun|verb	B1	reading	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
 risky-f8a3616d	risky	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
+rite-85a38928	rite	noun		listening	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 robber-2867519a	robber	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 roommate-7db0aea3	roommate	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 roughly-a029138b	roughly	adverb	B2	writing	manner-sequence	medium	needs_teacher_approved_sense		pending	no
@@ -4379,6 +4395,7 @@ similarly-1bc0846e	similarly	adverb	B1	reading	manner-sequence	medium	needs_teac
 simply-46ae5ea6	simply	adverb	B1	reading	manner-sequence	medium	needs_teacher_approved_sense		pending	no
 sincere-9556ec75	sincere	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 skating-c4655760	skating	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
+sketchy-d2470212	sketchy	adjective		listening	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 skilled-d15dd194	skilled	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 skull-15e9abb2	skull	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 slave-e25c8f72	slave	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
@@ -4416,7 +4433,6 @@ speculation-e334ea0d	speculation	noun	B2	writing	concept-metaphor	medium	needs_t
 spending-57bac4f7	spending	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 spinach-4e766d85	spinach	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 spirit-b40d5131	spirit	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
-spiritual-5b742e15	spiritual	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 splash-326d177f	splash	noun|verb	B2	reading	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
 split-94d5cab6	split	noun|verb	B2	reading	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
 split-up-b7fe4907	split up	phrasal verb|verb	B1	speaking	context-scene	medium	needs_teacher_approved_sense		pending	no
@@ -4567,6 +4583,7 @@ timetable-77409033	timetable	noun	B1	reading	object-or-context-scene	medium	need
 timing-61f53ba0	timing	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 tiring-2d1f13d9	tiring	adjective	B1	reading	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 toast-2d885aa8	toast	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
+tomb-d660902b	tomb	noun		listening	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 ton-5e4b6ad2	ton	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 tone-4429f685	tone	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 tonne-e1e6e7c7	tonne	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
@@ -4600,6 +4617,7 @@ truly-90099b2e	truly	adverb	B2	writing	manner-sequence	medium	needs_teacher_appr
 trumpet-562540cd	trumpet	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 tsunami-8ffd9b35	tsunami	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 tuna-b9149fd5	tuna	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
+turf-7397ea2e	turf	noun|verb		listening	multi-sense-panel	medium	needs_teacher_approved_sense		pending	no
 turkey-5009c8e1	turkey	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	yes
 turn-down-b679548c	turn down	phrasal verb|verb	B1	speaking	context-scene	medium	needs_teacher_approved_sense		pending	no
 turn-into-93bab305	turn into	phrasal verb|verb	B1	speaking	context-scene	medium	needs_teacher_approved_sense		pending	no
@@ -4630,7 +4648,6 @@ uninteresting-0fb2de9d	uninteresting	adjective	B1	reading	contrast-pair	medium	n
 unique-58037c00	unique	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 unite-5e94aafa	unite	verb	B2	reading	action-scene	medium	needs_teacher_approved_sense		pending	no
 unity-8de88458	unity	noun	B2	reading	concept-metaphor	medium	needs_teacher_approved_sense		pending	no
-universal-da5f51a1	universal	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 unkind-ca4339ee	unkind	adjective	B1	reading	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 unlucky-a6c6f227	unlucky	adjective	B1	reading	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 unpack-9a106745	unpack	verb	B1	speaking	action-scene	medium	needs_teacher_approved_sense		pending	no
@@ -4662,6 +4679,7 @@ video-clip-45cd2aa1	video clip	noun	B1	speaking	context-scene	medium	needs_teach
 video-game-287db56c	video game	noun	B1	speaking	context-scene	medium	needs_teacher_approved_sense		pending	no
 viewer-40b4f25b	viewer	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 viewpoint-f59cfa0a	viewpoint	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
+villa-208d788a	villa	noun		listening	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 violence-c8ceaa59	violence	noun	B2	writing	concept-metaphor	medium	needs_teacher_approved_sense		pending	no
 violent-3304fb6b	violent	adjective	B1	reading	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 visible-22388396	visible	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
@@ -4688,6 +4706,7 @@ well-made-well-made-af80ce3c	well made / well-made	adjective|adverb	B1	speaking	
 well-dressed-998b3e8e	well-dressed	adjective	B1	reading	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 well-known-d5f0fc2c	well-known	adjective	B1	reading	contrast-pair	medium	needs_teacher_approved_sense		pending	no
 well-organised-600d9b00	well-organised	adjective	B2	writing	contrast-pair	medium	needs_teacher_approved_sense		pending	no
+wellness-1644d71a	wellness	noun		listening	concept-metaphor	medium	needs_teacher_approved_sense		pending	no
 wetsuit-wet-suit-748278e3	wetsuit/wet suit	noun	B1	speaking	context-scene	medium	needs_teacher_approved_sense		pending	no
 wheat-7f572f2b	wheat	noun	B2	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
 wheelchair-237f8616	wheelchair	noun	B1	reading	object-or-context-scene	medium	needs_teacher_approved_sense		pending	no
@@ -4954,7 +4973,6 @@ capitalism-3334a0f5	capitalism	noun	C1	writing	concept-metaphor	low	needs_teache
 capitalist-3d835ecb	capitalist	adjective	C1	writing	contrast-pair	low	needs_teacher_approved_sense		pending	no
 carbon-emission-9c133053	carbon emission	noun	C1	writing	context-scene	low	needs_teacher_approved_sense		pending	no
 cargo-e0d6ae5c	cargo	noun	C1	reading	object-or-context-scene	low	needs_teacher_approved_sense		pending	no
-carve-3131fcd7	carve	verb	C1	reading	action-scene	low	needs_teacher_approved_sense		pending	no
 casino-67ba051d	casino	noun	C1	reading	object-or-context-scene	low	needs_teacher_approved_sense		pending	no
 catch-sb-doing-sth-184f1cdf	catch sb doing sth	verb	C1	reading	context-scene	low	needs_teacher_approved_sense		pending	no
 catch-sb-unprepared-dd62d714	catch sb unprepared	verb|verb phrase	C1	reading	context-scene	low	needs_teacher_approved_sense		pending	no
@@ -5807,7 +5825,6 @@ meaningful-fa8201ac	meaningful	adjective	C1	writing	contrast-pair	low	needs_teac
 meantime-5ef6d8f5	meantime	noun	C1	reading	object-or-context-scene	low	needs_teacher_approved_sense		pending	no
 media-bb362a46	media	noun	A2	reading	object-or-context-scene	low	needs_teacher_approved_sense		pending	no
 medical-ab24aed5	medical	adjective	A2	reading	contrast-pair	low	needs_teacher_approved_sense		pending	no
-meditation-6e77a66b	meditation	noun	C1	writing	concept-metaphor	low	needs_teacher_approved_sense		pending	no
 meet-regulations-df0c9595	meet regulations	verb|verb phrase	C1	reading	context-scene	low	needs_teacher_approved_sense		pending	no
 melodramatic-a4a830e1	melodramatic	adjective	C1	writing	contrast-pair	low	needs_teacher_approved_sense		pending	no
 melody-536c1bd4	melody	noun	C1	reading	object-or-context-scene	low	needs_teacher_approved_sense		pending	no
@@ -5824,7 +5841,6 @@ merge-14091a9f	merge	verb	C1	reading	action-scene	low	needs_teacher_approved_sen
 merger-7fc08098	merger	noun	C1	reading	object-or-context-scene	low	needs_teacher_approved_sense		pending	no
 merit-ffc3f191	merit	noun	C1	reading	object-or-context-scene	low	needs_teacher_approved_sense		pending	no
 methodology-5e705951	methodology	noun	C1	reading	object-or-context-scene	low	needs_teacher_approved_sense		pending	no
-midst-0915537f	midst	noun	C1	reading	object-or-context-scene	low	needs_teacher_approved_sense		pending	no
 migration-c5590b16	migration	noun	C1	writing	concept-metaphor	low	needs_teacher_approved_sense		pending	no
 militant-e870f40d	militant	adjective|noun	C1	writing	multi-sense-panel	low	needs_teacher_approved_sense		pending	no
 militia-e5d154cf	militia	noun	C1	reading	object-or-context-scene	low	needs_teacher_approved_sense		pending	no
@@ -6138,7 +6154,6 @@ relive-sth-199ef5e4	relive sth	verb	C1	reading	context-scene	low	needs_teacher_a
 reluctant-6436dc70	reluctant	adjective	C1	writing	contrast-pair	low	needs_teacher_approved_sense		pending	no
 remainder-d89d955d	remainder	noun	C1	reading	object-or-context-scene	low	needs_teacher_approved_sense		pending	no
 remains-75a94da2	remains	noun	C1	reading	object-or-context-scene	low	needs_teacher_approved_sense		pending	no
-reminder-348be0ed	reminder	noun	C1	reading	object-or-context-scene	low	needs_teacher_approved_sense		pending	no
 removal-2a89f5d8	removal	noun	C1	reading	object-or-context-scene	low	needs_teacher_approved_sense		pending	no
 render-37eca575	render	verb	C1	reading	action-scene	low	needs_teacher_approved_sense		pending	no
 renew-f102476a	renew	verb	C1	reading	action-scene	low	needs_teacher_approved_sense		pending	no
@@ -6499,7 +6514,6 @@ turnout-18257297	turnout	noun	C1	reading	object-or-context-scene	low	needs_teach
 turnover-83e4fbbb	turnover	noun	C1	reading	object-or-context-scene	low	needs_teacher_approved_sense		pending	no
 tv-ff0dc9ba	TV	noun	A1	reading	object-or-context-scene	low	needs_teacher_approved_sense		pending	no
 tv-network-013c54cc	TV network	noun	C1	reading	context-scene	low	needs_teacher_approved_sense		pending	no
-twist-d84b8620	twist	noun|verb	C1	reading	multi-sense-panel	low	needs_teacher_approved_sense		pending	no
 unaffected-b95e7d9b	unaffected	adjective	C1	writing	contrast-pair	low	needs_teacher_approved_sense		pending	no
 unbearable-4ba313c6	unbearable	adjective	C1	writing	contrast-pair	low	needs_teacher_approved_sense		pending	no
 undergo-a-profound-transformation-61393454	undergo a profound transformation	verb|verb phrase	C1	reading	context-scene	low	needs_teacher_approved_sense		pending	no

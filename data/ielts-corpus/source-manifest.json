@@ -1,5 +1,128 @@
 [
   {
+    "id": "240-vocabulary-words-kids-need-to-know-grade-1-8a2fddb0",
+    "name": "240 Vocabulary Words Kids Need to Know, Grade 1",
+    "source_files": [
+      "scholastic-240-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "scholastic-240-vocabulary-grade-1"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      80
+    ],
+    "extracted_rows": 240,
+    "unique_normalized_terms": 239,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "240-vocabulary-words-kids-need-to-know-grade-3-160173e0",
+    "name": "240 Vocabulary Words Kids Need to Know, Grade 3",
+    "source_files": [
+      "scholastic-240-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "scholastic-240-vocabulary-grade-3"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      80
+    ],
+    "extracted_rows": 240,
+    "unique_normalized_terms": 235,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "240-vocabulary-words-kids-need-to-know-grade-4-804d3bd0",
+    "name": "240 Vocabulary Words Kids Need to Know, Grade 4",
+    "source_files": [
+      "scholastic-240-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "scholastic-240-vocabulary-grade-4"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      79
+    ],
+    "extracted_rows": 240,
+    "unique_normalized_terms": 236,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "c1-vocabulary-pack-for-cae-25172255",
+    "name": "C1 Vocabulary Pack for CAE",
+    "source_files": [
+      "curated-native-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "c1-vocabulary-pack-cae"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20
+    ],
+    "extracted_rows": 1266,
+    "unique_normalized_terms": 1253,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
     "id": "cambridge-b1-preliminary-and-preliminary-for-schools-v-179d61e8",
     "name": "Cambridge B1 Preliminary and Preliminary for Schools Vocabulary List (2025)",
     "source_files": [
@@ -608,6 +731,373 @@
     "public_definition_policy": "omitted_from_public_outputs"
   },
   {
+    "id": "edge-3b-vocabulary-8a93a0b3",
+    "name": "Edge 3B Vocabulary",
+    "source_files": [
+      "edge-pdf-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "edge-vocabulary-3b"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      51,
+      53,
+      55,
+      57,
+      59
+    ],
+    "extracted_rows": 162,
+    "unique_normalized_terms": 162,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "edge-vocabulary-book-1a-0e8db989",
+    "name": "Edge Vocabulary Book 1A",
+    "source_files": [
+      "edge-pdf-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "edge-vocabulary-book-1a"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      49,
+      51,
+      53,
+      55
+    ],
+    "extracted_rows": 140,
+    "unique_normalized_terms": 139,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "edge-vocabulary-book-1b-dabe3e36",
+    "name": "Edge Vocabulary Book 1B",
+    "source_files": [
+      "edge-pdf-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "edge-vocabulary-book-1b"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      51,
+      53,
+      55,
+      57
+    ],
+    "extracted_rows": 177,
+    "unique_normalized_terms": 175,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "edge-vocabulary-booster-2a-97bcdef4",
+    "name": "Edge Vocabulary Booster 2A",
+    "source_files": [
+      "edge-pdf-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "edge-vocabulary-booster-2a"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      51,
+      53,
+      55,
+      57
+    ],
+    "extracted_rows": 134,
+    "unique_normalized_terms": 134,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "edge-vocabulary-booster-2b-85aea810",
+    "name": "Edge Vocabulary Booster 2B",
+    "source_files": [
+      "edge-pdf-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "edge-vocabulary-booster-2b"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      51,
+      53,
+      55,
+      57
+    ],
+    "extracted_rows": 168,
+    "unique_normalized_terms": 168,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "edge-vocabulary-booster-3a-85f8a5ba",
+    "name": "Edge Vocabulary Booster 3A",
+    "source_files": [
+      "edge-pdf-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "edge-vocabulary-booster-3a"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      55,
+      57,
+      59,
+      61,
+      63
+    ],
+    "extracted_rows": 179,
+    "unique_normalized_terms": 179,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "english-vocabulary-in-use-advanced-3rd-edition-82728371",
+    "name": "English Vocabulary in Use Advanced, 3rd edition",
+    "source_files": [
+      "vocabulary-in-use-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "english-vocabulary-in-use-advanced-3e"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      279,
+      280,
+      281,
+      282,
+      283,
+      284,
+      285,
+      286,
+      287,
+      288,
+      289,
+      290,
+      291,
+      292,
+      293,
+      294,
+      295,
+      296,
+      297,
+      298,
+      299,
+      300
+    ],
+    "extracted_rows": 3320,
+    "unique_normalized_terms": 3319,
+    "cefr_levels": [
+      "C1",
+      "C2"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "english-vocabulary-in-use-elementary-3rd-edition-26e04d98",
+    "name": "English Vocabulary in Use Elementary, 3rd edition",
+    "source_files": [
+      "vocabulary-in-use-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "english-vocabulary-in-use-elementary-3e"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      161,
+      162,
+      163,
+      164,
+      165,
+      166,
+      167,
+      168,
+      169,
+      170,
+      171
+    ],
+    "extracted_rows": 1505,
+    "unique_normalized_terms": 1504,
+    "cefr_levels": [
+      "A1",
+      "A2"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "english-vocabulary-in-use-pre-intermediate-and-interme-016c329a",
+    "name": "English Vocabulary in Use Pre-Intermediate and Intermediate",
+    "source_files": [
+      "vocabulary-in-use-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "english-vocabulary-in-use-pre-intermediate-intermediate"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      247,
+      248,
+      249,
+      250,
+      251,
+      252,
+      253,
+      254,
+      255,
+      256,
+      257,
+      258,
+      259,
+      260,
+      261,
+      262
+    ],
+    "extracted_rows": 2552,
+    "unique_normalized_terms": 2522,
+    "cefr_levels": [
+      "A2",
+      "B1"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "english-vocabulary-in-use-upper-intermediate-4th-editi-00b7a211",
+    "name": "English Vocabulary in Use Upper-Intermediate, 4th edition",
+    "source_files": [
+      "vocabulary-in-use-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "english-vocabulary-in-use-upper-intermediate-4e"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      259,
+      260,
+      261,
+      262,
+      263,
+      264,
+      265,
+      266,
+      267,
+      268,
+      269,
+      270,
+      271,
+      272,
+      273,
+      274,
+      275,
+      276,
+      277,
+      278,
+      279
+    ],
+    "extracted_rows": 3261,
+    "unique_normalized_terms": 3254,
+    "cefr_levels": [
+      "B2"
+    ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
     "id": "grammar-and-vocabulary-for-first-and-first-for-schools-8b73ed4c",
     "name": "Grammar and Vocabulary for First and First for Schools wordlist (2015)",
     "source_files": [
@@ -680,6 +1170,36 @@
     ],
     "extracted_rows": 927,
     "unique_normalized_terms": 919,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "oef-1b-unit-5-vocabulary-and-writing-book-ab6d44f7",
+    "name": "OEF 1B Unit 5 Vocabulary and Writing Book",
+    "source_files": [
+      "curated-native-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "oef-1bu5-vocabulary-writing-book"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      1,
+      2,
+      5,
+      7
+    ],
+    "extracted_rows": 45,
+    "unique_normalized_terms": 45,
     "cefr_levels": [],
     "public_definition_policy": "omitted_from_public_outputs"
   },
@@ -761,6 +1281,248 @@
       "B2",
       "C1"
     ],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "scholastic-success-with-vocabulary-grade-1-4ba2d7ca",
+    "name": "Scholastic Success with Vocabulary, Grade 1",
+    "source_files": [
+      "scholastic-success-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "scholastic-success-vocabulary-grade-1"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      2,
+      4,
+      16,
+      22,
+      24,
+      30,
+      32,
+      40,
+      42,
+      46,
+      48,
+      52,
+      54,
+      68,
+      82
+    ],
+    "extracted_rows": 112,
+    "unique_normalized_terms": 112,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "scholastic-success-with-vocabulary-grade-2-4daabbb0",
+    "name": "Scholastic Success with Vocabulary, Grade 2",
+    "source_files": [
+      "scholastic-success-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "scholastic-success-vocabulary-grade-2"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      2,
+      4,
+      8,
+      14,
+      22,
+      24,
+      30,
+      32,
+      34,
+      50,
+      52,
+      54,
+      56,
+      64,
+      66,
+      70,
+      82,
+      84,
+      86
+    ],
+    "extracted_rows": 201,
+    "unique_normalized_terms": 201,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "scholastic-success-with-vocabulary-grade-3-2f5270e8",
+    "name": "Scholastic Success with Vocabulary, Grade 3",
+    "source_files": [
+      "scholastic-success-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "scholastic-success-vocabulary-grade-3"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      6,
+      8,
+      10,
+      22,
+      26,
+      30,
+      32,
+      34,
+      44,
+      46,
+      50,
+      54,
+      56,
+      66,
+      68,
+      80,
+      82,
+      84,
+      86
+    ],
+    "extracted_rows": 301,
+    "unique_normalized_terms": 301,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "scholastic-success-with-vocabulary-grade-4-7257cf84",
+    "name": "Scholastic Success with Vocabulary, Grade 4",
+    "source_files": [
+      "scholastic-success-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "scholastic-success-vocabulary-grade-4"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      12,
+      30,
+      36,
+      42,
+      44,
+      48,
+      56,
+      58,
+      64,
+      66,
+      68,
+      70,
+      74
+    ],
+    "extracted_rows": 257,
+    "unique_normalized_terms": 257,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "scholastic-success-with-vocabulary-grade-5-092adce1",
+    "name": "Scholastic Success with Vocabulary, Grade 5",
+    "source_files": [
+      "scholastic-success-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "scholastic-success-vocabulary-grade-5"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      2,
+      6,
+      8,
+      12,
+      24,
+      26,
+      28,
+      31,
+      41,
+      45,
+      47,
+      52,
+      54,
+      58,
+      62,
+      64,
+      66,
+      71,
+      73,
+      75,
+      79
+    ],
+    "extracted_rows": 494,
+    "unique_normalized_terms": 494,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
+    "id": "student-ielts-listening-unknowns-2026-08-01-11e10af8",
+    "name": "Student IELTS Listening Unknowns 2026-08-01",
+    "source_files": [
+      "student-listening-unknowns-2026-08-01.tsv"
+    ],
+    "source_formats": [
+      "other"
+    ],
+    "registry_source_ids": [
+      "student-listening-unknowns-2026-08-01"
+    ],
+    "source_roles": [
+      "target_reference"
+    ],
+    "corpus_policies": [
+      "target"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [],
+    "extracted_rows": 36,
+    "unique_normalized_terms": 36,
+    "cefr_levels": [],
     "public_definition_policy": "omitted_from_public_outputs"
   }
 ]
