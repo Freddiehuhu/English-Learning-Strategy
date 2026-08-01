@@ -9,8 +9,8 @@ book definitions, example sentences, IPA notes, exercises or illustrations.
 - 12,352 approved target-source rows: 12,316 from the 21 target PDFs plus 36
   learner-reported listening unknowns
 - 7,242 deduplicated public learning entries
-- 15,008 candidate-source rows from 20 supplementary PDFs and 2 DOCX files,
-  deduplicated into 10,967 editorial-review rows
+- 15,523 candidate-source rows from 21 supplementary PDFs and 2 DOCX files,
+  deduplicated into 11,092 editorial-review rows
 - 6,604 noun, verb, adjective or adverb entries queued for sense review and
   possible image generation
 - 62 proper-noun-only entries and 87 proper-noun source senses removed from
@@ -23,9 +23,14 @@ book definitions, example sentences, IPA notes, exercises or illustrations.
 - 30 supplementary resources may nominate review candidates, 8 may only enrich
   relations and 8 may only inform teaching design
 - All currently extracted supplementary batches are connected to the unified
-  candidate queue: 6,909 candidate-only lexical entries remain blocked from
+  candidate queue: 6,964 candidate-only lexical entries remain blocked from
   target promotion, 46 candidate-backed proper nouns stay explicitly excluded,
-  and 4,012 rows provide support for existing targets
+  and 4,082 rows provide support for existing targets
+
+The English for Everyone Junior batch contributes 515 source rows and 504
+normalized keys from its explicit Word list on PDF pages 250-255. All six pages
+have source-bound render evidence, but this remains a candidate-only partial
+page review rather than a claim that the full 256-page book was evaluated.
 
 The active corpus increased by exactly 13 new lemmas from the explicitly
 approved 36-word student batch; its 23 existing lemmas were merged as new
@@ -60,10 +65,10 @@ skill.
 - `target-input/student-listening-unknowns-2026-08-01.tsv`: the 36-item,
   teacher-approved student listening batch. It deliberately withholds CEFR
   claims that do not yet have source-specific evidence.
-- `supplementary-input/*.tsv`: fail-closed candidate extracts from the 22
+- `supplementary-input/*.tsv`: fail-closed candidate extracts from the 23
   supplementary sources processed so far.
-- `supplementary-candidate-queue.tsv`: 10,967 normalized review rows: 6,909
-  target candidates, 46 excluded proper nouns and 4,012 active-target overlaps.
+- `supplementary-candidate-queue.tsv`: 11,092 normalized review rows: 6,964
+  target candidates, 46 excluded proper nouns and 4,082 active-target overlaps.
 - `supplementary-source-evidence.tsv`: sanitized candidate/enrichment
   provenance.
 - `image-generation-queue.tsv`: image candidates; every row remains blocked

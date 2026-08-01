@@ -1,22 +1,25 @@
 {
   "schema_version": 2,
+  "candidate_provenance_rule": "A declared candidate-provenance gate passes only when the inventory source profile, exact evidence-TSV bytes and row counts, audit fields, and source-bound render manifest all match. Partial page evidence proves only the declared pages and never implies full-source review.",
   "completion_rule": "A source is fully evaluated only after its review status is complete and a fail-closed evidence chain passes: exact full-page coverage, a verified source SHA-256, and a source-bound manifest of rendered page SHA-256 hashes. Lexical sources additionally require completed editorial review. Registration, extraction, or an audit JSON claim alone is never completion.",
   "statistics": {
     "registered_source_count": 46,
     "fully_evaluated_source_count": 1,
     "editorial_review_complete_source_count": 0,
+    "provenance_evidence_gate_declared_source_count": 1,
+    "provenance_evidence_gate_passed_source_count": 1,
     "completion_evidence_gate_required_source_count": 1,
     "completion_evidence_gate_passed_source_count": 1,
     "completion_claim_blocked_by_evidence_source_count": 0,
-    "sources_with_extracted_rows": 22,
-    "extracted_row_count": 15008,
+    "sources_with_extracted_rows": 23,
+    "extracted_row_count": 15523,
     "sources_with_missing_pages": 6,
     "sources_with_quality_blocker": 0,
     "review_status_counts": {
-      "candidate_extracted_needs_editorial_review": 16,
+      "candidate_extracted_needs_editorial_review": 17,
       "candidate_extracted_source_pages_missing": 6,
       "content_reviewed_no_lexical_targets": 1,
-      "registered_extraction_pending": 15,
+      "registered_extraction_pending": 14,
       "registered_method_review_pending": 8
     }
   },
@@ -39,6 +42,17 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
       },
       "extracted_row_count": 1505,
       "pages_parsed": 11,
@@ -81,6 +95,17 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
       },
       "extracted_row_count": 2552,
       "pages_parsed": 16,
@@ -129,6 +154,17 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
+      },
       "extracted_row_count": 162,
       "pages_parsed": 5,
       "parsed_page_numbers": [
@@ -165,6 +201,17 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
       },
       "extracted_row_count": 179,
       "pages_parsed": 5,
@@ -203,6 +250,17 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
+      },
       "extracted_row_count": 140,
       "pages_parsed": 4,
       "parsed_page_numbers": [
@@ -238,6 +296,17 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
       },
       "extracted_row_count": 177,
       "pages_parsed": 4,
@@ -275,6 +344,17 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
+      },
       "extracted_row_count": 134,
       "pages_parsed": 4,
       "parsed_page_numbers": [
@@ -310,6 +390,17 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
       },
       "extracted_row_count": 168,
       "pages_parsed": 4,
@@ -347,6 +438,17 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
+      },
       "extracted_row_count": 240,
       "pages_parsed": 1,
       "parsed_page_numbers": [
@@ -378,6 +480,17 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
+      },
       "extracted_row_count": 240,
       "pages_parsed": 1,
       "parsed_page_numbers": [
@@ -408,6 +521,17 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
       },
       "extracted_row_count": 240,
       "pages_parsed": 1,
@@ -444,6 +568,11 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
+      },
       "extracted_row_count": 0,
       "pages_parsed": 0,
       "parsed_page_numbers": [],
@@ -468,6 +597,17 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
       },
       "extracted_row_count": 112,
       "pages_parsed": 15,
@@ -516,6 +656,17 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
       },
       "extracted_row_count": 201,
       "pages_parsed": 19,
@@ -569,6 +720,17 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
+      },
       "extracted_row_count": 301,
       "pages_parsed": 19,
       "parsed_page_numbers": [
@@ -621,6 +783,17 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
+      },
       "extracted_row_count": 257,
       "pages_parsed": 13,
       "parsed_page_numbers": [
@@ -666,6 +839,17 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
       },
       "extracted_row_count": 494,
       "pages_parsed": 21,
@@ -721,6 +905,17 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
+      },
       "extracted_row_count": 45,
       "pages_parsed": 4,
       "parsed_page_numbers": [
@@ -758,6 +953,17 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
+      },
       "extracted_row_count": 7,
       "pages_parsed": 0,
       "parsed_page_numbers": [],
@@ -784,6 +990,17 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
       },
       "extracted_row_count": 7,
       "pages_parsed": 0,
@@ -812,6 +1029,11 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
+      },
       "extracted_row_count": 0,
       "pages_parsed": 0,
       "parsed_page_numbers": [],
@@ -836,6 +1058,11 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
       },
       "extracted_row_count": 0,
       "pages_parsed": 0,
@@ -862,6 +1089,11 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
+      },
       "extracted_row_count": 0,
       "pages_parsed": 0,
       "parsed_page_numbers": [],
@@ -886,6 +1118,17 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
       },
       "extracted_row_count": 1266,
       "pages_parsed": 16,
@@ -936,6 +1179,11 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
+      },
       "extracted_row_count": 0,
       "pages_parsed": 0,
       "parsed_page_numbers": [],
@@ -961,6 +1209,11 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
+      },
       "extracted_row_count": 0,
       "pages_parsed": 0,
       "parsed_page_numbers": [],
@@ -985,6 +1238,11 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
       },
       "extracted_row_count": 0,
       "pages_parsed": 0,
@@ -1018,6 +1276,17 @@
           }
         ]
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
+      },
       "extracted_row_count": 0,
       "pages_parsed": 1,
       "parsed_page_numbers": [
@@ -1049,6 +1318,11 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
+      },
       "extracted_row_count": 0,
       "pages_parsed": 0,
       "parsed_page_numbers": [],
@@ -1063,22 +1337,86 @@
       "corpus_policy": "candidate_only",
       "text_route": "pdf_native_text",
       "page_count": 256,
-      "review_status": "registered_extraction_pending",
+      "review_status": "candidate_extracted_needs_editorial_review",
       "fully_evaluated": false,
       "completion_evidence": {
         "required": false,
         "passed": false,
         "failure_codes": [],
         "source_sha256": "3f1c62b724582a0987e35e8d8940106f0929d198c0630a3cbbe1beb4928f2e49",
-        "manifest_sha256": "",
-        "rendered_page_numbers": [],
-        "rendered_page_hashes": []
+        "manifest_sha256": "38eb072daa4e3354ddad1453cca564d167c1cb9bbe1f6d72bbaae26199b3bebd",
+        "rendered_page_numbers": [
+          250,
+          251,
+          252,
+          253,
+          254,
+          255
+        ],
+        "rendered_page_hashes": [
+          {
+            "page": 250,
+            "sha256": "e54970c2f062fef95dfc59192611293973a358e68caf044745dfd4f9d7d67302"
+          },
+          {
+            "page": 251,
+            "sha256": "e58e01ce993e19ee668c75d0e61a497992c60f6c116a3c7c65486f97c0b53bad"
+          },
+          {
+            "page": 252,
+            "sha256": "ba9093ae3576a9f04306cd6481352af1059b73b69165825c0efc45a10140f67e"
+          },
+          {
+            "page": 253,
+            "sha256": "0cc41dc40169a512cda69fc6e82135db819598de384a8f983778a102d33fab33"
+          },
+          {
+            "page": 254,
+            "sha256": "cf04a44b5c64f422317bad11db41d14c517d8cd772c7ed488ee2a36cf57ed152"
+          },
+          {
+            "page": 255,
+            "sha256": "bade3031605520babf05e6dbe878045c819d615aa0532bed71e9a8fcf113e10c"
+          }
+        ]
       },
-      "extracted_row_count": 0,
-      "pages_parsed": 0,
-      "parsed_page_numbers": [],
-      "visual_sample_pages": [],
-      "editorial_review_complete": false
+      "provenance_evidence": {
+        "declared": true,
+        "passed": true,
+        "schema_version": 1,
+        "source_sha256": "3f1c62b724582a0987e35e8d8940106f0929d198c0630a3cbbe1beb4928f2e49",
+        "candidate_tsv_sha256": "a271593869096cbdcf616abb1678cc0f186f66466046934a0d957de02aeb51f5",
+        "candidate_tsv_byte_size": 216829,
+        "candidate_tsv_row_count": 515,
+        "candidate_tsv_source_counts": {
+          "english-for-everyone-junior-beginners": 515
+        },
+        "render_manifest_sha256": "38eb072daa4e3354ddad1453cca564d167c1cb9bbe1f6d72bbaae26199b3bebd"
+      },
+      "extracted_row_count": 515,
+      "pages_parsed": 6,
+      "parsed_page_numbers": [
+        250,
+        251,
+        252,
+        253,
+        254,
+        255
+      ],
+      "visual_sample_pages": [
+        250,
+        251,
+        252,
+        253,
+        254,
+        255
+      ],
+      "editorial_review_complete": false,
+      "audit_source_sha256": "3f1c62b724582a0987e35e8d8940106f0929d198c0630a3cbbe1beb4928f2e49",
+      "candidate_tsv_sha256": "a271593869096cbdcf616abb1678cc0f186f66466046934a0d957de02aeb51f5",
+      "render_manifest_sha256": "38eb072daa4e3354ddad1453cca564d167c1cb9bbe1f6d72bbaae26199b3bebd",
+      "extraction_method": "sha256_size_page_count_gated_poppler_xml_explicit_word_list",
+      "rights_boundary": "Retained printed lexical forms, teaching headwords, printed parts of speech and sanitized page/column/unit locators only; excluded definitions, examples, exercises, answers, illustrations, IPA, local paths and local filenames."
     },
     {
       "id": "english-collocations-in-use-intermediate",
@@ -1098,6 +1436,11 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
       },
       "extracted_row_count": 0,
       "pages_parsed": 0,
@@ -1124,6 +1467,11 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
+      },
       "extracted_row_count": 0,
       "pages_parsed": 0,
       "parsed_page_numbers": [],
@@ -1148,6 +1496,11 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
       },
       "extracted_row_count": 0,
       "pages_parsed": 0,
@@ -1174,6 +1527,11 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
+      },
       "extracted_row_count": 0,
       "pages_parsed": 0,
       "parsed_page_numbers": [],
@@ -1198,6 +1556,11 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
       },
       "extracted_row_count": 0,
       "pages_parsed": 0,
@@ -1224,6 +1587,11 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
+      },
       "extracted_row_count": 0,
       "pages_parsed": 0,
       "parsed_page_numbers": [],
@@ -1248,6 +1616,11 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
       },
       "extracted_row_count": 0,
       "pages_parsed": 0,
@@ -1274,6 +1647,11 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
+      },
       "extracted_row_count": 0,
       "pages_parsed": 0,
       "parsed_page_numbers": [],
@@ -1299,6 +1677,11 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
+      },
       "extracted_row_count": 0,
       "pages_parsed": 0,
       "parsed_page_numbers": [],
@@ -1323,6 +1706,17 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
       },
       "extracted_row_count": 3261,
       "pages_parsed": 21,
@@ -1378,6 +1772,17 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0,
+        "source_sha256": "",
+        "candidate_tsv_sha256": "",
+        "candidate_tsv_byte_size": 0,
+        "candidate_tsv_row_count": 0,
+        "candidate_tsv_source_counts": {},
+        "render_manifest_sha256": ""
+      },
       "extracted_row_count": 3320,
       "pages_parsed": 22,
       "parsed_page_numbers": [
@@ -1431,6 +1836,11 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
+      },
       "extracted_row_count": 0,
       "pages_parsed": 0,
       "parsed_page_numbers": [],
@@ -1455,6 +1865,11 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
       },
       "extracted_row_count": 0,
       "pages_parsed": 0,
@@ -1481,6 +1896,11 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
+      },
       "extracted_row_count": 0,
       "pages_parsed": 0,
       "parsed_page_numbers": [],
@@ -1506,6 +1926,11 @@
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
       },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
+      },
       "extracted_row_count": 0,
       "pages_parsed": 0,
       "parsed_page_numbers": [],
@@ -1530,6 +1955,11 @@
         "manifest_sha256": "",
         "rendered_page_numbers": [],
         "rendered_page_hashes": []
+      },
+      "provenance_evidence": {
+        "declared": false,
+        "passed": false,
+        "schema_version": 0
       },
       "extracted_row_count": 0,
       "pages_parsed": 0,

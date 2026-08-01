@@ -1098,6 +1098,38 @@
     "public_definition_policy": "omitted_from_public_outputs"
   },
   {
+    "id": "english-for-everyone-junior-beginners-course-3df172ae",
+    "name": "English for Everyone Junior: Beginners Course",
+    "source_files": [
+      "english-for-everyone-junior-candidates.tsv"
+    ],
+    "source_formats": [
+      "pdf"
+    ],
+    "registry_source_ids": [
+      "english-for-everyone-junior-beginners"
+    ],
+    "source_roles": [
+      "lexical_candidate"
+    ],
+    "corpus_policies": [
+      "candidate_only"
+    ],
+    "pdf_files": [],
+    "pdf_pages": [
+      250,
+      251,
+      252,
+      253,
+      254,
+      255
+    ],
+    "extracted_rows": 515,
+    "unique_normalized_terms": 504,
+    "cefr_levels": [],
+    "public_definition_policy": "omitted_from_public_outputs"
+  },
+  {
     "id": "grammar-and-vocabulary-for-first-and-first-for-schools-8b73ed4c",
     "name": "Grammar and Vocabulary for First and First for Schools wordlist (2015)",
     "source_files": [

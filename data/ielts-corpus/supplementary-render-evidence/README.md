@@ -32,6 +32,13 @@ source whose audit status claims completion is still reported as
 5. the render manifest source hash and page count match the inventory;
 6. every parsed page has a source-bound rendered PNG hash.
 
+A manifest may intentionally cover only the pages used for a candidate
+extraction. Such a partial manifest proves that those concrete pages were
+rendered and visually reviewable, but it does not satisfy the full-source
+completion gate. For example, the English for Everyone Junior candidate batch
+binds only its explicit Word list on pages 250-255 and remains pending
+editorial review.
+
 The hashes prove that concrete page renderings were produced from the
 registered source version. They do not prove human attention by themselves, so
 the audit's content/editorial review status remains a separate requirement.

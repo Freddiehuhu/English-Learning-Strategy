@@ -25,7 +25,17 @@ CEFR_ORDER = {"A1": 1, "A2": 2, "B1": 3, "B2": 4, "C1": 5, "C2": 6}
 SKILLS = ("listening", "speaking", "reading", "writing")
 CONTENT_POS = {"noun", "verb", "adjective", "adverb"}
 PROPER_NOUN_TOPICS = ("days", "months", "continents", "countries", "languages")
-AUDITED_PROPER_NOUN_SOURCE_FORMS = {"MasterCard", "VISA"}
+AUDITED_PROPER_NOUN_SOURCE_FORMS = {
+    "Friday",
+    "MasterCard",
+    "Monday",
+    "Saturday",
+    "Sunday",
+    "Thursday",
+    "Tuesday",
+    "VISA",
+    "Wednesday",
+}
 OPTIONAL_COMPLEMENTS = {
     "as",
     "by",
@@ -260,7 +270,16 @@ def canonical_pos(value: str) -> list[str]:
         ("adverb phrase", (r"\badverb phrase\b", r"\badvp\b")),
         ("prepositional phrase", (r"\bprepositional phrase\b", r"\bprep phr\b", r"\bpp\b")),
         ("idiom", (r"\bidiom\b",)),
-        ("phrase", (r"^phr\.?$", r"\bgeneral phrase\b")),
+        (
+            "phrase",
+            (
+                r"^phr\.?$",
+                r"\bgeneral phrase\b",
+                r"\bexpression\b",
+                r"^exp\.?$",
+            ),
+        ),
+        ("question word", (r"\bquestion word\b",)),
         ("auxiliary verb", (r"\bauxiliary verb\b", r"\bav\b")),
         ("modal verb", (r"\bmodal verb\b", r"\bmv\b", r"\bmodal v\b")),
         ("noun", (r"\bnoun\b", r"(?<![a-z])n(?:\.|\b)")),
@@ -316,6 +335,15 @@ def read_tsv(
             corpus_policy = clean_text(row.get("corpus_policy"))
             source_format = clean_text(row.get("source_format"))
             registry_source_id = clean_text(row.get("registry_source_id"))
+            if allow_legacy_target and (
+                (source_role and source_role != "target_reference")
+                or (corpus_policy and corpus_policy != "target")
+            ):
+                raise ValueError(
+                    f"{path}: --legacy-target-input may contain only target "
+                    f"rows; {headword!r} declares source_role="
+                    f"{source_role!r}, corpus_policy={corpus_policy!r}"
+                )
             if not allow_legacy_target and not all(
                 (
                     registry_source_id,
@@ -753,13 +781,27 @@ def build_entry(group: EntryGroup) -> dict:
             audited_group=audited_proper_group,
         )
     ]
+    candidate_proper_noun_rows = [
+        row
+        for row in candidate_rows
+        if is_proper_noun_source_sense(row)
+    ]
+    candidate_learning_rows = [
+        row
+        for row in candidate_rows
+        if not is_proper_noun_source_sense(row)
+    ]
     excluded_proper_noun = bool(target_rows) and not learning_rows
     if target_rows:
         rows = learning_rows or target_rows
         status = "excluded_proper_noun" if excluded_proper_noun else "active"
     elif candidate_rows:
-        rows = candidate_rows
-        status = "candidate_only"
+        rows = candidate_learning_rows or candidate_rows
+        status = (
+            "candidate_only"
+            if candidate_learning_rows
+            else "excluded_proper_noun"
+        )
     else:
         rows = enrichment_rows or all_rows
         status = "support_only"
@@ -862,7 +904,9 @@ def build_entry(group: EntryGroup) -> dict:
             multi_sense_candidate,
         ),
         "review_flags": {
-            "proper_noun_sense_candidate": False,
+            "proper_noun_sense_candidate": bool(
+                candidate_proper_noun_rows
+            ),
             "proper_noun_sense_removed": bool(proper_noun_rows),
             "proper_noun_source_rows_removed": len(proper_noun_rows),
             "source_correction_present": any(
