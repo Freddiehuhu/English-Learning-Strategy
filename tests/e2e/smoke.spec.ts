@@ -495,6 +495,7 @@ test('sound precheck keeps spelling hidden and a wrong diagnosis cannot count as
   expect(history.skill).toBe('sound');
   expect(history.correct).toBe(false);
   expect(history.detail).toContain('预听音节：错误');
+  expect(history.adaptive.replayUses).toBe(0);
 });
 
 test('skipping the sound precheck can never become a correct sound result', async ({ page }) => {
@@ -543,6 +544,13 @@ test('sound choices stay locked when natural audio fails to start', async ({ pag
   await page.getByRole('button', { name: /播放先听/ }).click();
   await expect(choices.first()).toBeDisabled();
   await expect(page.getByText('自然语音加载失败，请检查网络后重试。')).toBeVisible();
+  await page.getByRole('button', { name: '听不出来，先看拼写' }).click();
+  await page.getByRole('button', { name: '完成声音对照 →' }).click();
+  const history = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return saved.history?.at(-1);
+  });
+  expect(history.adaptive.replayUses).toBe(0);
 });
 
 test('enthusiasm precheck uses five audible syllables', async ({ page }) => {
@@ -675,9 +683,17 @@ test('legacy daily-new settings migrate to two bounded new words', async ({ page
   const saved = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}'),
   );
-  expect(saved.version).toBe(3);
+  expect(saved.version).toBe(4);
   expect(saved.settings.dailyNew).toBe(2);
   expect(saved.daily.newIds).toHaveLength(2);
+  expect(saved.adaptive).toMatchObject({
+    version: 1,
+    localOnly: true,
+    observations: 0,
+  });
+  await expect(plan).toHaveAttribute('data-adaptive-model', 'local-online-v1');
+  await expect(plan).toHaveAttribute('data-adaptive-observations', '0');
+  await expect(page.getByText('已按薄弱能力与遗忘风险排序 · 数据仅保存在本机')).toBeVisible();
 
   await startDaily(page);
   await expect(page.locator('.training-count')).toHaveText('1 / 8');
@@ -747,7 +763,7 @@ test('v2 sentence self-ratings migrate to archived practice instead of mastery e
   const saved = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}'),
   );
-  expect(saved.version).toBe(3);
+  expect(saved.version).toBe(4);
   expect(saved.words[word.id].legacySentencePractice).toMatchObject(legacySentence);
   expect(saved.words[word.id].skills.sentence).toMatchObject({
     attempts: 0,
@@ -854,6 +870,169 @@ test('v3 normalisation rejects impossible levels and lets the latest core error 
   await expect(
     page.locator('.metric').filter({ hasText: '四项受控任务达标且无待复习' }).locator('strong'),
   ).toHaveText('0');
+});
+
+test('the local adaptive learner records effort signals and updates after a controlled result', async ({
+  page,
+}) => {
+  await installControllableAudio(page);
+  await page.goto('/ielts/index.html');
+  await seedSingleDueSkill(page, 'ecologist', 'spell');
+  await startSkill(page, 'spell');
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', 'ecologist');
+
+  await page.getByRole('button', { name: '播放单词', exact: true }).click();
+  await page.getByRole('button', { name: '播放慢速 0.85×' }).click();
+  await page.getByRole('button', { name: '给一点提示' }).click();
+  await page.getByRole('button', { name: '先跳过（稍后复习）' }).click();
+
+  const saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}'),
+  );
+  expect(saved.version).toBe(4);
+  expect(saved.adaptive).toMatchObject({
+    version: 1,
+    localOnly: true,
+    observations: 1,
+  });
+  expect(saved.adaptive.weights.bias).not.toBe(-0.4);
+  expect(saved.words.ecologist.skills.spell).toMatchObject({
+    attempts: 2,
+    correct: 0,
+    hintUses: 1,
+    replayUses: 1,
+    skipCount: 1,
+    needsReview: true,
+  });
+  expect(saved.words.ecologist.skills.spell.lastResponseMs).toBeGreaterThan(0);
+  expect(saved.history.at(-1).adaptive).toMatchObject({
+    modelVersion: 1,
+    hintUses: 1,
+    replayUses: 1,
+    skipped: true,
+  });
+  expect(saved.history.at(-1).adaptive.predictedBefore).toBeGreaterThan(0.1);
+  expect(saved.history.at(-1).adaptive.predictedAfter).toBeLessThanOrEqual(1);
+  expect(saved.history.at(-1).adaptive.predictedAfter).toBeLessThan(
+    saved.history.at(-1).adaptive.predictedBefore,
+  );
+});
+
+test('adaptive scheduling puts the higher forgetting-risk word first', async ({ page }) => {
+  await page.goto('/ielts/index.html');
+  await page.evaluate(() => {
+    const old = Date.now() - 2 * 86_400_000;
+    const skill = {
+      attempts: 4,
+      correct: 3,
+      pending: 0,
+      level: 3,
+      due: 0,
+      last: old,
+      needsReview: false,
+      relearnRequired: false,
+    };
+    localStorage.setItem(
+      'els-ielts-wordlab-v1',
+      JSON.stringify({
+        version: 4,
+        settings: { accent: 'uk', dailyNew: 0 },
+        daily: {
+          date: '',
+          newIds: [],
+          carryoverIds: [],
+          newSelectionDone: false,
+          completedAt: 0,
+        },
+        words: {
+          ecologist: { skills: { spell: { ...skill } } },
+          fascinate: {
+            skills: {
+              spell: {
+                ...skill,
+                hintUses: 3,
+                replayUses: 2,
+                skipCount: 2,
+                lastResponseMs: 90_000,
+              },
+            },
+          },
+        },
+        history: [],
+        journal: [],
+      }),
+    );
+  });
+  await page.reload();
+
+  await startDaily(page);
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', 'fascinate');
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-adaptive-reason', '提示依赖');
+});
+
+test('adaptive state migration clamps current weights and resets unknown model versions', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'els-ielts-wordlab-v1',
+      JSON.stringify({
+        version: 4,
+        settings: { accent: 'uk', dailyNew: 0 },
+        daily: { date: '', newIds: [], carryoverIds: [], completedAt: 0 },
+        words: {},
+        history: [],
+        journal: [],
+        adaptive: {
+          version: 1,
+          localOnly: false,
+          observations: -12,
+          updatedAt: -10,
+          weights: { bias: 999, priorAccuracy: 'not-a-number', level: null },
+        },
+      }),
+    );
+  });
+  await page.reload();
+
+  const adaptive = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}').adaptive,
+  );
+  expect(adaptive).toMatchObject({
+    version: 1,
+    localOnly: true,
+    observations: 0,
+    updatedAt: 0,
+  });
+  expect(adaptive.weights.bias).toBe(6);
+  expect(adaptive.weights.priorAccuracy).toBe(1.4);
+  expect(adaptive.weights.level).toBe(1.2);
+
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    saved.adaptive = {
+      version: 99,
+      localOnly: false,
+      observations: 900,
+      updatedAt: Date.now(),
+      weights: { bias: 5, priorAccuracy: -5 },
+    };
+    saved.daily.date = '';
+    localStorage.setItem('els-ielts-wordlab-v1', JSON.stringify(saved));
+  });
+  await page.reload();
+  const resetAdaptive = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}').adaptive,
+  );
+  expect(resetAdaptive).toMatchObject({
+    version: 1,
+    localOnly: true,
+    observations: 0,
+    updatedAt: 0,
+  });
+  expect(resetAdaptive.weights.bias).toBe(-0.4);
+  expect(resetAdaptive.weights.priorAccuracy).toBe(1.4);
 });
 
 test('a latest spelling error removes level-five stability until independent correction', async ({
@@ -1248,6 +1427,13 @@ test('dictation audio pauses, resumes, and ignores stale playback events', async
   });
   await expect(slowReplay).toHaveAttribute('aria-label', '播放慢速 0.85×');
   await expect(page.locator('#listenStatus')).toContainText('播放完成');
+
+  await page.getByRole('button', { name: '先跳过（稍后复习）' }).click();
+  const history = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return saved.history?.at(-1);
+  });
+  expect(history.adaptive.replayUses).toBe(2);
 });
 
 test('service worker lets ranged natural-audio requests reach the network', async ({ page }) => {
@@ -1334,8 +1520,9 @@ test('dictation keeps answers hidden through hints and supports skipping', async
     .poll(() =>
       page.evaluate(() => {
         const actions = document.querySelector('.spell-action-grid')!.getBoundingClientRect();
-        const bottomInset = innerWidth <= 780 ? 84 : 0;
-        return actions.top >= 0 && actions.bottom <= innerHeight - bottomInset + 1;
+        const navigation = document.querySelector('.bottom-nav')?.getBoundingClientRect();
+        const visibleBottom = navigation?.height ? navigation.top : innerHeight;
+        return actions.top >= 0 && actions.bottom <= visibleBottom + 1;
       }),
     )
     .toBe(true);
@@ -1598,6 +1785,207 @@ test('surface-complete nonsense stays pending and cannot raise sentence mastery'
     correct: null,
     pendingReview: true,
   });
+  expect(saved.adaptive.observations).toBe(0);
+  expect(saved.history.at(-1).adaptive).toMatchObject({
+    trained: false,
+    excludedReason: 'pending_human_review',
+  });
+
+  await page.reload();
+  await openPracticeHub(page);
+  await page.locator('[data-action="start-weak"]').click();
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', 'marine');
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-adaptive-reason', '等待评阅');
+});
+
+test('an online model update reorders only the not-yet-started daily words', async ({ page }) => {
+  await page.goto('/ielts/index.html');
+  await page.evaluate(() => {
+    const old = Date.now() - 2 * 86_400_000;
+    const future = Date.now() + 30 * 86_400_000;
+    const dueSkill = {
+      attempts: 4,
+      correct: 3,
+      pending: 0,
+      level: 3,
+      due: 0,
+      last: old,
+      needsReview: false,
+      relearnRequired: false,
+    };
+    const stableForms = {
+      attempts: 5,
+      correct: 5,
+      pending: 0,
+      level: 5,
+      due: future,
+      last: old,
+      needsReview: false,
+      relearnRequired: false,
+    };
+    localStorage.setItem(
+      'els-ielts-wordlab-v1',
+      JSON.stringify({
+        version: 4,
+        settings: { accent: 'uk', dailyNew: 0 },
+        daily: {
+          date: '',
+          newIds: [],
+          carryoverIds: [],
+          newSelectionDone: false,
+          completedAt: 0,
+        },
+        words: {
+          ailment: {
+            skills: {
+              spell: {
+                attempts: 1,
+                correct: 0,
+                pending: 0,
+                level: 0,
+                due: 0,
+                last: old,
+                needsReview: true,
+                relearnRequired: true,
+                hintUses: 3,
+                skipCount: 2,
+              },
+              forms: { ...stableForms },
+            },
+          },
+          ecologist: { skills: { sound: { ...dueSkill }, forms: { ...stableForms } } },
+          fascinate: { skills: { spell: { ...dueSkill }, forms: { ...stableForms } } },
+        },
+        history: [],
+        journal: [],
+      }),
+    );
+  });
+  await page.reload();
+
+  await startDaily(page);
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', 'ailment');
+  await page.locator('[data-action="skip-spell"]').click();
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', 'ailment');
+  await expectActiveDailySkill(page, 'forms');
+  await page.locator('[data-action="skip-form"]').click();
+
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', 'fascinate');
+  await expectActiveDailySkill(page, 'spell');
+});
+
+test('adaptive reordering keeps due review ahead of a riskier unseen new word', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await page.evaluate(() => {
+    const now = new Date();
+    const dateKey = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-');
+    const old = Date.now() - 2 * 86_400_000;
+    const future = Date.now() + 30 * 86_400_000;
+    const stableForms = {
+      attempts: 5,
+      correct: 5,
+      pending: 0,
+      level: 5,
+      due: future,
+      last: old,
+      needsReview: false,
+      relearnRequired: false,
+    };
+    localStorage.setItem(
+      'els-ielts-wordlab-v1',
+      JSON.stringify({
+        version: 4,
+        settings: { accent: 'uk', dailyNew: 1 },
+        daily: {
+          date: dateKey,
+          newIds: ['tropical'],
+          carryoverIds: [],
+          newSelectionDone: true,
+          completedAt: 0,
+        },
+        words: {
+          ailment: {
+            skills: {
+              spell: {
+                attempts: 1,
+                correct: 0,
+                pending: 0,
+                level: 0,
+                due: 0,
+                last: old,
+                needsReview: true,
+                relearnRequired: true,
+              },
+              forms: { ...stableForms },
+            },
+          },
+          ecologist: {
+            skills: {
+              sound: { ...stableForms, due: 0 },
+              forms: { ...stableForms },
+            },
+          },
+        },
+        history: [],
+        journal: [],
+      }),
+    );
+  });
+  await page.reload();
+
+  await startDaily(page);
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', 'ailment');
+  await page.locator('[data-action="skip-spell"]').click();
+  await page.locator('[data-action="skip-form"]').click();
+
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', 'ecologist');
+  await expectActiveDailySkill(page, 'sound');
+});
+
+test('adaptive form practice preserves the foundation-vocabulary interleaving skeleton', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await startSkill(page, 'forms');
+
+  await expect(page.locator('[data-form-task-type="family"]')).toBeVisible();
+  await page.locator('[data-action="skip-form"]').click();
+  await expect(page.locator('[data-form-task-type="family"]')).toHaveCount(0);
+  await page.locator('[data-action="skip-form"]').click();
+  await expect(page.locator('[data-form-task-type="family"]')).toHaveCount(0);
+  await page.locator('[data-action="skip-form"]').click();
+  await expect(page.locator('[data-form-task-type="family"]')).toBeVisible();
+});
+
+test('an independent high-confidence answer lengthens the fixed review baseline safely', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await seedSingleDueSkill(page, 'sturdy', 'spell', {
+    attempts: 4,
+    correct: 4,
+    level: 4,
+    needsReview: false,
+  });
+  await startSkill(page, 'spell');
+  await resolveIntegratedMeaningIfPresent(page);
+  await page.getByLabel('TYPE WHAT YOU HEAR').fill('sturdy');
+  await page.getByRole('button', { name: '检查拼写' }).click();
+
+  const skillState = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return saved.words.sturdy.skills.spell;
+  });
+  expect(skillState.level).toBe(5);
+  expect(skillState.lastIntervalDays).toBeGreaterThan(30);
+  expect(skillState.lastIntervalDays).toBeLessThanOrEqual(45);
+  expect(skillState.due).toBeGreaterThan(Date.now() + 29 * 86_400_000);
 });
 
 test('first hidden exact recall records controlled evidence and raises sentence level', async ({

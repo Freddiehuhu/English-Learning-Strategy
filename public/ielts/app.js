@@ -9,6 +9,9 @@
   var STORAGE_KEY = 'els-ielts-wordlab-v1';
   var VISUAL_STORAGE_KEY = 'els-ielts-visual-lab-v1';
   var AUDIO_ASSET_VERSION = 'natural-20260801';
+  var STATE_VERSION = 4;
+  var ADAPTIVE_MODEL_VERSION = 1;
+  var DAY_MS = 86400000;
   var SKILLS = ['sound', 'spell', 'forms', 'sentence'];
   var DAILY_NEW_LIMIT = 2;
   var DAILY_MAX_SECONDS = 720;
@@ -35,6 +38,36 @@
     spell: '拼写与词义',
     forms: '词形与构词',
     sentence: '搭配到标准句复现',
+  };
+  var ADAPTIVE_WEIGHT_KEYS = [
+    'bias',
+    'priorAccuracy',
+    'level',
+    'logDays',
+    'recentError',
+    'hintRate',
+    'replayRate',
+    'skipRate',
+    'slowResponse',
+    'skillSound',
+    'skillSpell',
+    'skillForms',
+    'skillSentence',
+  ];
+  var ADAPTIVE_DEFAULT_WEIGHTS = {
+    bias: -0.4,
+    priorAccuracy: 1.4,
+    level: 1.2,
+    logDays: -1,
+    recentError: -1.2,
+    hintRate: -0.9,
+    replayRate: -0.45,
+    skipRate: -1.1,
+    slowResponse: -0.4,
+    skillSound: 0,
+    skillSpell: 0,
+    skillForms: 0,
+    skillSentence: 0,
   };
   // Visual tasks feed the same word × skill repair queue as the four core gates.
   // Meaning/context relations return to sentence use; sound–spelling relations
@@ -635,6 +668,7 @@
     main.addEventListener('input', handleMainInput);
     main.addEventListener('error', handleVisualImageError, true);
     main.addEventListener('load', handleVisualImageLoad, true);
+    document.addEventListener('visibilitychange', syncTaskActivityVisibility);
 
     if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
     if (history.replaceState) {
@@ -663,7 +697,7 @@
 
   function defaultState() {
     return {
-      version: 3,
+      version: STATE_VERSION,
       settings: {
         accent: 'uk',
         dailyNew: DAILY_NEW_LIMIT,
@@ -678,6 +712,17 @@
       words: {},
       history: [],
       journal: [],
+      adaptive: defaultAdaptiveState(),
+    };
+  }
+
+  function defaultAdaptiveState() {
+    return {
+      version: ADAPTIVE_MODEL_VERSION,
+      localOnly: true,
+      observations: 0,
+      updatedAt: 0,
+      weights: Object.assign({}, ADAPTIVE_DEFAULT_WEIGHTS),
     };
   }
 
@@ -1212,7 +1257,7 @@
     }
     normaliseSkillReviewFlags(words, history);
     return {
-      version: 3,
+      version: STATE_VERSION,
       settings: settings,
       daily: {
         date: String(savedDaily.date || ''),
@@ -1230,7 +1275,32 @@
       words: words,
       history: history,
       journal: journal,
+      adaptive: normaliseAdaptiveState(saved.adaptive),
     };
+  }
+
+  function normaliseAdaptiveState(saved) {
+    var base = defaultAdaptiveState();
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return base;
+    if (Number(saved.version) !== ADAPTIVE_MODEL_VERSION) return base;
+    var savedWeights =
+      saved.weights && typeof saved.weights === 'object' && !Array.isArray(saved.weights)
+        ? saved.weights
+        : {};
+    ADAPTIVE_WEIGHT_KEYS.forEach(function (key) {
+      var rawValue = savedWeights[key];
+      var value = Number(rawValue);
+      base.weights[key] =
+        typeof rawValue === 'number' && Number.isFinite(value)
+          ? Math.max(-6, Math.min(6, value))
+          : ADAPTIVE_DEFAULT_WEIGHTS[key];
+    });
+    base.observations = Math.min(
+      1000000,
+      Math.round(normaliseNonnegativeNumber(saved.observations)),
+    );
+    base.updatedAt = normaliseNonnegativeNumber(saved.updatedAt);
+    return base;
   }
 
   function archiveLegacySentenceEvidence(words) {
@@ -1245,6 +1315,13 @@
         level: 0,
         due: 0,
         last: 0,
+        lastResponseMs: 0,
+        hintUses: 0,
+        replayUses: 0,
+        skipCount: 0,
+        mastery: 0,
+        lastPredictedRecall: 0,
+        lastIntervalDays: 0,
         needsReview: true,
         relearnRequired: true,
       };
@@ -1325,6 +1402,19 @@
         );
         skillState.due = normaliseNonnegativeNumber(skillState.due);
         skillState.last = normaliseNonnegativeNumber(skillState.last);
+        skillState.lastResponseMs = Math.min(
+          20 * 60 * 1000,
+          normaliseNonnegativeNumber(skillState.lastResponseMs),
+        );
+        skillState.hintUses = Math.round(normaliseNonnegativeNumber(skillState.hintUses));
+        skillState.replayUses = Math.round(normaliseNonnegativeNumber(skillState.replayUses));
+        skillState.skipCount = Math.round(normaliseNonnegativeNumber(skillState.skipCount));
+        skillState.mastery = normaliseProbability(skillState.mastery);
+        skillState.lastPredictedRecall = normaliseProbability(skillState.lastPredictedRecall);
+        skillState.lastIntervalDays = Math.min(
+          60,
+          Math.round(normaliseNonnegativeNumber(skillState.lastIntervalDays)),
+        );
         skillState.relearnRequired = Boolean(skillState.relearnRequired);
         var latest = latestResults[wordId + '::' + skill];
         skillState.needsReview = skillState.relearnRequired
@@ -1339,6 +1429,11 @@
   function normaliseNonnegativeNumber(value) {
     var number = Number(value);
     return Number.isFinite(number) ? Math.max(0, number) : 0;
+  }
+
+  function normaliseProbability(value) {
+    var number = Number(value);
+    return Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : 0;
   }
 
   function saveState() {
@@ -1369,6 +1464,13 @@
         level: 0,
         due: 0,
         last: 0,
+        lastResponseMs: 0,
+        hintUses: 0,
+        replayUses: 0,
+        skipCount: 0,
+        mastery: 0,
+        lastPredictedRecall: 0,
+        lastIntervalDays: 0,
         needsReview: false,
         relearnRequired: false,
       };
@@ -1386,6 +1488,13 @@
         level: 0,
         due: 0,
         last: 0,
+        lastResponseMs: 0,
+        hintUses: 0,
+        replayUses: 0,
+        skipCount: 0,
+        mastery: 0,
+        lastPredictedRecall: 0,
+        lastIntervalDays: 0,
         needsReview: false,
         relearnRequired: false,
       };
@@ -1393,23 +1502,43 @@
     return wordState.skills[skill];
   }
 
-  function recordResult(word, skill, correct, detail, source) {
+  function recordResult(word, skill, correct, detail, source, interactionOverrides) {
     var skillState = getSkillState(word.id, skill);
     clearVisualRepairNeed(word.id, skill);
     skillState.relearnRequired = false;
+    startTaskActivity();
     var now = Date.now();
+    var interaction = collectInteractionEvidence(skill, interactionOverrides);
+    // Train only on information available before this answer. Current hints,
+    // replays, response time and skipping describe the attempt itself; they are
+    // persisted after scoring so they can inform the next recall prediction.
+    var features = adaptiveFeatures(word.id, skill, null, now);
+    var predictedBefore = predictRecallProbability(word.id, skill, null, now, features);
     skillState.attempts += 1;
+    skillState.lastResponseMs = interaction.responseMs;
+    skillState.hintUses += interaction.hintUses;
+    skillState.replayUses += interaction.replayUses;
+    if (interaction.skipped) skillState.skipCount += 1;
     if (correct) {
       skillState.correct += 1;
       skillState.level = Math.min(5, skillState.level + 1);
-      skillState.due = addCalendarDays(startOfToday(), INTERVAL_DAYS[skillState.level]);
+      skillState.lastIntervalDays = adaptiveIntervalDays(
+        skill,
+        skillState.level,
+        predictedBefore,
+        interaction,
+      );
+      skillState.due = addCalendarDays(startOfToday(), skillState.lastIntervalDays);
       skillState.needsReview = false;
     } else {
       skillState.level = Math.max(0, skillState.level - 1);
+      skillState.lastIntervalDays = 0;
       skillState.due = startOfToday();
       skillState.needsReview = true;
     }
     skillState.last = now;
+    skillState.lastPredictedRecall = predictedBefore;
+    updateAdaptiveModel(features, Boolean(correct), predictedBefore, now);
 
     var historyItem = {
       wordId: word.id,
@@ -1418,6 +1547,15 @@
       correct: Boolean(correct),
       detail: detail || (correct ? '首次完成' : '需要复习'),
       at: now,
+      adaptive: {
+        modelVersion: ADAPTIVE_MODEL_VERSION,
+        predictedBefore: roundProbability(predictedBefore),
+        predictedAfter: 0,
+        responseMs: interaction.responseMs,
+        hintUses: interaction.hintUses,
+        replayUses: interaction.replayUses,
+        skipped: interaction.skipped,
+      },
     };
     if (source && typeof source === 'object') {
       historyItem.source = String(source.source || '');
@@ -1425,6 +1563,10 @@
       historyItem.visualGameType = String(source.visualGameType || '');
     }
     state.history.push(historyItem);
+    // The just-recorded result must be visible to the after-prediction. This
+    // keeps persisted mastery aligned with the scheduler's next calculation.
+    skillState.mastery = predictRecallProbability(word.id, skill, null, now);
+    historyItem.adaptive.predictedAfter = roundProbability(skillState.mastery);
     state.history = state.history.slice(-240);
     saveState();
 
@@ -1439,11 +1581,14 @@
     var skillState = getSkillState(word.id, skill);
     clearVisualRepairNeed(word.id, skill);
     skillState.relearnRequired = false;
+    startTaskActivity();
     var now = Date.now();
+    var interaction = collectInteractionEvidence(skill, null);
     skillState.pending = Number(skillState.pending || 0) + 1;
     skillState.needsReview = true;
     skillState.due = startOfToday();
     skillState.last = now;
+    skillState.lastResponseMs = interaction.responseMs;
     state.history.push({
       wordId: word.id,
       word: word.word,
@@ -1452,6 +1597,12 @@
       pendingReview: true,
       detail: detail || '已提交，等待人工评阅',
       at: now,
+      adaptive: {
+        modelVersion: ADAPTIVE_MODEL_VERSION,
+        trained: false,
+        excludedReason: 'pending_human_review',
+        responseMs: interaction.responseMs,
+      },
     });
     state.history = state.history.slice(-240);
     saveState();
@@ -1462,6 +1613,140 @@
       }
       session.stats[skill].pending = Number(session.stats[skill].pending || 0) + 1;
     }
+  }
+
+  function collectInteractionEvidence(skill, overrides) {
+    var task = session && session.taskState ? session.taskState : {};
+    var hintUses = 0;
+    if (skill === 'spell') hintUses = Number(task.attempts || 0);
+    if (skill === 'forms') hintUses = Number(task.formAttempts || 0);
+    if (skill === 'sentence' && task.hadError) hintUses = 1;
+    var evidence = {
+      responseMs: currentTaskResponseMs(),
+      hintUses: Math.max(0, Math.round(hintUses)),
+      replayUses: Math.max(0, Math.round(Number(task.audioPlays || 0)) - 1),
+      skipped: Boolean(task.soundDiagnosticSkipped),
+    };
+    if (overrides && typeof overrides === 'object') {
+      if (overrides.responseMs !== undefined) {
+        evidence.responseMs = Math.max(0, Number(overrides.responseMs) || 0);
+      }
+      if (overrides.hintUses !== undefined) {
+        evidence.hintUses = Math.max(0, Math.round(Number(overrides.hintUses) || 0));
+      }
+      if (overrides.replayUses !== undefined) {
+        evidence.replayUses = Math.max(0, Math.round(Number(overrides.replayUses) || 0));
+      }
+      if (overrides.skipped !== undefined) evidence.skipped = Boolean(overrides.skipped);
+    }
+    evidence.responseMs = Math.min(20 * 60 * 1000, Math.round(evidence.responseMs));
+    return evidence;
+  }
+
+  function adaptiveFeatures(wordId, skill, interaction, now) {
+    var skillState = peekSkillState(wordId, skill);
+    var attempts = Math.max(0, Number(skillState.attempts || 0));
+    var denominator = Math.max(1, attempts + (interaction ? 1 : 0));
+    var responseMs = interaction
+      ? Number(interaction.responseMs || 0)
+      : Number(skillState.lastResponseMs || 0);
+    var expectedMs = (STAGE_SECONDS[skill] || 60) * 1000;
+    var elapsedDays = skillState.last ? Math.max(0, (now - skillState.last) / DAY_MS) : 0;
+    return {
+      bias: 1,
+      priorAccuracy: (Number(skillState.correct || 0) + 1) / (attempts + 2),
+      level: Math.max(0, Math.min(1, Number(skillState.level || 0) / 5)),
+      logDays: Math.max(0, Math.min(1.5, Math.log1p(elapsedDays) / Math.log(31))),
+      recentError: hasUnresolvedControlledError(wordId, skill, skillState)
+        ? !skillState.last || now - skillState.last <= 14 * DAY_MS
+          ? 1
+          : 0.5
+        : 0,
+      hintRate: Math.min(
+        1,
+        (Number(skillState.hintUses || 0) + (interaction ? interaction.hintUses : 0)) / denominator,
+      ),
+      replayRate: Math.min(
+        1,
+        (Number(skillState.replayUses || 0) + (interaction ? interaction.replayUses : 0)) /
+          denominator,
+      ),
+      skipRate: Math.min(
+        1,
+        (Number(skillState.skipCount || 0) + (interaction && interaction.skipped ? 1 : 0)) /
+          denominator,
+      ),
+      slowResponse: responseMs ? Math.max(0, Math.min(1, responseMs / (expectedMs * 1.5))) : 0,
+      skillSound: skill === 'sound' ? 1 : 0,
+      skillSpell: skill === 'spell' ? 1 : 0,
+      skillForms: skill === 'forms' ? 1 : 0,
+      skillSentence: skill === 'sentence' ? 1 : 0,
+    };
+  }
+
+  function latestControlledResult(wordId, skill) {
+    for (var index = state.history.length - 1; index >= 0; index -= 1) {
+      var item = state.history[index];
+      if (
+        item &&
+        item.wordId === wordId &&
+        item.skill === skill &&
+        item.coreAttempt !== false &&
+        typeof item.correct === 'boolean'
+      ) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  function hasUnresolvedControlledError(wordId, skill, preparedSkillState) {
+    var skillState = preparedSkillState || peekSkillState(wordId, skill);
+    if (skillState.relearnRequired) return true;
+    var latest = latestControlledResult(wordId, skill);
+    if (latest) return latest.correct === false;
+    return Boolean(skillState.needsReview && Number(skillState.pending || 0) === 0);
+  }
+
+  function predictRecallProbability(wordId, skill, interaction, now, preparedFeatures) {
+    var model = state.adaptive || defaultAdaptiveState();
+    var features =
+      preparedFeatures || adaptiveFeatures(wordId, skill, interaction, now || Date.now());
+    var score = ADAPTIVE_WEIGHT_KEYS.reduce(function (total, key) {
+      return total + Number(model.weights[key] || 0) * Number(features[key] || 0);
+    }, 0);
+    score = Math.max(-12, Math.min(12, score));
+    return 1 / (1 + Math.exp(-score));
+  }
+
+  function updateAdaptiveModel(features, correct, prediction, now) {
+    if (!state.adaptive) state.adaptive = defaultAdaptiveState();
+    var model = state.adaptive;
+    var learningRate = Math.max(0.025, 0.16 / Math.sqrt(1 + model.observations / 40));
+    var error = (correct ? 1 : 0) - prediction;
+    ADAPTIVE_WEIGHT_KEYS.forEach(function (key) {
+      var current = Number(model.weights[key] || 0);
+      var updated = current * 0.9995 + learningRate * error * Number(features[key] || 0);
+      model.weights[key] = Math.max(-6, Math.min(6, updated));
+    });
+    model.version = ADAPTIVE_MODEL_VERSION;
+    model.localOnly = true;
+    model.observations = Math.min(1000000, Number(model.observations || 0) + 1);
+    model.updatedAt = now;
+  }
+
+  function adaptiveIntervalDays(skill, level, predictedRecall, interaction) {
+    var baseDays = INTERVAL_DAYS[Math.max(0, Math.min(5, level))] || 1;
+    var quality = 0.78 + Math.max(0, Math.min(1, predictedRecall)) * 0.5;
+    var expectedMs = (STAGE_SECONDS[skill] || 60) * 1000;
+    if (interaction.responseMs > expectedMs * 1.25) quality *= 0.86;
+    if (interaction.hintUses > 0) quality *= Math.max(0.65, 1 - interaction.hintUses * 0.1);
+    if (interaction.replayUses > 0) quality *= Math.max(0.75, 1 - interaction.replayUses * 0.06);
+    return Math.max(1, Math.min(45, Math.round(baseDays * quality)));
+  }
+
+  function roundProbability(value) {
+    return Math.round(Math.max(0, Math.min(1, value)) * 1000) / 1000;
   }
 
   function clearVisualRepairNeed(wordId, skill) {
@@ -1561,6 +1846,8 @@
       newCount +
       '" data-estimated-seconds="' +
       estimatedSeconds +
+      '" data-adaptive-model="local-online-v1" data-adaptive-observations="' +
+      Number(state.adaptive.observations || 0) +
       '">' +
       '<div class="focus-summary"><span>' +
       (plan.length ? Math.max(1, Math.ceil(estimatedSeconds / 60)) + ' 分钟' : '已完成') +
@@ -1570,6 +1857,7 @@
       '<div class="compact-loop" aria-label="听音、拼写与辨义、词形、句用">' +
       '<span>听音</span><i>→</i><span>拼写＋辨义</span><i>→</i><span>词形</span><i>→</i><span>句用</span>' +
       '</div>' +
+      '<p class="adaptive-note">已按薄弱能力与遗忘风险排序 · 数据仅保存在本机</p>' +
       '<div class="start-actions primary-start-actions">' +
       '<button class="primary-button" type="button" data-action="start-daily"' +
       (plan.length ? '' : ' disabled') +
@@ -2996,6 +3284,7 @@
 
     var word = currentWord();
     var skill = currentSkill();
+    initialiseTaskActivity(skill);
     var currentTaskNumber = session.type === 'daily' ? dailyTaskNumber() : session.wordIndex + 1;
     var totalTasks = session.type === 'daily' ? dailyTaskTotal() : session.words.length;
 
@@ -3006,6 +3295,10 @@
       '<section class="training-shell streamlined-training-shell">' +
       '<article class="panel training-panel" data-word-id="' +
       esc(word.id) +
+      '" data-adaptive-priority="' +
+      Math.round(adaptivePriority(word.id, skill, Date.now())) +
+      '" data-adaptive-reason="' +
+      esc(adaptiveReason(word.id, skill, Date.now())) +
       '">' +
       renderTask(word, skill, currentTaskNumber, totalTasks) +
       '</article>' +
@@ -3017,6 +3310,57 @@
         focusCurrentFormInput(formExercise, session.taskState);
       }
     }
+  }
+
+  function monotonicNow() {
+    return window.performance && typeof window.performance.now === 'function'
+      ? window.performance.now()
+      : Date.now();
+  }
+
+  function initialiseTaskActivity(skill) {
+    if (!session || session.taskState.activityInitialised) return;
+    var task = session.taskState;
+    task.activityInitialised = true;
+    task.activeElapsedMs = 0;
+    task.activityStarted = skill === 'forms' || skill === 'sentence';
+    task.activeSince = task.activityStarted && !document.hidden ? monotonicNow() : 0;
+  }
+
+  function startTaskActivity() {
+    if (!session) return;
+    var task = session.taskState;
+    if (!task.activityInitialised) initialiseTaskActivity(currentSkill());
+    if (!task.activityStarted) task.activityStarted = true;
+    if (!document.hidden && !task.activeSince) task.activeSince = monotonicNow();
+  }
+
+  function pauseTaskActivity() {
+    if (!session || !session.taskState.activeSince) return;
+    var task = session.taskState;
+    task.activeElapsedMs =
+      Math.max(0, Number(task.activeElapsedMs || 0)) +
+      Math.max(0, monotonicNow() - Number(task.activeSince));
+    task.activeSince = 0;
+  }
+
+  function syncTaskActivityVisibility() {
+    if (!session || !session.taskState.activityStarted) return;
+    if (document.hidden) {
+      pauseTaskActivity();
+    } else if (!session.taskState.activeSince) {
+      session.taskState.activeSince = monotonicNow();
+    }
+  }
+
+  function currentTaskResponseMs() {
+    if (!session || !session.taskState.activityStarted) return 0;
+    var task = session.taskState;
+    var active = Math.max(0, Number(task.activeElapsedMs || 0));
+    if (task.activeSince && !document.hidden) {
+      active += Math.max(0, monotonicNow() - Number(task.activeSince));
+    }
+    return active;
   }
 
   function renderTask(word, skill, currentTaskNumber, totalTasks) {
@@ -4605,6 +4949,7 @@
       return;
     }
     if (!session) return;
+    if (event.target.matches('input, textarea, select')) startTaskActivity();
     if (currentSkill() === 'sentence' && event.target.id === 'sentenceInput') {
       var task = session.taskState;
       task.writing = event.target.value;
@@ -4655,6 +5000,7 @@
 
   function skipSoundPrecheck() {
     if (!session || currentSkill() !== 'sound') return;
+    startTaskActivity();
     var task = session.taskState;
     if (task.soundObserved) return;
     task.soundObserved = true;
@@ -4689,6 +5035,7 @@
 
   function checkSpelling(rawAnswer) {
     if (!session || currentSkill() !== 'spell') return;
+    startTaskActivity();
     var word = currentWord();
     var answer = String(rawAnswer || '').trim();
     var task = session.taskState;
@@ -4757,6 +5104,7 @@
 
   function revealSpellHint() {
     if (!session || currentSkill() !== 'spell') return;
+    startTaskActivity();
     var input = document.getElementById('spellInput');
     var answer = input ? input.value : '';
     var task = session.taskState;
@@ -4854,6 +5202,7 @@
 
   function skipSpelling() {
     if (!session || currentSkill() !== 'spell') return;
+    startTaskActivity();
     var task = session.taskState;
     if (task.completed || task.skipping) return;
     if (!acquireSkipLock()) return;
@@ -4867,6 +5216,8 @@
       'spell',
       false,
       usedHelp ? '尝试或使用提示后主动跳过；未显示答案' : '主动跳过；未显示答案',
+      null,
+      { skipped: true },
     );
     showToast('已跳过，不显示答案；这道题已加入待复习。');
     advanceSession();
@@ -5085,6 +5436,8 @@
       'forms',
       false,
       usedHelp ? '尝试或使用提示后主动跳过；未显示答案' : '主动跳过；未显示答案',
+      null,
+      { skipped: true },
     );
     showToast('已跳过，不显示答案；这道题已加入待复习。');
     advanceSession();
@@ -5434,7 +5787,9 @@
     if (task.skipping || task.evaluated) return;
     if (!acquireSkipLock()) return;
     task.skipping = true;
-    recordResult(currentWord(), 'sentence', false, '主动跳过搭配与句架任务；稍后复习');
+    recordResult(currentWord(), 'sentence', false, '主动跳过搭配与句架任务；稍后复习', null, {
+      skipped: true,
+    });
     showToast('已跳过；这道表达题已加入待复习。');
     advanceSession();
   }
@@ -5530,6 +5885,7 @@
       if (session.stageIndex >= currentStages().length) {
         session.stageIndex = 0;
         session.wordIndex += 1;
+        reorderRemainingSession();
       }
       if (session.wordIndex >= session.words.length) {
         state.daily.completedAt = Date.now();
@@ -5537,11 +5893,105 @@
       }
     } else {
       session.wordIndex += 1;
+      reorderRemainingSession();
     }
     session.taskState = {};
     renderSession();
     scrollToTop();
     focusCurrentSessionTask();
+  }
+
+  function reorderRemainingSession() {
+    if (!session || session.wordIndex >= session.words.length) return;
+    var planningNow = Date.now();
+    if (session.type === 'daily') {
+      var completedPlans = session.plans.slice(0, session.wordIndex);
+      var remainingPlans = session.plans
+        .slice(session.wordIndex)
+        .map(function (plan) {
+          return makeDailyPlan(plan.word, plan.kind, plan.stages, planningNow);
+        })
+        .sort(compareAdaptivePlansWithinStructure);
+      session.plans = completedPlans.concat(remainingPlans);
+      session.words = session.plans.map(function (plan) {
+        return plan.word;
+      });
+      return;
+    }
+    if (session.type === 'repair') {
+      var remainingRepairs = session.words
+        .slice(session.wordIndex)
+        .map(function (word, offset) {
+          var absoluteIndex = session.wordIndex + offset;
+          var skill = session.repairSkills[absoluteIndex];
+          return {
+            word: word,
+            skill: skill,
+            priority: adaptivePriority(word.id, skill, planningNow),
+          };
+        })
+        .sort(function (a, b) {
+          return (
+            b.priority - a.priority ||
+            a.word.id.localeCompare(b.word.id) ||
+            SKILLS.indexOf(a.skill) - SKILLS.indexOf(b.skill)
+          );
+        });
+      session.words.splice(
+        session.wordIndex,
+        remainingRepairs.length,
+        ...remainingRepairs.map(function (item) {
+          return item.word;
+        }),
+      );
+      session.repairSkills.splice(
+        session.wordIndex,
+        remainingRepairs.length,
+        ...remainingRepairs.map(function (item) {
+          return item.skill;
+        }),
+      );
+      return;
+    }
+    var skill = session.stages[0];
+    var originalRemaining = session.words.slice(session.wordIndex);
+    var sortByPriority = function (words) {
+      return words.sort(function (a, b) {
+        var difference =
+          adaptivePriority(b.id, skill, planningNow) - adaptivePriority(a.id, skill, planningNow);
+        return difference || a.id.localeCompare(b.id);
+      });
+    };
+    var remainingWords = sortByPriority(originalRemaining.slice());
+    if (skill === 'forms') {
+      var foundationIds = new Set(
+        FORM_FOUNDATIONS.map(function (word) {
+          return word.id;
+        }),
+      );
+      var formStructureKey = function (word) {
+        if (foundationIds.has(word.id)) return 'foundation';
+        return word.practiceMode === 'direct' ? 'direct' : 'context';
+      };
+      var formQueues = {};
+      var formQueueIndices = {};
+      originalRemaining.forEach(function (word) {
+        var key = formStructureKey(word);
+        if (!formQueues[key]) formQueues[key] = [];
+        formQueues[key].push(word);
+      });
+      Object.keys(formQueues).forEach(function (key) {
+        formQueues[key] = sortByPriority(formQueues[key]);
+        formQueueIndices[key] = 0;
+      });
+      remainingWords = originalRemaining.map(function (word) {
+        var key = formStructureKey(word);
+        var nextWord = formQueues[key][formQueueIndices[key]];
+        formQueueIndices[key] += 1;
+        return nextWord;
+      });
+    }
+    session.words.splice(session.wordIndex, remainingWords.length, ...remainingWords);
   }
 
   function scheduleAdvance(delay) {
@@ -5621,6 +6071,7 @@
 
   function buildDailyPlan() {
     var today = startOfToday();
+    var planningNow = Date.now();
     var dateKey = localDateKey();
     if (!state.daily) state.daily = defaultState().daily;
     if (state.daily.date !== dateKey) {
@@ -5652,7 +6103,9 @@
       .map(function (id) {
         var word = findWord(id);
         var remaining = word ? unattemptedSkills(word.id) : [];
-        return remaining.length ? makeDailyPlan(word, 'new', makeNewStages(remaining)) : null;
+        return remaining.length
+          ? makeDailyPlan(word, 'new', makeNewStages(remaining), planningNow)
+          : null;
       })
       .filter(Boolean);
     var reservedNewSeconds = dailyPlanSeconds(currentNewPlans);
@@ -5663,23 +6116,44 @@
       .map(function (id) {
         var word = findWord(id);
         if (!word) return null;
-        var skills = uniqueSkills(dueSkills(word.id, today).concat(unattemptedSkills(word.id)));
-        return skills.length ? makeDailyPlan(word, 'carryover', makeReviewStages(skills)) : null;
+        var skills = uniqueSkills(
+          dueSkills(word.id, today, planningNow).concat(unattemptedSkills(word.id)),
+        );
+        return skills.length
+          ? makeDailyPlan(
+              word,
+              'carryover',
+              makeReviewStages(skills, word.id, planningNow),
+              planningNow,
+            )
+          : null;
       })
-      .filter(Boolean);
+      .filter(Boolean)
+      .sort(compareAdaptivePlans);
 
     var dueCandidates = WORDS.filter(function (word) {
       return !excludedIds.has(word.id);
     })
       .map(function (word) {
-        var skills = dueSkills(word.id, today);
-        return skills.length ? makeDailyPlan(word, 'review', makeReviewStages(skills)) : null;
+        var skills = dueSkills(word.id, today, planningNow);
+        return skills.length
+          ? makeDailyPlan(
+              word,
+              'review',
+              makeReviewStages(skills, word.id, planningNow),
+              planningNow,
+            )
+          : null;
       })
       .filter(Boolean)
       .sort(function (a, b) {
+        var priorityDifference = b.adaptivePriority - a.adaptivePriority;
+        if (priorityDifference) return priorityDifference;
         var dueDifference = nextDueTime(a.word.id) - nextDueTime(b.word.id);
         if (dueDifference) return dueDifference;
-        return overallWordScore(a.word.id) - overallWordScore(b.word.id);
+        var scoreDifference = overallWordScore(a.word.id) - overallWordScore(b.word.id);
+        if (scoreDifference) return scoreDifference;
+        return a.word.id.localeCompare(b.word.id);
       });
 
     var reviewPlans = [];
@@ -5693,7 +6167,7 @@
 
     if (!state.daily.newSelectionDone) {
       var fullNewSeconds = dailyPlanSeconds([
-        makeDailyPlan(WORDS[0], 'new', makeNewStages(SKILLS)),
+        makeDailyPlan(WORDS[0], 'new', makeNewStages(SKILLS), planningNow),
       ]);
       var availableForNew = Math.max(0, DAILY_MAX_SECONDS - reviewSeconds);
       var allowedNew = Math.min(
@@ -5714,7 +6188,7 @@
       currentNewPlans = state.daily.newIds
         .map(function (id) {
           var word = findWord(id);
-          return word ? makeDailyPlan(word, 'new', makeNewStages(SKILLS)) : null;
+          return word ? makeDailyPlan(word, 'new', makeNewStages(SKILLS), planningNow) : null;
         })
         .filter(Boolean);
     }
@@ -5740,10 +6214,14 @@
     });
   }
 
-  function dueSkills(wordId, today) {
+  function dueSkills(wordId, today, planningNow) {
+    var now = planningNow || Date.now();
     return SKILLS.filter(function (skill) {
       var skillState = peekSkillState(wordId, skill);
       return hasSkillActivity(skillState) && skillState.due <= today && skillState.last < today;
+    }).sort(function (a, b) {
+      var difference = adaptivePriority(wordId, b, now) - adaptivePriority(wordId, a, now);
+      return difference || SKILLS.indexOf(a) - SKILLS.indexOf(b);
     });
   }
 
@@ -5753,6 +6231,40 @@
       Number(skillState.pending || 0) > 0 ||
       Boolean(skillState.relearnRequired)
     );
+  }
+
+  function adaptivePriority(wordId, skill, now) {
+    var skillState = peekSkillState(wordId, skill);
+    var predictedRecall = predictRecallProbability(wordId, skill, null, now || Date.now());
+    var due = Number(skillState.due || 0);
+    var overdueDays = due ? Math.max(0, ((now || Date.now()) - due) / DAY_MS) : 0;
+    var attempts = Number(skillState.attempts || 0);
+    var unresolvedError = hasUnresolvedControlledError(wordId, skill, skillState);
+    var pendingOnly = Number(skillState.pending || 0) > 0 && !unresolvedError;
+    return (
+      (1 - predictedRecall) * 100 +
+      (unresolvedError ? 22 : 0) +
+      (skillState.relearnRequired ? 24 : 0) +
+      (pendingOnly ? 8 : 0) +
+      (hasVisualRepair(wordId, skill) ? 30 : 0) +
+      Math.min(18, overdueDays * 1.5) +
+      Math.max(0, 3 - attempts) * 2
+    );
+  }
+
+  function adaptiveReason(wordId, skill, now) {
+    var skillState = peekSkillState(wordId, skill);
+    if (hasVisualRepair(wordId, skill)) return '图像错项回流';
+    var unresolvedError = hasUnresolvedControlledError(wordId, skill, skillState);
+    if (Number(skillState.pending || 0) > 0 && !unresolvedError) return '等待评阅';
+    if (unresolvedError) {
+      return Number(skillState.skipCount || 0) > 0 ? '跳过后重学' : '最近错项';
+    }
+    if (Number(skillState.hintUses || 0) > 0) return '提示依赖';
+    if (Number(skillState.replayUses || 0) > 0) return '听音需要巩固';
+    return predictRecallProbability(wordId, skill, null, now || Date.now()) < 0.55
+      ? '临近遗忘'
+      : '间隔复习';
   }
 
   function uniqueSkills(skills) {
@@ -5780,7 +6292,8 @@
     });
   }
 
-  function makeReviewStages(skills) {
+  function makeReviewStages(skills, wordId, planningNow) {
+    var now = planningNow || Date.now();
     var ordered = uniqueSkills(skills);
     var exitSkill = '';
     if (ordered.indexOf('sentence') >= 0) {
@@ -5791,6 +6304,15 @@
       ordered.push('forms');
       exitSkill = 'forms';
     }
+    ordered = ordered
+      .filter(function (skill) {
+        return skill !== exitSkill;
+      })
+      .sort(function (a, b) {
+        var difference = adaptivePriority(wordId, b, now) - adaptivePriority(wordId, a, now);
+        return difference || SKILLS.indexOf(a) - SKILLS.indexOf(b);
+      })
+      .concat(exitSkill);
     return ordered.map(function (skill) {
       var isTransfer = skill === exitSkill;
       return {
@@ -5802,17 +6324,46 @@
     });
   }
 
-  function makeDailyPlan(word, kind, stages) {
+  function makeDailyPlan(word, kind, stages, planningNow) {
+    var now = planningNow || Date.now();
+    var rankedStages = stages
+      .map(function (stage) {
+        return {
+          skill: stage.skill,
+          priority: adaptivePriority(word.id, stage.skill, now),
+        };
+      })
+      .sort(function (a, b) {
+        return b.priority - a.priority;
+      });
+    var urgentStage = rankedStages[0];
     return {
       word: word,
       kind: kind,
       stages: stages,
+      adaptivePriority: urgentStage ? urgentStage.priority : 0,
+      adaptiveReason: urgentStage ? adaptiveReason(word.id, urgentStage.skill, now) : '间隔复习',
     };
+  }
+
+  function compareAdaptivePlans(a, b) {
+    var difference = b.adaptivePriority - a.adaptivePriority;
+    if (difference) return difference;
+    return a.word.id.localeCompare(b.word.id);
+  }
+
+  function compareAdaptivePlansWithinStructure(a, b) {
+    var kindOrder = { carryover: 0, review: 1, new: 2 };
+    var kindDifference =
+      Number(kindOrder[a.kind] === undefined ? 9 : kindOrder[a.kind]) -
+      Number(kindOrder[b.kind] === undefined ? 9 : kindOrder[b.kind]);
+    return kindDifference || compareAdaptivePlans(a, b);
   }
 
   function buildRepairQueue(limit) {
     var today = startOfToday();
-    var recentBoundary = Date.now() - 14 * 86400000;
+    var planningNow = Date.now();
+    var recentBoundary = planningNow - 14 * DAY_MS;
     var latestCoreResults = {};
     state.history.forEach(function (item) {
       if (!item || item.coreAttempt === false || SKILLS.indexOf(item.skill) < 0) return;
@@ -5844,11 +6395,11 @@
           word: word,
           skill: skill,
           priority:
-            (1 - accuracy) * 100 +
-            (unresolvedRecentError ? 20 : 0) +
-            (due ? 12 : 0) +
-            (visualPending ? 30 : 0) +
-            Math.max(0, 4 - skillState.level) * 3,
+            adaptivePriority(word.id, skill, planningNow) +
+            (1 - accuracy) * 12 +
+            (unresolvedRecentError ? 8 : 0) +
+            (due ? 4 : 0) +
+            (visualPending ? 8 : 0),
           due: skillState.due || 0,
         });
       });
@@ -5865,26 +6416,25 @@
 
   function buildSkillQueue(skill, limit) {
     var now = startOfToday();
-    var due = WORDS.filter(function (word) {
+    var planningNow = Date.now();
+    var active = WORDS.filter(function (word) {
       var skillState = peekSkillState(word.id, skill);
-      return hasSkillActivity(skillState) && skillState.due <= now;
+      var weak = skillState.attempts > 0 && skillState.correct / skillState.attempts < 0.8;
+      var due = hasSkillActivity(skillState) && skillState.due <= now;
+      return due || weak || skillState.needsReview || hasVisualRepair(word.id, skill);
     }).sort(function (a, b) {
-      return peekSkillState(a.id, skill).due - peekSkillState(b.id, skill).due;
-    });
-    var weak = WORDS.filter(function (word) {
-      var skillState = peekSkillState(word.id, skill);
-      return skillState.attempts > 0 && skillState.correct / skillState.attempts < 0.8;
-    }).sort(function (a, b) {
-      var aState = peekSkillState(a.id, skill);
-      var bState = peekSkillState(b.id, skill);
-      return aState.correct / aState.attempts - bState.correct / bState.attempts;
+      var difference =
+        adaptivePriority(b.id, skill, planningNow) - adaptivePriority(a.id, skill, planningNow);
+      if (difference) return difference;
+      var dueDifference = peekSkillState(a.id, skill).due - peekSkillState(b.id, skill).due;
+      return dueDifference || a.id.localeCompare(b.id);
     });
     var unseen = seededWords(
       WORDS.filter(function (word) {
         return !hasSkillActivity(peekSkillState(word.id, skill));
       }),
     );
-    return uniqueWords(due.concat(weak, unseen)).slice(0, limit);
+    return uniqueWords(active.concat(unseen)).slice(0, limit);
   }
 
   function buildFormsQueue(limit) {
@@ -6167,10 +6717,14 @@
       suffix +
       '.mp3?v=' +
       encodeURIComponent(AUDIO_ASSET_VERSION);
-    startAudioPlayback(source, button, rate);
+    startAudioPlayback(source, button, rate, {
+      sessionToken: session && session.token,
+      taskState: session && session.taskState,
+      wordId: word.id,
+    });
   }
 
-  function startAudioPlayback(source, button, rate) {
+  function startAudioPlayback(source, button, rate, adaptiveEvidence) {
     stopAudio();
     var audio = new Audio(source);
     var token = ++playbackToken;
@@ -6183,6 +6737,7 @@
     button.dataset.activeRate = String(rate);
     updatePlaybackButton(button, 'loading');
     updatePlaybackMessage(button, 'loading');
+    var adaptivePlaybackCounted = false;
 
     var isCurrent = function () {
       return playbackToken === token && currentAudio === audio;
@@ -6218,6 +6773,19 @@
       playbackStatus = 'playing';
       updatePlaybackButton(button, 'playing');
       updatePlaybackMessage(button, 'playing');
+      if (
+        !adaptivePlaybackCounted &&
+        adaptiveEvidence &&
+        session &&
+        session.token === adaptiveEvidence.sessionToken &&
+        session.taskState === adaptiveEvidence.taskState &&
+        currentWord() &&
+        currentWord().id === adaptiveEvidence.wordId
+      ) {
+        adaptivePlaybackCounted = true;
+        session.taskState.audioPlays = Math.max(0, Number(session.taskState.audioPlays || 0)) + 1;
+        startTaskActivity();
+      }
       unlockSoundPrecheck(button);
     });
     audio.addEventListener('waiting', function () {
@@ -6486,7 +7054,7 @@
   function exportData() {
     var payload = {
       app: 'WordLab',
-      version: 3,
+      version: STATE_VERSION,
       exportedAt: new Date().toISOString(),
       state: state,
       visualState: visualState,
