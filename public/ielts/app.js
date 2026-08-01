@@ -32,6 +32,7 @@
     spell: '听写拼词',
     forms: '词形变换',
     sentence: '标准句复现',
+    meaning: '图片辨义',
   };
   var SKILL_SHORT = {
     sound: '辨音',
@@ -917,6 +918,8 @@
         if (!allowedIds.has(taskId)) return;
         var task = saved.tasks[taskId] || {};
         var mastered = Boolean(task.mastered);
+        var expectedTaskVersion = visualTaskVersion(visualTaskMetadata(taskId));
+        var allowedPromptIds = visualPromptIds(taskId);
         tasks[taskId] = {
           attempts: Math.max(0, Number(task.attempts) || 0),
           correct: Math.max(0, Number(task.correct) || 0),
@@ -931,7 +934,13 @@
           modelRecorded: Array.isArray(task.modelRecorded)
             ? task.modelRecorded
                 .filter(function (key) {
-                  return typeof key === 'string' && /^[a-z0-9-]+-v\d+::[a-z0-9-]+$/.test(key);
+                  if (typeof key !== 'string') return false;
+                  var parts = key.split('::');
+                  return (
+                    parts.length === 2 &&
+                    parts[0] === expectedTaskVersion &&
+                    allowedPromptIds.indexOf(parts[1]) >= 0
+                  );
                 })
                 .slice(-64)
             : [],
@@ -1006,9 +1015,64 @@
     return 'visual-' + String((metadata && metadata.gameType) || 'unknown') + '-v2';
   }
 
-  function claimVisualModelEvidence(taskState, metadata, promptId) {
+  function visualPromptIds(taskId) {
+    var id = String(taskId || '');
+    if (VISUAL_LAB.posScene && VISUAL_LAB.posScene.id === id) {
+      return (
+        Array.isArray(VISUAL_LAB.posScene.questions) ? VISUAL_LAB.posScene.questions : []
+      ).map(function (_, index) {
+        return 'question-' + index;
+      });
+    }
+    var familyTask = visualFamilyAtlases().find(function (task) {
+      return task && task.id === id;
+    });
+    if (familyTask) {
+      return visualFamilyPracticeSlots(familyTask).map(function (_, index) {
+        return 'form-' + index;
+      });
+    }
+    var comparisonTask = Array.isArray(VISUAL_LAB.groups)
+      ? VISUAL_LAB.groups.find(function (task) {
+          return task && task.id === id;
+        })
+      : null;
+    if (comparisonTask) {
+      return (Array.isArray(comparisonTask.scenes) ? comparisonTask.scenes : []).map(
+        function (_, index) {
+          return 'scene-' + index;
+        },
+      );
+    }
+    var isSinglePromptGame = visualGameModes().some(function (mode) {
+      return Boolean(
+        mode &&
+        Array.isArray(mode.tasks) &&
+        mode.tasks.some(function (task) {
+          return task && task.id === id;
+        }),
+      );
+    });
+    return isSinglePromptGame ? ['prompt-0'] : [];
+  }
+
+  function normaliseVisualPromptId(taskId, promptId) {
+    var value = String(promptId || '');
+    var allowed = visualPromptIds(taskId);
+    return allowed.indexOf(value) >= 0 ? value : '';
+  }
+
+  function claimVisualModelEvidence(taskId, taskState, metadata, promptId) {
     if (!Array.isArray(taskState.modelRecorded)) taskState.modelRecorded = [];
-    var safePromptId = /^[a-z0-9-]+$/.test(String(promptId || '')) ? String(promptId) : 'prompt-0';
+    var safePromptId = normaliseVisualPromptId(taskId, promptId);
+    if (!safePromptId) {
+      return {
+        independent: false,
+        promptId: 'prompt-0',
+        attemptCycle: Number(taskState.modelCycle || 0),
+        taskVersion: visualTaskVersion(metadata),
+      };
+    }
     var taskVersion = visualTaskVersion(metadata);
     var key = taskVersion + '::' + safePromptId;
     if (taskState.modelRecorded.indexOf(key) >= 0) {
@@ -1039,7 +1103,7 @@
     var taskState = getVisualTaskState(taskId);
     var metadata = visualTaskMetadata(taskId);
     var now = Date.now();
-    var evidence = claimVisualModelEvidence(taskState, metadata, promptId);
+    var evidence = claimVisualModelEvidence(taskId, taskState, metadata, promptId);
     if (evidence.independent && Number(taskState.modelCycle || 0) > 0) {
       taskState.completed = false;
       taskState.mastered = false;
@@ -1368,6 +1432,7 @@
           })
           .slice(-240)
       : [];
+    history = normaliseLegacyVisualHistory(history);
     var journal = Array.isArray(saved.journal)
       ? saved.journal
           .filter(function (item) {
@@ -1568,7 +1633,8 @@
           ['controlled_first_attempt', 'controlled_visual_first_attempt'].indexOf(
             event.labelSource,
           ) >= 0 &&
-          (event.label === 0 || event.label === 1)
+          (event.label === 0 || event.label === 1) &&
+          Boolean(normaliseImportedAdaptivePromptId(event))
         );
       })
       .map(function (event) {
@@ -1592,9 +1658,7 @@
           ),
           predictedRuleBefore: normaliseProbability(event.predictedRuleBefore),
           predictedModelBefore: normaliseProbability(event.predictedModelBefore),
-          promptId: /^[a-z0-9-]+$/.test(String(event.promptId || ''))
-            ? String(event.promptId)
-            : 'core',
+          promptId: normaliseImportedAdaptivePromptId(event),
           attemptCycle: Math.min(10000, Math.round(normaliseNonnegativeNumber(event.attemptCycle))),
         };
       })
@@ -1608,6 +1672,73 @@
         String(value || ''),
       )
     );
+  }
+
+  function normaliseImportedAdaptivePromptId(event) {
+    if (!event || typeof event !== 'object') return '';
+    var taskVersion = String(event.taskVersion || '');
+    var rawPromptId = typeof event.promptId === 'string' ? event.promptId : '';
+    var coreMatch = /^(sound|spell|forms|sentence)-controlled-v2$/.exec(taskVersion);
+    if (coreMatch) {
+      var isOrdinaryWord = WORDS.some(function (word) {
+        return word.id === event.wordId;
+      });
+      var isFormFoundation = FORM_FOUNDATIONS.some(function (word) {
+        return word.id === event.wordId;
+      });
+      if (
+        event.labelSource !== 'controlled_first_attempt' ||
+        event.skill !== coreMatch[1] ||
+        (!isOrdinaryWord && !(isFormFoundation && coreMatch[1] === 'forms')) ||
+        (rawPromptId && rawPromptId !== 'core')
+      ) {
+        return '';
+      }
+      return 'core';
+    }
+    if (event.labelSource !== 'controlled_visual_first_attempt') return '';
+    var matchingTasks = visualTaskIds().filter(function (taskId) {
+      var metadata = visualTaskMetadata(taskId);
+      return (
+        metadata.targetWordId === event.wordId &&
+        metadata.modelSkill === event.skill &&
+        visualTaskVersion(metadata) === taskVersion
+      );
+    });
+    if (!matchingTasks.length) return '';
+    if (rawPromptId) {
+      return matchingTasks.some(function (taskId) {
+        return visualPromptIds(taskId).indexOf(rawPromptId) >= 0;
+      })
+        ? rawPromptId
+        : '';
+    }
+    var defaults = new Set();
+    matchingTasks.forEach(function (taskId) {
+      visualPromptIds(taskId).forEach(function (promptId) {
+        defaults.add(promptId);
+      });
+    });
+    return defaults.size === 1 ? Array.from(defaults)[0] : '';
+  }
+
+  function normaliseGeneratedAdaptivePromptId(taskVersion, promptId) {
+    var version = String(taskVersion || '');
+    var value = String(promptId || '');
+    if (/^(sound|spell|forms|sentence)-controlled-v2$/.test(version)) return 'core';
+    if (version === 'visual-pos-v2') {
+      return /^question-(0|[1-9][0-9]?)$/.test(value) ? value : 'question-0';
+    }
+    if (version === 'visual-family-v2') {
+      return /^form-(0|[1-9][0-9]?)$/.test(value) ? value : 'form-0';
+    }
+    if (/^visual-(synonym|antonym)-v2$/.test(version)) {
+      return /^scene-(0|[1-9][0-9]?)$/.test(value) ? value : 'scene-0';
+    }
+    if (/^visual-(guess|homophone|homograph|analogy|taxonomy|collocation)-v2$/.test(version)) {
+      return 'prompt-0';
+    }
+    return 'core';
   }
 
   function archiveLegacySentenceEvidence(words) {
@@ -1632,6 +1763,28 @@
         needsReview: true,
         relearnRequired: true,
       };
+    });
+  }
+
+  function isMeaningOnlyVisualHistory(item) {
+    var gameType = String((item && item.visualGameType) || '');
+    return Boolean(
+      item &&
+      item.source === 'visual' &&
+      item.coreAttempt === false &&
+      VISUAL_MODEL_SKILLS[gameType] === 'meaning' &&
+      SKILLS.indexOf(VISUAL_REPAIR_SKILLS[gameType]) < 0,
+    );
+  }
+
+  function normaliseLegacyVisualHistory(history) {
+    return history.map(function (item) {
+      if (!isMeaningOnlyVisualHistory(item) || item.skill === 'meaning') return item;
+      return Object.assign({}, item, {
+        skill: 'meaning',
+        legacySkill: String(item.skill || ''),
+        migration: 'v4-visual-meaning',
+      });
     });
   }
 
@@ -2367,9 +2520,7 @@
       ),
       predictedRuleBefore: roundProbability(rulePrediction),
       predictedModelBefore: roundProbability(modelPrediction),
-      promptId: /^[a-z0-9-]+$/.test(String(metadata.promptId || ''))
-        ? String(metadata.promptId)
-        : 'core',
+      promptId: normaliseGeneratedAdaptivePromptId(metadata.taskVersion, metadata.promptId),
       attemptCycle: Math.min(10000, Math.max(0, Math.round(Number(metadata.attemptCycle || 0)))),
     });
     model.events = model.events.slice(-160);
@@ -5011,7 +5162,7 @@
       .join('');
     var mistakes = state.history
       .filter(function (item) {
-        return item.correct === false;
+        return item.correct === false && Boolean(effectiveCoreMistakeSkill(item));
       })
       .slice(-18)
       .reverse();
@@ -7264,7 +7415,11 @@
     }).length;
     var recentBoundary = Date.now() - 14 * 86400000;
     var mistakes = state.history.filter(function (item) {
-      return item.correct === false && item.at >= recentBoundary;
+      return (
+        item.correct === false &&
+        item.at >= recentBoundary &&
+        Boolean(effectiveCoreMistakeSkill(item))
+      );
     }).length;
     var skills = {};
     SKILLS.forEach(function (skill) {
@@ -7278,6 +7433,14 @@
       skills[skill] = total ? Math.round((correct / total) * 100) : 0;
     });
     return { started: started, stable: stable, mistakes: mistakes, skills: skills };
+  }
+
+  function effectiveCoreMistakeSkill(item) {
+    if (!item || SKILLS.indexOf(item.skill) < 0) return '';
+    if (item.coreAttempt !== false) return item.skill;
+    if (item.source !== 'visual') return '';
+    var repairSkill = VISUAL_REPAIR_SKILLS[String(item.visualGameType || '')];
+    return repairSkill === item.skill && SKILLS.indexOf(repairSkill) >= 0 ? repairSkill : '';
   }
 
   function countDueSkills() {

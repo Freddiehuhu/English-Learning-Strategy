@@ -804,6 +804,7 @@ test('v4 visual meaning repairs migrate out of sentence while direct form repair
         history: [
           {
             wordId: 'fascinate',
+            word: 'fascinate',
             skill: 'sentence',
             correct: false,
             source: 'visual',
@@ -814,6 +815,7 @@ test('v4 visual meaning repairs migrate out of sentence while direct form repair
           },
           {
             wordId: 'distant',
+            word: 'distant',
             skill: 'forms',
             correct: false,
             source: 'visual',
@@ -829,13 +831,35 @@ test('v4 visual meaning repairs migrate out of sentence while direct form repair
   });
   await page.reload();
 
-  const words = await page.evaluate(() => {
-    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
-    return saved.words;
+  const saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}'),
+  );
+  expect(saved.words.fascinate.visualRepairPending).toBeUndefined();
+  expect(saved.words.fascinate.skills.sentence).toBeUndefined();
+  expect(saved.words.distant.visualRepairPending).toEqual({ forms: true });
+  expect(saved.history[0]).toMatchObject({
+    wordId: 'fascinate',
+    skill: 'meaning',
+    legacySkill: 'sentence',
+    migration: 'v4-visual-meaning',
+    visualTaskId: 'game-guess-fascinate',
+    correct: false,
   });
-  expect(words.fascinate.visualRepairPending).toBeUndefined();
-  expect(words.fascinate.skills.sentence).toBeUndefined();
-  expect(words.distant.visualRepairPending).toEqual({ forms: true });
+  expect(saved.history[1]).toMatchObject({
+    wordId: 'distant',
+    skill: 'forms',
+    visualTaskId: 'game-analogy-distance-importance',
+    correct: false,
+  });
+
+  await page.evaluate(() => {
+    const visibleLink = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-view-link="progress"]'),
+    ).find((element) => element.offsetParent !== null);
+    visibleLink?.click();
+  });
+  await expect(page.locator('.mistake-list')).not.toContainText('fascinate');
+  await expect(page.locator('.mistake-list')).toContainText('distant');
 });
 
 test('v5 keeps valid pending visual repairs after compact history is gone', async ({ page }) => {
@@ -1212,6 +1236,162 @@ test('adaptive state migration clamps weights and resets unknown model or featur
   );
   expect(unknownVersion).toMatchObject({ version: 2, observations: 0, updatedAt: 0 });
   expect(unknownVersion.weights.bias).toBe(-0.4);
+});
+
+test('adaptive import keeps only finite prompt ids and valid task-skill combinations', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await page.evaluate(() => {
+    const event = {
+      at: Date.now(),
+      label: 0,
+      independent: true,
+      optionCount: 4,
+      evidenceWeight: 0.75,
+      hintLevel: 0,
+      replayCount: 0,
+      activeResponseMs: 0,
+      predictedRuleBefore: 0.5,
+      predictedModelBefore: 0.5,
+    };
+    localStorage.setItem(
+      'els-ielts-wordlab-v1',
+      JSON.stringify({
+        version: 5,
+        settings: { accent: 'uk', dailyNew: 0 },
+        daily: { date: '', newIds: [], carryoverIds: [], completedAt: 0 },
+        words: {},
+        history: [],
+        journal: [],
+        adaptive: {
+          version: 2,
+          featureSchemaVersion: 2,
+          observations: 0,
+          weights: {},
+          meaningWeights: {},
+          shadow: {},
+          meaningShadow: {},
+          skillObservations: {},
+          abilities: {},
+          eventSeq: 7,
+          events: [
+            {
+              ...event,
+              sequence: 1,
+              wordId: 'distant',
+              skill: 'spell',
+              taskVersion: 'spell-controlled-v2',
+              labelSource: 'controlled_first_attempt',
+            },
+            {
+              ...event,
+              sequence: 2,
+              wordId: 'fascinate',
+              skill: 'meaning',
+              taskVersion: 'visual-guess-v2',
+              labelSource: 'controlled_visual_first_attempt',
+            },
+            {
+              ...event,
+              sequence: 3,
+              wordId: 'fascinate',
+              skill: 'meaning',
+              taskVersion: 'visual-guess-v2',
+              labelSource: 'controlled_visual_first_attempt',
+              promptId: 'alice-smith-home-address',
+              name: 'Alice Smith',
+              answer: 'private answer',
+            },
+            {
+              ...event,
+              sequence: 4,
+              wordId: 'fascinate',
+              skill: 'sentence',
+              taskVersion: 'visual-guess-v2',
+              labelSource: 'controlled_visual_first_attempt',
+              promptId: 'prompt-0',
+            },
+            {
+              ...event,
+              sequence: 5,
+              wordId: 'distant',
+              skill: 'meaning',
+              taskVersion: 'visual-guess-v2',
+              labelSource: 'controlled_visual_first_attempt',
+              promptId: 'prompt-0',
+            },
+            {
+              ...event,
+              sequence: 6,
+              wordId: 'foundation-beauty',
+              skill: 'sound',
+              taskVersion: 'sound-controlled-v2',
+              labelSource: 'controlled_first_attempt',
+              promptId: 'core',
+            },
+            {
+              ...event,
+              sequence: 7,
+              wordId: 'foundation-beauty',
+              skill: 'forms',
+              taskVersion: 'forms-controlled-v2',
+              labelSource: 'controlled_first_attempt',
+              promptId: 'core',
+            },
+          ],
+        },
+      }),
+    );
+    localStorage.setItem(
+      'els-ielts-visual-lab-v1',
+      JSON.stringify({
+        version: 5,
+        tasks: {
+          'game-guess-fascinate': {
+            modelCycle: 0,
+            modelRecorded: [
+              'visual-guess-v2::prompt-0',
+              'visual-guess-v2::alice-smith-home-address',
+              'visual-family-v2::form-0',
+            ],
+          },
+        },
+        history: [],
+      }),
+    );
+  });
+  await page.reload();
+
+  const events = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}').adaptive.events,
+  );
+  expect(events).toHaveLength(3);
+  expect(
+    events.map((event: { sequence: number; promptId: string }) => [event.sequence, event.promptId]),
+  ).toEqual([
+    [1, 'core'],
+    [2, 'prompt-0'],
+    [7, 'core'],
+  ]);
+  expect(events[0]).not.toHaveProperty('name');
+  expect(events[0]).not.toHaveProperty('answer');
+  expect(events[1]).not.toHaveProperty('name');
+  expect(events[1]).not.toHaveProperty('answer');
+
+  await openPracticeHub(page);
+  await page.locator('[data-action="go-view"][data-view="visual"]').click();
+  await page.getByRole('button', { name: /词网游戏/ }).click();
+  await page.getByRole('button', { name: /看图猜词/ }).click();
+  await page
+    .locator('[data-visual-task-id="game-guess-fascinate"]')
+    .getByRole('button', { name: 'interested', exact: true })
+    .click();
+  const modelRecorded = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-visual-lab-v1') || '{}');
+    return saved.tasks['game-guess-fascinate'].modelRecorded;
+  });
+  expect(modelRecorded).toEqual(['visual-guess-v2::prompt-0']);
 });
 
 test('shadow evaluation activates a better local model and falls back when it is worse', async ({
