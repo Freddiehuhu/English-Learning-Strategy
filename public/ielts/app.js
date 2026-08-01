@@ -8,7 +8,7 @@
       : { posScene: null, familyAtlases: [], groups: [], gameModes: [] };
   var STORAGE_KEY = 'els-ielts-wordlab-v1';
   var VISUAL_STORAGE_KEY = 'els-ielts-visual-lab-v1';
-  var AUDIO_ASSET_VERSION = 'natural-20260728';
+  var AUDIO_ASSET_VERSION = 'natural-20260801';
   var SKILLS = ['sound', 'spell', 'forms', 'sentence'];
   var DAILY_NEW_LIMIT = 2;
   var DAILY_MAX_SECONDS = 720;
@@ -32,7 +32,7 @@
   };
   var SKILL_CHAIN_LABELS = {
     sound: '声音与核心义',
-    spell: '无提示拼写',
+    spell: '拼写与词义',
     forms: '词形与构词',
     sentence: '搭配到标准句复现',
   };
@@ -610,6 +610,7 @@
     });
 
     document.getElementById('openAudit').addEventListener('click', function () {
+      if (settingsDialog.open) settingsDialog.close();
       auditDialog.showModal();
     });
     document.getElementById('openSettings').addEventListener('click', openSettings);
@@ -1107,6 +1108,11 @@
       }
       mode.tasks.forEach(function (task) {
         var hasImage = Boolean(task.image);
+        var validIntegratedMeaning =
+          mode.id !== 'guess' ||
+          (Array.isArray(task.meaningChoices) &&
+            task.meaningChoices.length >= 2 &&
+            task.meaningChoices.indexOf(task.meaningAnswer) >= 0);
         var validImage =
           !hasImage ||
           (String(task.image).indexOf('./images/semantic-lab/') === 0 &&
@@ -1122,6 +1128,7 @@
           !wordIds.has(task.targetWordId) ||
           !Array.isArray(task.choices) ||
           task.choices.indexOf(task.answer) < 0 ||
+          !validIntegratedMeaning ||
           !validImage
         ) {
           console.error('Invalid visual word game:', task && task.id);
@@ -1169,11 +1176,9 @@
         overflowCarryoverIds,
       ),
       validWordIds,
-    ).filter(
-      function (id) {
-        return newIds.indexOf(id) < 0;
-      },
-    );
+    ).filter(function (id) {
+      return newIds.indexOf(id) < 0;
+    });
     var history = Array.isArray(saved.history)
       ? saved.history
           .filter(function (item) {
@@ -1286,12 +1291,7 @@
   function normaliseSkillReviewFlags(words, history) {
     var latestResults = {};
     history.forEach(function (item) {
-      if (
-        !item ||
-        SKILLS.indexOf(item.skill) < 0 ||
-        !item.wordId ||
-        item.coreAttempt === false
-      )
+      if (!item || SKILLS.indexOf(item.skill) < 0 || !item.wordId || item.coreAttempt === false)
         return;
       var key = item.wordId + '::' + item.skill;
       if (!latestResults[key] || Number(item.at || 0) >= Number(latestResults[key].at || 0)) {
@@ -1499,12 +1499,7 @@
       } else if (!history.state || history.state.wordlabView !== view) {
         history.pushState(nextHistoryState, '', location.href);
       }
-    } else if (
-      options &&
-      options.fromPopState &&
-      isSessionHistoryEntry &&
-      history.replaceState
-    ) {
+    } else if (options && options.fromPopState && isSessionHistoryEntry && history.replaceState) {
       // A completed in-memory session cannot be restored through browser Forward.
       // Convert that stale entry into its safe landing view before another session starts.
       history.replaceState(
@@ -1518,6 +1513,8 @@
       renderToday();
     } else if (view === 'progress') {
       renderProgress();
+    } else if (view === 'practice') {
+      renderPracticeHub();
     } else if (view === 'visual') {
       renderVisualLab();
     } else if (SKILLS.indexOf(view) >= 0) {
@@ -1531,7 +1528,8 @@
   }
 
   function setActiveNav(view) {
-    var normalised = view === 'sound' ? 'learn' : view;
+    var normalised =
+      SKILLS.indexOf(view) >= 0 || view === 'learn' || view === 'visual' ? 'practice' : view;
     document.querySelectorAll('[data-view-link]').forEach(function (button) {
       button.classList.toggle('is-active', button.dataset.viewLink === normalised);
     });
@@ -1555,108 +1553,71 @@
     }).format(new Date());
 
     main.innerHTML =
-      '<section class="page-heading">' +
-      '<div>' +
-      '<p class="eyebrow">ONE WORD · ONE LEARNING LOOP</p>' +
-      '<h1>同一个词，走完一条学习闭环</h1>' +
-      '<p>系统让声音、拼写、词形、搭配和标准句复现连续发生；每一关都为下一关留下可用的记忆线索。</p>' +
-      '</div>' +
-      '<span class="date-chip">' +
+      '<section class="page-heading compact-page-heading"><div><p class="eyebrow">TODAY</p><h1>今天</h1></div><span class="date-chip">' +
       esc(today) +
-      '</span>' +
-      '</section>' +
-      '<section class="today-layout">' +
-      '<article class="panel start-panel" data-daily-plan data-new-count="' +
+      '</span></section>' +
+      '<section class="today-focus">' +
+      '<article class="panel start-panel compact-start-panel" data-daily-plan data-new-count="' +
       newCount +
       '" data-estimated-seconds="' +
       estimatedSeconds +
       '">' +
-      '<p class="eyebrow">8–12 MINUTES · NATURAL STOP</p>' +
-      '<h2>' +
-      (plan.length
-        ? '预计 ' +
-          Math.max(1, Math.ceil(estimatedSeconds / 60)) +
-          ' 分钟 · ' +
-          plan.length +
-          ' 个词 · ' +
-          taskCount +
-          ' 项'
-        : '今日到期任务已完成') +
-      '</h2>' +
-      '<p>' +
-      (plan.length
-        ? '新词最多 2 个并完成声音、拼写、词形和表达四关；旧词只复习今天到期或尚未完成的能力，最后用新语境确认迁移。'
-        : '你可以继续做专项练习，或明天按间隔计划回来复习。') +
-      '</p>' +
-      '<ol class="session-steps integrated-loop" aria-label="每日学习闭环">' +
-      '<li><span>01</span><strong>声音与核心义</strong><small>听辨 · 跟读</small></li>' +
-      '<li><span>02</span><strong>无提示拼写</strong><small>盲听 · 检索</small></li>' +
-      '<li><span>03</span><strong>词形与构词</strong><small>判断 · 变形</small></li>' +
-      '<li><span>04</span><strong>搭配到句架</strong><small>词块 · 复现</small></li>' +
-      '</ol>' +
-      '<div class="start-actions">' +
+      '<div class="focus-summary"><span>' +
+      (plan.length ? Math.max(1, Math.ceil(estimatedSeconds / 60)) + ' 分钟' : '已完成') +
+      '</span><h2>' +
+      (plan.length ? plan.length + ' 个词 · ' + taskCount + ' 个小任务' : '今天的到期词已经练完') +
+      '</h2></div>' +
+      '<div class="compact-loop" aria-label="听音、拼写与辨义、词形、句用">' +
+      '<span>听音</span><i>→</i><span>拼写＋辨义</span><i>→</i><span>词形</span><i>→</i><span>句用</span>' +
+      '</div>' +
+      '<div class="start-actions primary-start-actions">' +
       '<button class="primary-button" type="button" data-action="start-daily"' +
       (plan.length ? '' : ' disabled') +
       '>' +
-      (plan.length ? '开始今日训练 →' : '今日任务已完成') +
+      (plan.length ? '继续学习' : '明天再来') +
       '</button>' +
-      '<button class="secondary-button" type="button" data-action="start-weak">智能补弱（按错因）</button>' +
-      '<span class="mini-metric">' +
-      dueCount +
-      ' 项能力待复习</span>' +
       '</div>' +
       '</article>' +
-      '<div class="dashboard-side">' +
-      '<article class="panel metric-panel">' +
-      '<h3>学习概览</h3>' +
-      '<div class="metric-grid">' +
-      metric(summary.started, '已开始') +
-      metric(summary.stable, '四项受控任务达标且无待复习') +
-      metric(summary.mistakes, '近期待纠正') +
+      '<div class="home-glance" aria-label="学习概览">' +
+      metric(summary.started, '已练词') +
+      metric(dueCount, '待复习') +
+      metric(summary.mistakes, '近期错项') +
       '</div>' +
-      '</article>' +
-      '<article class="panel skill-panel">' +
-      '<h3>四项能力</h3>' +
-      skillBars(summary.skills) +
-      '</article>' +
-      '</div>' +
-      '</section>' +
-      '<section class="repair-heading" aria-labelledby="repairHeading">' +
-      '<div><p class="eyebrow">ERROR-ADAPTIVE REPAIR</p><h2 id="repairHeading">专项练习是错误修复站</h2></div>' +
-      '<p>哪一关不稳，就回到对应站点做短练；稳定后再回到完整闭环。图像关系游戏只在核心词义建立后使用。</p>' +
-      '</section>' +
-      '<section class="module-grid" aria-label="专项训练">' +
-      moduleCard(
-        '01',
-        '音节听辨与自练',
-        '自动证据只检查音节听辨；跟读录音用于自己的 A/B 对比，不自动评价发音。',
-        'sound',
-      ) +
-      moduleCard(
-        '02',
-        '听写拼词',
-        '修复声音到拼写的连接：盲听输入、暂停与变速重播，提示不直接给答案。',
-        'spell',
-      ) +
-      moduleCard(
-        '03',
-        '词形变换',
-        '修复词性和构词错误：预测后再验证四格词族、直接变形、屈折与语境。',
-        'forms',
-      ) +
-      moduleCard(
-        '04',
-        '句子工坊',
-        '修复搭配、句法和表达：先回忆自然词块，再排序、仿写并修改完整句子。',
-        'sentence',
-      ) +
-      viewModuleCard(
-        '05',
-        '图像词义实验室',
-        '修复意义混淆：用手绘场景复盘词族，再做近反义、同音同形与语义分类。',
-        'visual',
-      ) +
       '</section>';
+  }
+
+  function renderPracticeHub() {
+    currentView = 'practice';
+    setActiveNav('practice');
+    var repairCount = buildRepairQueue(10).length;
+    main.innerHTML =
+      '<section class="page-heading compact-page-heading"><div><p class="eyebrow">PRACTICE</p><h1>专项练习</h1></div></section>' +
+      '<section class="practice-hub">' +
+      (repairCount
+        ? '<article class="panel practice-repair-card"><div><span class="mini-metric">' +
+          repairCount +
+          ' 项待复习</span><h2>先修复最薄弱的一项</h2></div><button class="primary-button" type="button" data-action="start-weak">开始补弱</button></article>'
+        : '') +
+      '<section class="practice-grid" aria-label="按能力练习">' +
+      compactPracticeCard('◉', '听音', 'sound') +
+      compactPracticeCard('⌨', '拼写', 'spell') +
+      compactPracticeCard('⇄', '词形', 'forms') +
+      compactPracticeCard('¶', '句用', 'sentence') +
+      '</section>' +
+      '<button class="panel semantic-library-link" type="button" data-action="go-view" data-view="visual"><span aria-hidden="true">◫</span><span><strong>语义与图像题库</strong><small>近反义 · 同音同形 · 分类</small></span><i aria-hidden="true">→</i></button>' +
+      '</section>';
+  }
+
+  function compactPracticeCard(icon, title, skill) {
+    return (
+      '<button class="panel compact-practice-card" type="button" data-action="start-skill" data-skill="' +
+      esc(skill) +
+      '"><span aria-hidden="true">' +
+      esc(icon) +
+      '</span><strong>' +
+      esc(title) +
+      '</strong><i aria-hidden="true">→</i></button>'
+    );
   }
 
   function metric(value, label) {
@@ -1666,71 +1627,6 @@
       '</strong><span>' +
       esc(label) +
       '</span></div>'
-    );
-  }
-
-  function moduleCard(number, title, description, skill) {
-    return (
-      '<button class="module-card" type="button" data-action="start-skill" data-skill="' +
-      skill +
-      '">' +
-      '<span>' +
-      '<span class="module-number">' +
-      number +
-      '</span>' +
-      '<h3>' +
-      esc(title) +
-      '</h3>' +
-      '<p>' +
-      esc(description) +
-      '</p>' +
-      '</span>' +
-      '<small>进入专项 →</small>' +
-      '</button>'
-    );
-  }
-
-  function viewModuleCard(number, title, description, view) {
-    return (
-      '<button class="module-card visual-module-card" type="button" data-action="go-view" data-view="' +
-      esc(view) +
-      '">' +
-      '<span>' +
-      '<span class="module-number">' +
-      esc(number) +
-      '</span>' +
-      '<h3>' +
-      esc(title) +
-      '</h3>' +
-      '<p>' +
-      esc(description) +
-      '</p>' +
-      '</span>' +
-      '<small>看图辨词 →</small>' +
-      '</button>'
-    );
-  }
-
-  function skillBars(skills) {
-    return (
-      '<div class="skill-list">' +
-      SKILLS.map(function (skill) {
-        var percentage = skills[skill] || 0;
-        return (
-          '<div class="skill-row">' +
-          '<span>' +
-          SKILL_SHORT[skill] +
-          '</span>' +
-          '<div class="progress-track"><span style="--progress:' +
-          percentage +
-          '%"></span></div>' +
-          '<strong>' +
-          percentage +
-          '%</strong>' +
-          '</div>'
-        );
-      }).join('') +
-      '</div>'
     );
   }
 
@@ -2594,7 +2490,7 @@
         '<span class="corpus-loading-mark" aria-hidden="true">!</span>' +
         '<div><p class="eyebrow">CORPUS UNAVAILABLE</p><h2>全量词库暂时没有载入</h2>' +
         '<p>' +
-        esc(corpusLoadError || '请检查网络后重试；现有 50 词训练和图片游戏不受影响。') +
+        esc(corpusLoadError || '请检查网络后重试；当前训练和图片题不受影响。') +
         '</p><button class="secondary-button" type="button" data-action="corpus-retry">重新载入</button>' +
         '</div></section>';
       return;
@@ -3011,8 +2907,7 @@
     if (!history.pushState || (history.state && history.state.wordlabSession)) return;
     history.pushState(
       Object.assign({}, history.state || {}, {
-        wordlabView:
-          (history.state && history.state.wordlabView) || currentView || 'today',
+        wordlabView: (history.state && history.state.wordlabView) || currentView || 'today',
         wordlabSession: true,
       }),
       '',
@@ -3101,80 +2996,19 @@
 
     var word = currentWord();
     var skill = currentSkill();
-    var stages = currentStages();
     var currentTaskNumber = session.type === 'daily' ? dailyTaskNumber() : session.wordIndex + 1;
     var totalTasks = session.type === 'daily' ? dailyTaskTotal() : session.words.length;
 
-    setActiveNav(skill);
+    setActiveNav(session.type === 'daily' ? 'today' : 'practice');
     currentView = skill;
-    var focusHeadings = {
-      sound: ['音节听辨', '先建立声音，再看拼写。录音跟读只作自练，不计自动评分。'],
-      spell: ['听写拼词', '先盲听拼写，可暂停和变速重播；提示不会直接显示答案。'],
-      forms: ['词形变换', '四格词族、直接变形与语境填空交替出现；答案在答对前保持隐藏。'],
-      sentence: ['句子工坊', '先回忆自然搭配，再用词块搭好骨架并完成受控仿写。'],
-    };
-    var dailyHeadingContent = {
-      sound: ['声音与核心义', '听清、跟读并确认一个核心义，为接下来的无提示拼写留下声音线索。'],
-      spell: ['无提示拼写', '保持同一个词，先盲听检索完整拼写；需要时只获得最小提示。'],
-      forms: ['词形与构词', '继续处理同一个词的词性、变形和句中位置；答案在作答前保持隐藏。'],
-      sentence: [
-        '搭配到标准句复现',
-        '先从记忆中提取一个自然词块，再隐藏骨架复现完整标准句。',
-      ],
-    };
-    var headings = focusHeadings;
-    if (session.type === 'daily') {
-      var dailyPlan = currentPlan();
-      var stage = currentStage();
-      var stagePrefix =
-        dailyPlan && dailyPlan.kind === 'new'
-          ? '第 ' + (session.stageIndex + 1) + ' 关 · '
-          : stages.length === 1
-            ? '迁移复习 · '
-            : '本词第 ' + (session.stageIndex + 1) + ' 步 · ';
-      var dailyDescription = dailyHeadingContent[skill][1];
-      if (stage && stage.role === 'transfer') {
-        dailyDescription = '这是本词今天的出口题：撤掉前面线索，在新语境中独立完成后自然结束。';
-      }
-      headings = {};
-      headings[skill] = [stagePrefix + dailyHeadingContent[skill][0], dailyDescription];
-    }
-
     main.innerHTML =
-      '<section class="page-heading">' +
-      '<div>' +
-      '<p class="eyebrow">' +
-      (session.type === 'daily'
-        ? (currentPlan() && currentPlan().kind === 'new' ? 'NEW WORD LOOP' : 'DUE SKILL LOOP') +
-          ' · ' +
-          (session.stageIndex + 1) +
-          ' / ' +
-          stages.length
-        : 'FOCUS PRACTICE') +
-      '</p>' +
-      '<h1>' +
-      headings[skill][0] +
-      '</h1>' +
-      '<p>' +
-      headings[skill][1] +
-      '</p>' +
-      '</div>' +
-      '<span class="date-chip">任务 ' +
-      currentTaskNumber +
-      ' / ' +
-      totalTasks +
-      '</span>' +
-      '</section>' +
-      '<section class="training-shell">' +
+      renderQueuePanel() +
+      '<section class="training-shell streamlined-training-shell">' +
       '<article class="panel training-panel" data-word-id="' +
       esc(word.id) +
       '">' +
       renderTask(word, skill, currentTaskNumber, totalTasks) +
       '</article>' +
-      '<aside class="training-aside">' +
-      renderQueuePanel() +
-      renderTrainingTip(word, skill) +
-      '</aside>' +
       '</section>';
 
     if (skill === 'forms' && !session.taskState.completed) {
@@ -3202,8 +3036,6 @@
 
   function renderQueuePanel() {
     var wordPosition = session.wordIndex + 1;
-    var isRepair = session.type === 'repair';
-    var dailyPlan = currentPlan();
     var stageText =
       session.type === 'daily'
         ? '第 ' +
@@ -3214,45 +3046,12 @@
           SKILL_CHAIN_LABELS[currentSkill()]
         : '第 ' + wordPosition + ' / ' + session.words.length + ' 题';
     return (
-      '<article class="panel queue-panel">' +
-      '<h3>' +
-      (session.type === 'daily'
-        ? dailyPlan && dailyPlan.kind === 'new'
-          ? '本词完整学习链'
-          : '本词定向复习'
-        : isRepair
-          ? '本轮错误修复'
-          : '当前队列') +
-      '</h3>' +
-      '<p>' +
-      (session.type === 'daily'
-        ? dailyPlan && dailyPlan.kind === 'new'
-          ? '新词保持在同一条四关学习链中；中途不会换词。'
-          : '只练今天真正到期或尚未完成的能力，并以迁移任务自然结束。'
-        : isRepair
-          ? '系统只安排这个词真正薄弱的能力，不把已经稳定的关卡机械重做。'
-          : currentSkill() === 'forms'
-            ? '基础词族与薄弱词交替，题型不会连续重复。'
-            : '到期和薄弱项目优先。') +
-      '</p>' +
+      '<nav class="panel queue-panel compact-queue-panel" aria-label="本轮进度">' +
       renderLearningStageTrack() +
       '<div class="queue-progress"><span>' +
       esc(stageText) +
       '</span><button class="quiet-button" type="button" data-action="leave-session">退出</button></div>' +
-      '<div class="queue-dots">' +
-      session.words
-        .map(function (_, index) {
-          var className =
-            index < session.wordIndex
-              ? 'queue-dot is-done'
-              : index === session.wordIndex
-                ? 'queue-dot is-current'
-                : 'queue-dot';
-          return '<span class="' + className + '"></span>';
-        })
-        .join('') +
-      '</div>' +
-      '</article>'
+      '</nav>'
     );
   }
 
@@ -3289,31 +3088,12 @@
     );
   }
 
-  function renderTrainingTip(word, skill) {
-    if (skill === 'sound' && !session.taskState.soundObserved) {
-      return (
-        '<article class="panel info-panel"><h3>先听后看</h3>' +
-        '<p>这一小步只检查你能否从声音中分出音节。先不显示拼写、音标、词义或例句；作答后再进入跟读。</p>' +
-        '</article>'
-      );
-    }
-    if (skill === 'forms') {
-      return (
-        '<article class="panel info-panel"><h3>无答案提示</h3>' +
-        '<p>先确定目标词性，再回忆拼写规则。需要帮助时，系统只给规则、词形轮廓和乱序字母，不会替你填答案。</p>' +
-        '</article>'
-      );
-    }
-    return (
-      '<article class="panel info-panel"><h3>本词提醒</h3><p>' + esc(word.tip) + '</p></article>'
-    );
-  }
-
   function renderSoundTask(word) {
     if (!session.taskState.soundObserved) {
       return renderSoundPrecheck(word);
     }
     var displayedAccent = state.settings.accent === 'us' ? 'us' : 'uk';
+    var alternateAccent = displayedAccent === 'us' ? 'uk' : 'us';
     var sourceBadge = word.sourceError
       ? '<span class="source-badge">原输入误拼：' +
         esc(word.sourceError) +
@@ -3323,31 +3103,35 @@
         : '';
     return (
       '<div class="word-stage">' +
-      '<span class="topic-badge">' +
-      esc(word.topic) +
-      '</span>' +
       '<h2>' +
       esc(word.word) +
       '</h2>' +
       '<div class="word-meta"><span class="ipa" data-ipa-display>' +
       esc(accentLabel(displayedAccent) + ' ' + wordIpa(word, displayedAccent)) +
-      '</span><span class="pos-badge">' +
-      esc(word.pos) +
       '</span>' +
-      sourceBadge +
       '</div>' +
       '<p class="syllable-line">' +
       syllableHtml(word) +
       '</p>' +
-      renderSoundDiagnostic(word) +
-      '<div class="audio-row">' +
-      audioButton('uk', word.id, 1, '单词 · 英') +
-      audioButton('us', word.id, 1, '单词 · 美') +
-      exampleAudioButton('uk', word.id, '例句 · 英') +
-      exampleAudioButton('us', word.id, '例句 · 美') +
+      '<div class="audio-row primary-sound-row">' +
+      audioButton(
+        displayedAccent,
+        word.id,
+        1,
+        displayedAccent === 'us' ? '单词 · 美' : '单词 · 英',
+      ) +
       '</div>' +
-      '<div class="record-box">' +
-      '<p>自练方法：听范音 → 录下自己 → 交替播放。系统只记录前面的音节听辨，不自动评价你的发音或口音。</p>' +
+      renderSoundDiagnostic(word) +
+      '<details class="sound-more"><summary>更多练习</summary><div class="audio-row">' +
+      audioButton(
+        alternateAccent,
+        word.id,
+        1,
+        alternateAccent === 'us' ? '单词 · 美' : '单词 · 英',
+        true,
+      ) +
+      exampleAudioButton(displayedAccent, word.id, '例句 · 主口音') +
+      '</div><div class="record-box compact-record-box">' +
       '<div class="record-actions">' +
       '<button class="secondary-button" type="button" data-action="record-toggle">● 录下跟读</button>' +
       '<button class="secondary-button" type="button" data-action="play-recording" disabled>▶ 回放自己</button>' +
@@ -3360,7 +3144,9 @@
       esc(word.zh) +
       '</strong><span class="pos-badge">' +
       esc(word.pos) +
-      '</span></div>' +
+      '</span>' +
+      sourceBadge +
+      '</div>' +
       '<p class="collocation">高频搭配：<code>' +
       esc(word.collocation) +
       '</code></p>' +
@@ -3372,7 +3158,7 @@
       '<div class="family-strip">' +
       familyHtml(word) +
       '</div>' +
-      '</div>' +
+      '</div></details>' +
       '<div class="card-actions">' +
       '<button class="secondary-button" type="button" data-action="mark-sound" data-correct="false">仍听不清，再排期</button>' +
       '<button class="primary-button" type="button" data-action="mark-sound" data-correct="true">完成声音对照 →</button>' +
@@ -3399,16 +3185,12 @@
       .join('');
     return (
       '<div class="word-stage sound-precheck" data-sound-precheck>' +
-      '<p class="eyebrow">AUDIO-ONLY CHECK</p>' +
-      '<h2>先听，不看拼写</h2>' +
-      '<p class="sound-precheck-lead" id="soundSyllablePrompt">播放主口音，凭耳朵判断这个词有几个音节。这里不显示主题、词长、首字母、音标或中文义。</p>' +
+      '<h2 id="soundSyllablePrompt">听音，选音节数</h2>' +
       '<div class="audio-row">' +
       audioButton(accent, word.id, 1, accentLabel) +
       '</div>' +
       '<p class="sound-precheck-status" id="soundPrecheckStatus" aria-live="polite">' +
-      (session.taskState.soundPlayed
-        ? '已经听过了，请选择音节数。'
-        : '先播放一次，音节选项随后可用。') +
+      (session.taskState.soundPlayed ? '现在选择音节数。' : '播放后即可作答。') +
       '</p>' +
       '<div class="sound-syllable-options" role="group" aria-labelledby="soundSyllablePrompt">' +
       buttons +
@@ -3423,22 +3205,19 @@
     var count = word.syllables.length;
     if (task.soundDiagnosticSkipped) {
       return (
-        '<div class="sound-diagnostic is-review"><strong>预听记录：暂时听不出</strong>' +
-        '<span>这个词有 ' +
+        '<div class="sound-diagnostic is-review"><strong>稍后再练</strong>' +
+        '<span>先对照 ' +
         count +
-        ' 个音节。现在对照拼写和重音跟读；本轮不会记为听辨通过。</span></div>'
+        ' 个音节和重音位置跟读。</span></div>'
       );
     }
+    if (task.soundDiagnosticCorrect) {
+      return '<div class="sound-diagnostic"><strong>判断正确</strong><span>再听一遍，跟着重音读。</span></div>';
+    }
     return (
-      '<div class="sound-diagnostic ' +
-      (task.soundDiagnosticCorrect ? 'is-correct' : 'is-review') +
-      '"><strong>' +
-      (task.soundDiagnosticCorrect ? '音节听辨正确' : '音节听辨需要复习') +
-      '</strong><span>你选择了 ' +
-      Number(task.soundDiagnosticChoice || 0) +
-      ' 个；实际是 ' +
+      '<div class="sound-diagnostic is-review"><strong>再留意重音</strong><span>实际是 ' +
       count +
-      ' 个。现在再听并对照重音位置。</span></div>'
+      ' 个音节。</span></div>'
     );
   }
 
@@ -3482,6 +3261,10 @@
     var stateForTask = session.taskState;
     var attempts = stateForTask.attempts || 0;
     var completed = Boolean(stateForTask.completed);
+    var meaningTask = integratedMeaningTask(word);
+    if (meaningTask && !stateForTask.meaningResolved) {
+      return renderIntegratedMeaningTask(word, meaningTask);
+    }
     var accent = state.settings.accent === 'us' ? 'us' : 'uk';
     var accentLabel = accent === 'us' ? '美音' : '英音';
     return (
@@ -3528,6 +3311,73 @@
     );
   }
 
+  function integratedMeaningTask(word) {
+    var mode = visualGameModes().find(function (candidate) {
+      return candidate && candidate.id === 'guess';
+    });
+    if (!mode || !Array.isArray(mode.tasks)) return null;
+    return (
+      mode.tasks.find(function (task) {
+        return (
+          task &&
+          task.targetWordId === word.id &&
+          task.image &&
+          Array.isArray(task.meaningChoices) &&
+          task.meaningChoices.indexOf(task.meaningAnswer) >= 0
+        );
+      }) || null
+    );
+  }
+
+  function renderIntegratedMeaningTask(word, task) {
+    var attempts = Math.max(0, Number(session.taskState.meaningAttempts) || 0);
+    var focusClass = task.focus === 'left' || task.focus === 'right' ? ' focus-' + task.focus : '';
+    return (
+      '<div class="word-stage integrated-meaning-stage" data-integrated-meaning="' +
+      esc(task.id) +
+      '" data-visual-task-id="' +
+      esc(task.id) +
+      '" aria-busy="false">' +
+      '<p class="eyebrow">IMAGE → MEANING</p>' +
+      '<h2>看图，选出最贴切的意思</h2>' +
+      '<figure class="integrated-meaning-figure visual-image-frame' +
+      focusClass +
+      '"><img src="' +
+      esc(task.image) +
+      '" data-src="' +
+      esc(task.image) +
+      '" data-visual-image loading="eager" decoding="async' +
+      '" width="' +
+      Number(task.width || 1200) +
+      '" height="' +
+      Number(task.height || 800) +
+      '" alt="' +
+      esc(task.alt || '') +
+      '"><div class="visual-image-error" data-image-error hidden role="status">图片暂时没有载入。<button type="button" data-action="visual-retry-image">重新加载图片</button></div></figure>' +
+      '<p class="integrated-meaning-prompt">' +
+      esc(task.prompt) +
+      '</p>' +
+      '<div class="integrated-meaning-choices" role="group" aria-label="词义选项">' +
+      task.meaningChoices
+        .map(function (choice) {
+          return (
+            '<button type="button" data-action="integrated-meaning-choice" data-choice="' +
+            esc(choice) +
+            '">' +
+            esc(choice) +
+            '</button>'
+          );
+        })
+        .join('') +
+      '</div>' +
+      '<p class="feedback" id="integratedMeaningFeedback" aria-live="polite">' +
+      (attempts ? '再看画面和语境；答案仍然隐藏。' : '') +
+      '</p>' +
+      '<button class="quiet-button" type="button" data-action="integrated-meaning-skip">先跳过</button>' +
+      '</div>'
+    );
+  }
+
   function spellReplayButton(accent, id, rate, label) {
     return (
       '<button class="audio-button secondary-audio spell-replay-button" type="button" data-action="play-word" data-accent="' +
@@ -3564,6 +3414,7 @@
   }
 
   function renderContextFormsTask(word, exercise, task) {
+    var requiredPos = normaliseRequiredPos(exercise.need);
     return (
       '<div class="word-stage" data-form-task-type="context">' +
       '<div class="word-meta"><span class="topic-badge">' +
@@ -3584,7 +3435,7 @@
         .map(function (pos) {
           var className = 'pill-button';
           if (task.selectedPos === pos) {
-            className += pos === exercise.need ? ' is-selected' : ' is-wrong';
+            className += pos === requiredPos ? ' is-selected' : ' is-wrong';
           }
           return (
             '<button class="' +
@@ -4127,7 +3978,9 @@
       '<section class="page-heading"><div><p class="eyebrow">LOCAL PROGRESS</p><h1>错题与进度</h1><p>声音、拼写、词形和标准句复现分别记录；其他表达只保存为待人工评阅草稿。</p></div></section>' +
       '<section class="progress-layout">' +
       '<article class="panel progress-panel">' +
-      '<h2>50 词能力表</h2>' +
+      '<h2>' +
+      WORDS.length +
+      ' 词能力表</h2>' +
       '<div class="metric-grid">' +
       metric(summary.started, '已开始') +
       metric(summary.stable, '四项受控任务达标且无待复习') +
@@ -4188,22 +4041,33 @@
   function wordProgressRow(word) {
     var scores = SKILLS.map(function (skill) {
       var skillState = peekSkillState(word.id, skill);
+      var visualPending = hasVisualRepair(word.id, skill);
       var score = skillState.attempts
         ? Math.round((skillState.correct / skillState.attempts) * 100)
         : null;
       var pendingOnly = !skillState.attempts && Number(skillState.pending || 0) > 0;
       var relearnRequired = !skillState.attempts && Boolean(skillState.relearnRequired);
       var className =
-        score === null && !pendingOnly && !relearnRequired
+        score === null && !pendingOnly && !relearnRequired && !visualPending
           ? 'score-chip'
-          : !skillState.needsReview && score !== null && score >= 80
+          : !skillState.needsReview && !visualPending && score !== null && score >= 80
             ? 'score-chip good'
             : 'score-chip weak';
       return (
         '<td><span class="' +
         className +
         '">' +
-        (pendingOnly ? '待评' : relearnRequired ? '需重练' : score === null ? '—' : score + '%') +
+        (visualPending
+          ? score === null
+            ? '图义待练'
+            : score + '% · 待修复'
+          : pendingOnly
+            ? '待评'
+            : relearnRequired
+              ? '需重练'
+              : score === null
+                ? '—'
+                : score + '%') +
         '</span></td>'
       );
     }).join('');
@@ -4269,6 +4133,8 @@
     if (action === 'sound-syllables') return chooseSoundSyllables(button.dataset.value);
     if (action === 'sound-precheck-skip') return skipSoundPrecheck();
     if (action === 'mark-sound') return markSound(button.dataset.correct === 'true');
+    if (action === 'integrated-meaning-choice') return chooseIntegratedMeaning(button);
+    if (action === 'integrated-meaning-skip') return skipIntegratedMeaning();
     if (action === 'reveal-spell') return revealSpellHint();
     if (action === 'skip-spell') return skipSpelling();
     if (action === 'advance-spell') return advanceSession();
@@ -4671,7 +4537,7 @@
     if (error) error.hidden = false;
     card
       .querySelectorAll(
-        '[data-action="visual-choice"], [data-action="visual-pos-token"], [data-action="visual-game-choice"], [data-visual-family-control]',
+        '[data-action="visual-choice"], [data-action="visual-pos-token"], [data-action="visual-game-choice"], [data-action="integrated-meaning-choice"], [data-visual-family-control]',
       )
       .forEach(function (answerButton) {
         answerButton.disabled = true;
@@ -4690,7 +4556,7 @@
     if (card.dataset.complete !== 'true') {
       card
         .querySelectorAll(
-          '[data-action="visual-choice"], [data-action="visual-pos-token"], [data-action="visual-game-choice"], [data-visual-family-control]',
+          '[data-action="visual-choice"], [data-action="visual-pos-token"], [data-action="visual-game-choice"], [data-action="integrated-meaning-choice"], [data-visual-family-control]',
         )
         .forEach(function (answerButton) {
           answerButton.disabled = false;
@@ -4816,9 +4682,7 @@
       evidenceCorrect,
       diagnosticDetail +
         '；' +
-        (correct
-          ? '声音对照已完成；录音跟读不计自动评分'
-          : '声音仍不清楚；录音跟读不计自动评分'),
+        (correct ? '声音对照已完成；录音跟读不计自动评分' : '声音仍不清楚；录音跟读不计自动评分'),
     );
     advanceSession();
   }
@@ -4855,6 +4719,14 @@
             ? '听写首次正确'
             : '提示后完成；仍列入复习',
       );
+      if (integratedMeaningTask(word) && !task.meaningResolved) {
+        task.spellingFirstTry = firstTry;
+        task.spellingVariant = variant;
+        stopAudio();
+        renderSession();
+        focusCurrentSessionTask();
+        return;
+      }
       setFeedback(
         'spellFeedback',
         '<div class="spell-result-copy">' +
@@ -4943,6 +4815,43 @@
     focusSpellInput();
   }
 
+  function chooseIntegratedMeaning(button) {
+    if (!session || currentSkill() !== 'spell') return;
+    var task = integratedMeaningTask(currentWord());
+    if (!task || session.taskState.meaningResolved || button.disabled) return;
+    var choice = String(button.dataset.choice || '');
+    var correct = choice === task.meaningAnswer;
+    recordVisualResult(task.id, correct, choice);
+    if (!correct) {
+      session.taskState.meaningAttempts =
+        Math.max(0, Number(session.taskState.meaningAttempts) || 0) + 1;
+      button.disabled = true;
+      button.classList.add('is-wrong');
+      setFeedback('integratedMeaningFeedback', '再看画面和语境；答案仍然隐藏。', 'is-wrong');
+      return;
+    }
+    completeVisualTask(task.id);
+    session.taskState.meaningResolved = true;
+    session.taskState.meaningSkipped = false;
+    delete visualRuntime.repairRecorded[task.id];
+    saveVisualState();
+    renderSession();
+    focusCurrentSessionTask();
+  }
+
+  function skipIntegratedMeaning() {
+    if (!session || currentSkill() !== 'spell') return;
+    var task = integratedMeaningTask(currentWord());
+    if (!task || session.taskState.meaningResolved || !acquireSkipLock()) return;
+    recordVisualResult(task.id, false, 'skip');
+    session.taskState.meaningResolved = true;
+    session.taskState.meaningSkipped = true;
+    delete visualRuntime.repairRecorded[task.id];
+    saveVisualState();
+    renderSession();
+    focusCurrentSessionTask();
+  }
+
   function skipSpelling() {
     if (!session || currentSkill() !== 'spell') return;
     var task = session.taskState;
@@ -5016,7 +4925,8 @@
     var exercise = getFormExercise(currentWord());
     if (exercise.type !== 'context' || task.completed) return;
     task.selectedPos = pos;
-    if (pos === exercise.need) {
+    var requiredPos = normaliseRequiredPos(exercise.need);
+    if (pos === requiredPos) {
       task.posPassed = true;
       task.posFeedback = '判断正确：这里需要' + POS_LABELS[pos] + '。继续写出正确词形。';
       task.posFeedbackClass = 'is-correct';
@@ -5145,9 +5055,7 @@
         esc(completedAnswer) +
         '</strong>。' +
         (normaliseAnswer(completedAnswer) !== normaliseAnswer(exercise.answer)
-          ? '这是可接受的标准变体；本卡首选形式是 <strong>' +
-            esc(exercise.answer) +
-            '</strong>。'
+          ? '这是可接受的标准变体；本卡首选形式是 <strong>' + esc(exercise.answer) + '</strong>。'
           : '') +
         esc(exercise.explanation || '');
     }
@@ -5218,7 +5126,10 @@
         : [
             {
               key: exercise.need || exercise.targetPos || 'target',
-              label: exercise.type === 'context' ? POS_LABELS[exercise.need] : exercise.targetLabel,
+              label:
+                exercise.type === 'context'
+                  ? POS_LABELS[normaliseRequiredPos(exercise.need)] || exercise.need
+                  : exercise.targetLabel,
               answer: exercise.answer,
               hint: exercise.ruleHint,
             },
@@ -5442,8 +5353,7 @@
     task.checks = checks;
     task.mechanicsPass = allPass;
     task.controlledRecallPass =
-      normaliseControlledSentence(text) ===
-      normaliseControlledSentence(joinChunks(word.chunks));
+      normaliseControlledSentence(text) === normaliseControlledSentence(joinChunks(word.chunks));
     task.evaluated = true;
     task.sentenceFeedback = task.controlledRecallPass
       ? task.hadError
@@ -5465,11 +5375,7 @@
     setFeedback(
       'sentenceFeedback',
       task.sentenceFeedback,
-      task.controlledRecallPass && !task.hadError
-        ? 'is-correct'
-        : allPass
-          ? ''
-          : 'is-wrong',
+      task.controlledRecallPass && !task.hadError ? 'is-correct' : allPass ? '' : 'is-wrong',
     );
   }
 
@@ -5516,11 +5422,7 @@
             : '学习者标记为需要人工帮助',
       );
     } else {
-      recordPendingResult(
-        word,
-        'sentence',
-        '表达与标准句不同；已保存为待人工评阅草稿，不计正误',
-      );
+      recordPendingResult(word, 'sentence', '表达与标准句不同；已保存为待人工评阅草稿，不计正误');
     }
     saveState();
     advanceSession();
@@ -5841,9 +5743,7 @@
   function dueSkills(wordId, today) {
     return SKILLS.filter(function (skill) {
       var skillState = peekSkillState(wordId, skill);
-      return (
-        hasSkillActivity(skillState) && skillState.due <= today && skillState.last < today
-      );
+      return hasSkillActivity(skillState) && skillState.due <= today && skillState.last < today;
     });
   }
 
@@ -5913,11 +5813,16 @@
   function buildRepairQueue(limit) {
     var today = startOfToday();
     var recentBoundary = Date.now() - 14 * 86400000;
-    var recentErrors = {};
+    var latestCoreResults = {};
     state.history.forEach(function (item) {
-      if (item.correct !== false || item.at < recentBoundary) return;
+      if (!item || item.coreAttempt === false || SKILLS.indexOf(item.skill) < 0) return;
       var key = item.wordId + ':' + item.skill;
-      recentErrors[key] = (recentErrors[key] || 0) + 1;
+      if (
+        !latestCoreResults[key] ||
+        Number(item.at || 0) >= Number(latestCoreResults[key].at || 0)
+      ) {
+        latestCoreResults[key] = item;
+      }
     });
     var items = [];
     WORDS.forEach(function (word) {
@@ -5928,18 +5833,19 @@
           wordState.visualRepairPending && wordState.visualRepairPending[skill],
         );
         if (!hasSkillActivity(skillState) && !visualPending) return;
-        var accuracy = skillState.attempts
-          ? skillState.correct / skillState.attempts
-          : 0;
-        var errorCount = recentErrors[word.id + ':' + skill] || 0;
+        var accuracy = skillState.attempts ? skillState.correct / skillState.attempts : 0;
+        var latest = latestCoreResults[word.id + ':' + skill];
+        var unresolvedRecentError = Boolean(
+          latest && latest.correct === false && Number(latest.at || 0) >= recentBoundary,
+        );
         var due = skillState.due <= today;
-        if (accuracy >= 0.8 && !errorCount && !skillState.needsReview) return;
+        if (!unresolvedRecentError && !skillState.needsReview && !visualPending) return;
         items.push({
           word: word,
           skill: skill,
           priority:
             (1 - accuracy) * 100 +
-            errorCount * 20 +
+            (unresolvedRecentError ? 20 : 0) +
             (due ? 12 : 0) +
             (visualPending ? 30 : 0) +
             Math.max(0, 4 - skillState.level) * 3,
@@ -6066,10 +5972,13 @@
       return hasAnyAttempt(word.id);
     }).length;
     var stable = WORDS.filter(function (word) {
-      return SKILLS.every(function (skill) {
-        var skillState = peekSkillState(word.id, skill);
-        return skillState.level >= 4 && !skillState.needsReview;
-      });
+      return (
+        !hasVisualRepair(word.id) &&
+        SKILLS.every(function (skill) {
+          var skillState = peekSkillState(word.id, skill);
+          return skillState.level >= 4 && !skillState.needsReview;
+        })
+      );
     }).length;
     var recentBoundary = Date.now() - 14 * 86400000;
     var mistakes = state.history.filter(function (item) {
@@ -6095,7 +6004,10 @@
     WORDS.forEach(function (word) {
       SKILLS.forEach(function (skill) {
         var skillState = peekSkillState(word.id, skill);
-        if (hasSkillActivity(skillState) && skillState.due <= now && skillState.last < now) {
+        if (
+          hasVisualRepair(word.id, skill) ||
+          (hasSkillActivity(skillState) && skillState.due <= now && skillState.last < now)
+        ) {
           count += 1;
         }
       });
@@ -6104,8 +6016,21 @@
   }
 
   function hasAnyAttempt(wordId) {
-    return SKILLS.some(function (skill) {
-      return hasSkillActivity(peekSkillState(wordId, skill));
+    return (
+      hasVisualRepair(wordId) ||
+      SKILLS.some(function (skill) {
+        return hasSkillActivity(peekSkillState(wordId, skill));
+      })
+    );
+  }
+
+  function hasVisualRepair(wordId, skill) {
+    var wordState = state.words[wordId];
+    var pending = wordState && wordState.visualRepairPending;
+    if (!pending || typeof pending !== 'object') return false;
+    if (skill) return Boolean(pending[skill]);
+    return SKILLS.some(function (candidate) {
+      return Boolean(pending[candidate]);
     });
   }
 
@@ -6127,6 +6052,7 @@
       var skillState = peekSkillState(wordId, skill);
       return hasSkillActivity(skillState) ? skillState.due : Infinity;
     });
+    if (hasVisualRepair(wordId)) times.push(startOfToday());
     return Math.min.apply(Math, times);
   }
 
@@ -6559,7 +6485,7 @@
 
   function exportData() {
     var payload = {
-      app: 'WordLab 50',
+      app: 'WordLab',
       version: 3,
       exportedAt: new Date().toISOString(),
       state: state,
@@ -6571,7 +6497,7 @@
     var url = URL.createObjectURL(blob);
     var link = document.createElement('a');
     link.href = url;
-    link.download = 'wordlab-50-progress-' + new Date().toISOString().slice(0, 10) + '.json';
+    link.download = 'wordlab-progress-' + new Date().toISOString().slice(0, 10) + '.json';
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -6584,7 +6510,7 @@
   async function importData(file) {
     try {
       var payload = JSON.parse(await file.text());
-      if (!payload || payload.app !== 'WordLab 50' || !payload.state) {
+      if (!payload || ['WordLab', 'WordLab 50'].indexOf(payload.app) < 0 || !payload.state) {
         throw new Error('Invalid WordLab export');
       }
       state = normaliseState(payload.state);
@@ -6595,7 +6521,7 @@
       showToast('词汇与图像课程进度已导入。');
       renderProgress();
     } catch (error) {
-      showToast('导入失败：请选择由 WordLab 50 导出的 JSON 文件。');
+      showToast('导入失败：请选择由 WordLab 导出的 JSON 文件。');
     }
   }
 
@@ -6666,6 +6592,17 @@
 
   function compactLength(value) {
     return String(value || '').replace(/[^A-Za-z]/g, '').length;
+  }
+
+  function normaliseRequiredPos(value) {
+    var text = String(value || '')
+      .trim()
+      .toLowerCase();
+    if (/^(n\.|noun)/.test(text)) return 'n.';
+    if (/^(v\.|verb|past v\.)/.test(text)) return 'v.';
+    if (/^(adj\.|adjective)/.test(text)) return 'adj.';
+    if (/^(adv\.|adverb)/.test(text)) return 'adv.';
+    return text;
   }
 
   function normaliseAnswer(value) {

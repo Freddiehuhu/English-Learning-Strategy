@@ -107,7 +107,9 @@ async function expectFamilyAnswersHidden(card: Locator, answers: readonly string
 }
 
 async function showVisualLab(page: Page) {
-  await page.locator('[data-view-link="visual"]:visible').first().click();
+  await page.locator('[data-view-link="practice"]:visible').first().click();
+  await expect(page.getByRole('heading', { name: '专项练习' })).toBeVisible();
+  await page.locator('[data-action="go-view"][data-view="visual"]').click();
   await expect(page.getByRole('heading', { name: '图像词义实验室' })).toBeVisible();
 }
 
@@ -132,7 +134,7 @@ test('teaches noun, verb, adjective and adverb without changing core progress', 
   await page.goto('/ielts/index.html');
   const coreBefore = await page.evaluate(() => localStorage.getItem('els-ielts-wordlab-v1'));
 
-  await page.getByRole('button', { name: /05 图像词义实验室/ }).click();
+  await showVisualLab(page);
   await expect(page.getByRole('heading', { name: '一张图看懂四种词性' })).toBeVisible();
   const scene = page.locator('[data-visual-task-id="pos-foundation"] img');
   await expect(scene).toBeVisible();
@@ -580,7 +582,7 @@ test('keeps image failures recoverable and mobile navigation usable', async ({ p
   });
   expect(layout.overflow).toBeLessThanOrEqual(1);
   if (layout.mobile) {
-    expect(layout.items).toHaveLength(6);
+    expect(layout.items).toHaveLength(3);
     layout.items.forEach((box) => {
       expect(box.width).toBeGreaterThanOrEqual(44);
       expect(box.height).toBeGreaterThanOrEqual(44);
@@ -721,8 +723,10 @@ test('supports homophone, homograph, analogy and taxonomy games without revealin
   );
   expect(overflow).toBeLessThanOrEqual(1);
   await page.locator('[data-view-link="today"]:visible').first().click();
-  await page.getByRole('button', { name: '智能补弱（按错因）' }).click();
-  await expect(page.getByRole('heading', { name: '听写拼词' })).toBeVisible();
+  await page.locator('[data-view-link="practice"]:visible').first().click();
+  await page.locator('[data-action="start-weak"]').click();
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', 'fir');
+  await expect(page.locator('.skill-badge')).toHaveText('听写拼词');
   await expect(page.locator('.training-count')).toHaveText('1 / 1');
   expect(pageErrors).toEqual([]);
 });

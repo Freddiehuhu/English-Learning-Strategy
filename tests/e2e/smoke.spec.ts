@@ -43,6 +43,50 @@ async function installControllableAudio(page: import('@playwright/test').Page) {
 
 type IeltsSkill = 'sound' | 'spell' | 'forms' | 'sentence';
 
+async function openPracticeHub(page: import('@playwright/test').Page) {
+  await page.locator('[data-view-link="practice"]:visible').first().click();
+  await expect(page.getByRole('heading', { name: '专项练习' })).toBeVisible();
+}
+
+async function startSkill(page: import('@playwright/test').Page, skill: IeltsSkill) {
+  await openPracticeHub(page);
+  await page.locator(`[data-action="start-skill"][data-skill="${skill}"]`).click();
+}
+
+async function startDaily(page: import('@playwright/test').Page) {
+  await page.locator('[data-action="start-daily"]').click();
+}
+
+async function resolveIntegratedMeaningIfPresent(page: import('@playwright/test').Page) {
+  const stage = page.locator('[data-integrated-meaning]');
+  if (!(await stage.count()) || !(await stage.isVisible())) return;
+  const taskId = await stage.getAttribute('data-integrated-meaning');
+  const answer = await page.evaluate((id) => {
+    const modes = (
+      window as unknown as {
+        IELTS_VISUAL_LAB: {
+          gameModes: Array<{ tasks: Array<{ id: string; meaningAnswer?: string }> }>;
+        };
+      }
+    ).IELTS_VISUAL_LAB.gameModes;
+    return modes.flatMap((mode) => mode.tasks).find((task) => task.id === id)?.meaningAnswer;
+  }, taskId);
+  expect(answer).toBeTruthy();
+  await stage.getByRole('button', { name: answer!, exact: true }).click();
+}
+
+async function expectToday(page: import('@playwright/test').Page) {
+  await expect(page.getByRole('heading', { name: '今天' })).toBeVisible();
+  await expect(page.locator('[data-action="start-daily"]')).toBeVisible();
+}
+
+async function expectActiveDailySkill(page: import('@playwright/test').Page, skill: IeltsSkill) {
+  await expect(page.locator('.training-panel')).toBeVisible();
+  await expect(
+    page.locator(`.learning-stage-track li.is-current[data-skill="${skill}"]`),
+  ).toBeVisible();
+}
+
 async function seedSingleDueSkill(
   page: import('@playwright/test').Page,
   wordId: string,
@@ -137,7 +181,7 @@ test('opens the learning list and boots the Phaser mission', async ({ page }) =>
   const ieltsEntry = page.getByRole('link', { name: '进入学习 →' });
   await expect(ieltsEntry).toHaveAttribute('href', './ielts/index.html');
   await ieltsEntry.click();
-  await expect(page).toHaveTitle('WordLab 50 · 雅思薄弱词专项训练');
+  await expect(page).toHaveTitle('WordLab · 雅思听力薄弱词训练');
   await page.goBack();
   await expect(page.getByRole('heading', { name: /沪教版 英语/ })).toBeVisible();
 
@@ -154,10 +198,113 @@ test('opens the learning list and boots the Phaser mission', async ({ page }) =>
   await expect(page.getByRole('button', { name: '开始任务' })).toBeVisible();
 });
 
+test('loads the 36-word listening batch into one unique 86-word vocabulary', async ({ page }) => {
+  await page.goto('/ielts/index.html');
+  const expectedListeningWords = [
+    'universal',
+    'scale',
+    'sketchy',
+    'corridor',
+    'pamphlet',
+    'midst',
+    'crisis',
+    'wellness',
+    'lay',
+    'perspective',
+    'heal',
+    'mindfulness',
+    'rite',
+    'fertility',
+    'turf',
+    'actual',
+    'empire',
+    'tomb',
+    'villa',
+    'mosaic',
+    'cosmology',
+    'tribe',
+    'carve',
+    'prayer',
+    'meditation',
+    'reminder',
+    'spiritual',
+    'spiral',
+    'wind',
+    'metaphor',
+    'confusion',
+    'pattern',
+    'hedge',
+    'intricate',
+    'labyrinth',
+    'twist',
+  ];
+
+  const audit = await page.evaluate(() => {
+    const vocabulary = window.IELTS_VOCABULARY as Array<{
+      id: string;
+      word: string;
+      sourceBatch?: string;
+      sourceSkill?: string;
+      alternatePronunciation?: unknown;
+    }>;
+    const batch = vocabulary.filter(
+      (entry) => entry.sourceBatch === 'student-listening-unknowns-2026-08-01',
+    );
+    return {
+      total: vocabulary.length,
+      uniqueIds: new Set(vocabulary.map((entry) => entry.id)).size,
+      words: batch.map((entry) => entry.word),
+      sourceSkills: [...new Set(batch.map((entry) => entry.sourceSkill))],
+      windHasAlternatePronunciation: Boolean(
+        batch.find((entry) => entry.id === 'wind')?.alternatePronunciation,
+      ),
+      windPronunciations: (() => {
+        const wind = batch.find((entry) => entry.id === 'wind') as
+          | {
+              ipaUk?: string;
+              alternatePronunciation?: { ipaUk?: string };
+            }
+          | undefined;
+        return [wind?.ipaUk, wind?.alternatePronunciation?.ipaUk];
+      })(),
+    };
+  });
+
+  expect(audit.total).toBe(86);
+  expect(audit.uniqueIds).toBe(86);
+  expect(audit.words).toEqual(expectedListeningWords);
+  expect(audit.sourceSkills).toEqual(['listening']);
+  expect(audit.windHasAlternatePronunciation).toBe(true);
+  expect(audit.windPronunciations).toEqual(['/wɪnd/', '/waɪnd/']);
+});
+
+test('normalises plural and past-tense form prompts to the four visible part-of-speech choices', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  const cases = [
+    { id: 'crisis', pos: 'n.', answer: 'crises' },
+    { id: 'lay', pos: 'v.', answer: 'laid' },
+  ];
+
+  for (const testCase of cases) {
+    await test.step(testCase.id, async () => {
+      await seedSingleDueSkill(page, testCase.id, 'forms');
+      await startDaily(page);
+      await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', testCase.id);
+      await page.locator(`[data-action="choose-pos"][data-pos="${testCase.pos}"]`).click();
+      await expect(page.locator('#formInput')).toBeVisible();
+      await page.locator('#formInput').fill(testCase.answer);
+      await page.getByRole('button', { name: '检查词形' }).click();
+      await expect(page.locator('#formFeedback')).toContainText(testCase.answer);
+    });
+  }
+});
+
 test('lets learners skip word-form questions before using hints', async ({ page }) => {
   await page.goto('/ielts/index.html');
 
-  await page.getByRole('button', { name: /03 词形变换/ }).click();
+  await startSkill(page, 'forms');
   const skipButton = page.getByRole('button', { name: '先跳过本题，稍后复习' });
 
   await expect(page.locator('[data-form-task-type="family"]')).toBeVisible();
@@ -180,35 +327,37 @@ test('lets learners skip word-form questions before using hints', async ({ page 
   await expect(page.locator('.training-count')).toHaveText('3 / 12');
 });
 
-test('presents daily practice as one connected learning loop with secondary repair stations', async ({
+test('presents one compact daily loop behind three primary navigation choices', async ({
   page,
 }) => {
   await installControllableAudio(page);
   await page.goto('/ielts/index.html');
 
-  await expect(page.getByRole('heading', { name: '同一个词，走完一条学习闭环' })).toBeVisible();
+  await expectToday(page);
+  await expect(page.locator('.side-nav .nav-item')).toHaveCount(3);
+  await expect(page.locator('.bottom-nav .bottom-nav-item')).toHaveCount(3);
+  await expect(page.locator('.compact-loop span')).toHaveText([
+    '听音',
+    '拼写＋辨义',
+    '词形',
+    '句用',
+  ]);
+  await expect(page.getByRole('heading', { name: '同一个词，走完一条学习闭环' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '专项练习是错误修复站' })).toHaveCount(0);
   await expect(page.locator('[data-daily-plan]')).toHaveAttribute('data-new-count', '2');
   const estimatedSeconds = Number(
     await page.locator('[data-daily-plan]').getAttribute('data-estimated-seconds'),
   );
   expect(estimatedSeconds).toBeLessThanOrEqual(720);
-  await expect(page.locator('.integrated-loop li')).toHaveText([
-    '01声音与核心义听辨 · 跟读',
-    '02无提示拼写盲听 · 检索',
-    '03词形与构词判断 · 变形',
-    '04搭配到句架词块 · 复现',
-  ]);
-  await expect(page.getByRole('heading', { name: '专项练习是错误修复站' })).toBeVisible();
-
-  await page.getByRole('button', { name: '开始今日训练 →' }).click();
-  await expect(page.getByRole('heading', { name: '第 1 关 · 声音与核心义' })).toBeVisible();
+  await startDaily(page);
+  await expectActiveDailySkill(page, 'sound');
   await expect(page.locator('.training-count')).toHaveText('1 / 8');
   const activeWordId = await page.locator('.training-panel').getAttribute('data-word-id');
   const activeWord = await page.evaluate(
     (wordId) => window.IELTS_VOCABULARY.find((word) => word.id === wordId),
     activeWordId,
   );
-  await expect(page.getByRole('heading', { name: '先听，不看拼写' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '听音，选音节数' })).toBeVisible();
   await expect(page.getByText(activeWord.word, { exact: true })).toHaveCount(0);
   const syllableChoices = page.locator('[data-action="sound-syllables"]');
   await expect(syllableChoices.first()).toBeDisabled();
@@ -223,9 +372,13 @@ test('presents daily practice as one connected learning loop with secondary repa
   await expect(stages.filter({ hasText: '声音与核心义' })).toHaveClass(/is-current/);
 
   await page.getByRole('button', { name: '完成声音对照 →' }).click();
-  await expect(page.getByRole('heading', { name: '第 2 关 · 无提示拼写' })).toBeVisible();
+  await expectActiveDailySkill(page, 'spell');
+  await resolveIntegratedMeaningIfPresent(page);
+  await expect(page.getByLabel('TYPE WHAT YOU HEAR')).toBeVisible();
   await expect(stages.filter({ hasText: '声音与核心义' })).toHaveClass(/is-done/);
-  await expect(stages.filter({ hasText: '无提示拼写' })).toHaveClass(/is-current/);
+  await expect(page.locator('.learning-stage-track li[data-skill="spell"]')).toHaveClass(
+    /is-current/,
+  );
   const soundEvidence = await page.evaluate(() => {
     const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
     return saved.history?.at(-1);
@@ -236,33 +389,31 @@ test('presents daily practice as one connected learning loop with secondary repa
 
 test('browser back exits an active daily session before leaving WordLab', async ({ page }) => {
   await page.goto('/ielts/index.html');
-  await page.getByRole('button', { name: '开始今日训练 →' }).click();
-  await expect(page.getByRole('heading', { name: '第 1 关 · 声音与核心义' })).toBeVisible();
+  await startDaily(page);
+  await expectActiveDailySkill(page, 'sound');
 
   await page.goBack();
 
   await expect(page).toHaveURL(/\/ielts\/index\.html$/);
-  await expect(page.getByRole('heading', { name: '同一个词，走完一条学习闭环' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '开始今日训练 →' })).toBeVisible();
+  await expectToday(page);
 });
 
 test('browser back still exits after leaving and starting a second daily session', async ({
   page,
 }) => {
   await page.goto('/ielts/index.html');
-  await page.getByRole('button', { name: '开始今日训练 →' }).click();
-  await expect(page.getByRole('heading', { name: '第 1 关 · 声音与核心义' })).toBeVisible();
+  await startDaily(page);
+  await expectActiveDailySkill(page, 'sound');
 
   await page.getByRole('button', { name: '退出' }).click();
-  await expect(page.getByRole('heading', { name: '同一个词，走完一条学习闭环' })).toBeVisible();
-  await page.getByRole('button', { name: '开始今日训练 →' }).click();
-  await expect(page.getByRole('heading', { name: '第 1 关 · 声音与核心义' })).toBeVisible();
+  await expectToday(page);
+  await startDaily(page);
+  await expectActiveDailySkill(page, 'sound');
 
   await page.goBack();
 
   await expect(page).toHaveURL(/\/ielts\/index\.html$/);
-  await expect(page.getByRole('heading', { name: '同一个词，走完一条学习闭环' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '开始今日训练 →' })).toBeVisible();
+  await expectToday(page);
 });
 
 test('leaving a session does not leave a duplicate today entry in browser history', async ({
@@ -270,11 +421,11 @@ test('leaving a session does not leave a duplicate today entry in browser histor
 }) => {
   await page.goto('/');
   await page.getByRole('link', { name: '进入学习 →' }).click();
-  await page.getByRole('button', { name: '开始今日训练 →' }).click();
-  await expect(page.getByRole('heading', { name: '第 1 关 · 声音与核心义' })).toBeVisible();
+  await startDaily(page);
+  await expectActiveDailySkill(page, 'sound');
 
   await page.getByRole('button', { name: '退出' }).click();
-  await expect(page.getByRole('heading', { name: '同一个词，走完一条学习闭环' })).toBeVisible();
+  await expectToday(page);
   await page.goBack();
 
   await expect(page).toHaveURL(/\/$/);
@@ -283,18 +434,18 @@ test('leaving a session does not leave a duplicate today entry in browser histor
 
 test('refreshing an active session clears its stale history marker', async ({ page }) => {
   await page.goto('/ielts/index.html');
-  await page.getByRole('button', { name: '开始今日训练 →' }).click();
-  await expect(page.getByRole('heading', { name: '第 1 关 · 声音与核心义' })).toBeVisible();
+  await startDaily(page);
+  await expectActiveDailySkill(page, 'sound');
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: '同一个词，走完一条学习闭环' })).toBeVisible();
+  await expectToday(page);
   expect(await page.evaluate(() => history.state?.wordlabSession)).not.toBe(true);
 
-  await page.getByRole('button', { name: '开始今日训练 →' }).click();
+  await startDaily(page);
   await page.goBack();
 
   await expect(page).toHaveURL(/\/ielts\/index\.html$/);
-  await expect(page.getByRole('heading', { name: '同一个词，走完一条学习闭环' })).toBeVisible();
+  await expectToday(page);
 });
 
 test('sound precheck keeps spelling hidden and a wrong diagnosis cannot count as correct', async ({
@@ -302,7 +453,7 @@ test('sound precheck keeps spelling hidden and a wrong diagnosis cannot count as
 }) => {
   await installControllableAudio(page);
   await page.goto('/ielts/index.html');
-  await page.getByRole('button', { name: /01 音节听辨与自练/ }).click();
+  await startSkill(page, 'sound');
 
   const activeWordId = await page.locator('.training-panel').getAttribute('data-word-id');
   const activeWord = await page.evaluate(
@@ -313,7 +464,7 @@ test('sound precheck keeps spelling hidden and a wrong diagnosis cannot count as
   await expect(page.locator('.ipa')).toHaveCount(0);
   await expect(page.locator('.meaning-line')).toHaveCount(0);
   await expect(page.locator('.word-stage .topic-badge')).toHaveCount(0);
-  await expect(page.getByRole('group', { name: /播放主口音/ })).toBeVisible();
+  await expect(page.getByRole('group', { name: '听音，选音节数' })).toBeVisible();
   const precheckSkip = page.getByRole('button', { name: '听不出来，先看拼写' });
   await expect(precheckSkip).toBeVisible();
   expect(
@@ -329,7 +480,7 @@ test('sound precheck keeps spelling hidden and a wrong diagnosis cannot count as
   await expect(precheckAudio).toHaveAttribute('aria-label', /暂停先听/);
   const wrongCount = (activeWord.syllables.length % 5) + 1;
   await page.locator(`[data-action="sound-syllables"][data-value="${String(wrongCount)}"]`).click();
-  await expect(page.getByText('音节听辨需要复习')).toBeVisible();
+  await expect(page.getByText('再留意重音')).toBeVisible();
   await page.getByRole('button', { name: '完成声音对照 →' }).click();
 
   const history = await page.evaluate(() => {
@@ -343,9 +494,9 @@ test('sound precheck keeps spelling hidden and a wrong diagnosis cannot count as
 
 test('skipping the sound precheck can never become a correct sound result', async ({ page }) => {
   await page.goto('/ielts/index.html');
-  await page.getByRole('button', { name: /01 音节听辨与自练/ }).click();
+  await startSkill(page, 'sound');
   await page.getByRole('button', { name: '听不出来，先看拼写' }).click();
-  await expect(page.getByText('预听记录：暂时听不出')).toBeVisible();
+  await expect(page.getByText('稍后再练')).toBeVisible();
   await page.getByRole('button', { name: '完成声音对照 →' }).click();
 
   const history = await page.evaluate(() => {
@@ -380,7 +531,7 @@ test('sound choices stay locked when natural audio fails to start', async ({ pag
     });
   });
   await page.goto('/ielts/index.html');
-  await page.getByRole('button', { name: /01 音节听辨与自练/ }).click();
+  await startSkill(page, 'sound');
 
   const choices = page.locator('[data-action="sound-syllables"]');
   await expect(choices.first()).toBeDisabled();
@@ -404,7 +555,7 @@ test('chaparral source misspelling stays hidden until the audio-only precheck is
 }) => {
   await page.goto('/ielts/index.html');
   await seedSingleDueSkill(page, 'chaparral', 'sound');
-  await page.getByRole('button', { name: /01 音节听辨与自练/ }).click();
+  await startSkill(page, 'sound');
 
   await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', 'chaparral');
   const precheck = page.locator('[data-sound-precheck]');
@@ -413,20 +564,24 @@ test('chaparral source misspelling stays hidden until the audio-only precheck is
 
   await page.getByRole('button', { name: '听不出来，先看拼写' }).click();
   await expect(page.getByRole('heading', { name: 'chaparral' })).toBeVisible();
-  await expect(page.getByText('原输入误拼：chapparal')).toBeVisible();
+  await expect(page.getByText(/原输入误拼：chapparal/)).toBeHidden();
+  await page.locator('details.sound-more summary').click();
+  await page.getByRole('button', { name: '查看词义与词族' }).click();
+  await expect(page.getByText(/原输入误拼：chapparal/)).toBeVisible();
 });
 
 test('mesquite audio controls switch the visible UK and US IPA', async ({ page }) => {
   await installControllableAudio(page);
   await page.goto('/ielts/index.html');
   await seedSingleDueSkill(page, 'mesquite', 'sound');
-  await page.getByRole('button', { name: /01 音节听辨与自练/ }).click();
+  await startSkill(page, 'sound');
 
   await page.getByRole('button', { name: /播放先听 · 英/ }).click();
   await page.locator('[data-action="sound-syllables"][data-value="2"]').click();
 
   const ipa = page.locator('[data-ipa-display]');
   await expect(ipa).toHaveText('UK /mesˈkiːt/');
+  await page.locator('details.sound-more summary').click();
   await page.getByRole('button', { name: '播放单词 · 美' }).click();
   await expect(ipa).toHaveText('US /məˈskiːt/');
   await page.getByRole('button', { name: '播放单词 · 英' }).click();
@@ -476,7 +631,7 @@ test('daily practice schedules only a due ability plus one transfer gate', async
   await page.reload();
 
   await expect(page.locator('[data-daily-plan]')).toHaveAttribute('data-new-count', '0');
-  await page.getByRole('button', { name: '开始今日训练 →' }).click();
+  await startDaily(page);
 
   const stages = page.locator('.learning-stage-track li');
   await expect(stages).toHaveCount(2);
@@ -489,7 +644,7 @@ test('daily practice schedules only a due ability plus one transfer gate', async
 
   await page.getByRole('button', { name: '先跳过（稍后复习）' }).click();
   await expect(page.locator('[data-form-task-type="context"]')).toBeVisible();
-  await expect(page.getByRole('heading', { name: '本词第 2 步 · 词形与构词' })).toBeVisible();
+  await expect(stages.nth(1)).toHaveClass(/is-current/);
 });
 
 test('legacy daily-new settings migrate to two bounded new words', async ({ page }) => {
@@ -519,7 +674,7 @@ test('legacy daily-new settings migrate to two bounded new words', async ({ page
   expect(saved.settings.dailyNew).toBe(2);
   expect(saved.daily.newIds).toHaveLength(2);
 
-  await page.getByRole('button', { name: '开始今日训练 →' }).click();
+  await startDaily(page);
   await expect(page.locator('.training-count')).toHaveText('1 / 8');
   await expect(page.locator('.learning-stage-track li')).toHaveCount(4);
 });
@@ -690,11 +845,9 @@ test('v3 normalisation rejects impossible levels and lets the latest core error 
     level: 4,
     needsReview: false,
   });
+  await page.locator('[data-view-link="progress"]:visible').first().click();
   await expect(
-    page
-      .locator('.metric')
-      .filter({ hasText: '四项受控任务达标且无待复习' })
-      .locator('strong'),
+    page.locator('.metric').filter({ hasText: '四项受控任务达标且无待复习' }).locator('strong'),
   ).toHaveText('0');
 });
 
@@ -745,13 +898,13 @@ test('a latest spelling error removes level-five stability until independent cor
   }, word);
   await page.reload();
 
-  const stableMetric = page
-    .locator('.metric')
-    .filter({ hasText: '四项受控任务达标且无待复习' });
+  await page.locator('[data-view-link="progress"]:visible').first().click();
+  const stableMetric = page.locator('.metric').filter({ hasText: '四项受控任务达标且无待复习' });
   await expect(stableMetric.locator('strong')).toHaveText('1');
 
-  await page.getByRole('button', { name: /02 听写拼词/ }).click();
+  await startSkill(page, 'spell');
   await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', word.id);
+  await resolveIntegratedMeaningIfPresent(page);
   const spellingSkip = page.getByRole('button', { name: '先跳过（稍后复习）' });
   await expect(async () => {
     const needsReview = await page.evaluate((wordId) => {
@@ -782,8 +935,9 @@ test('a latest spelling error removes level-five stability until independent cor
     correct: false,
   });
 
-  await page.locator('[data-view-link="spell"]:visible').click();
+  await startSkill(page, 'spell');
   await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', word.id);
+  await resolveIntegratedMeaningIfPresent(page);
   await page.getByLabel('TYPE WHAT YOU HEAR').fill(word.word);
   await page.getByRole('button', { name: '检查拼写' }).click();
   await page.locator('[data-view-link="progress"]:visible').click();
@@ -845,7 +999,7 @@ test('a skipped due task does not immediately loop again on the same day', async
   }, word);
   await page.reload();
 
-  await page.getByRole('button', { name: '开始今日训练 →' }).click();
+  await startDaily(page);
   const spellingSkip = page.getByRole('button', { name: '先跳过（稍后复习）' });
   const formSkip = page.getByRole('button', { name: '先跳过本题，稍后复习' });
   await expect(async () => {
@@ -859,8 +1013,8 @@ test('a skipped due task does not immediately loop again on the same day', async
   }).toPass({ timeout: 5_000 });
 
   await page.getByRole('button', { name: '返回今日 →' }).click();
-  await expect(page.getByRole('heading', { name: '今日到期任务已完成' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '今日任务已完成' })).toBeDisabled();
+  await expect(page.getByRole('heading', { name: '今天的到期词已经练完' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '明天再来' })).toBeDisabled();
   const completedAt = await page.evaluate(() => {
     const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
     return saved.daily?.completedAt;
@@ -868,8 +1022,8 @@ test('a skipped due task does not immediately loop again on the same day', async
   expect(completedAt).toBeGreaterThan(0);
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: '今日到期任务已完成' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '今日任务已完成' })).toBeDisabled();
+  await expect(page.getByRole('heading', { name: '今天的到期词已经练完' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '明天再来' })).toBeDisabled();
   await expect(page.locator('[data-daily-plan]')).toHaveAttribute('data-new-count', '0');
 });
 
@@ -914,7 +1068,7 @@ test('resumes only unfinished stages for a partially learned daily word', async 
   }, word);
   await page.reload();
 
-  await page.getByRole('button', { name: '开始今日训练 →' }).click();
+  await startDaily(page);
   const stages = page.locator('.learning-stage-track li');
   await expect(stages).toHaveCount(3);
   await expect(stages.nth(0)).toHaveAttribute('data-skill', 'spell');
@@ -928,7 +1082,7 @@ test('unlocks the atlas and story only after completing a pictured core word fam
   page,
 }) => {
   await page.goto('/ielts/index.html');
-  await page.getByRole('button', { name: /03 词形变换/ }).click();
+  await startSkill(page, 'forms');
 
   const familyTask = page.locator('[data-form-task-type="family"]');
   await expect(familyTask).toContainText('beauty');
@@ -984,7 +1138,7 @@ test('context form cards accept both standard inflection variants', async ({ pag
     for (const [answerIndex, answer] of testCase.answers.entries()) {
       await test.step(`${testCase.id} accepts ${answer}`, async () => {
         await seedSingleDueSkill(page, testCase.id, 'forms');
-        await page.getByRole('button', { name: '开始今日训练 →' }).click();
+        await startDaily(page);
         await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', testCase.id);
         await expect(page.locator('[data-form-task-type="context"]')).toBeVisible();
 
@@ -1019,7 +1173,8 @@ test('context form cards accept both standard inflection variants', async ({ pag
 test('dictation audio pauses, resumes, and ignores stale playback events', async ({ page }) => {
   await installControllableAudio(page);
   await page.goto('/ielts/index.html');
-  await page.getByRole('button', { name: /02 听写拼词/ }).click();
+  await seedSingleDueSkill(page, 'universal', 'spell');
+  await startSkill(page, 'spell');
 
   const mainPlay = page.locator('.listen-orb');
   await expect(mainPlay).toContainText('▶');
@@ -1135,7 +1290,8 @@ test('service worker caches the on-demand corpus for offline reuse', async ({ pa
     .toBe(true);
 
   await context.setOffline(true);
-  await page.locator('[data-view-link="visual"]:visible').first().click();
+  await openPracticeHub(page);
+  await page.locator('[data-action="go-view"][data-view="visual"]').click();
   await page.getByRole('button', { name: /词库地图/ }).click();
   await expect(page.locator('.corpus-stat-grid')).toContainText('7,229');
   await expect(page.locator('[data-corpus-results] .corpus-entry')).toHaveCount(60);
@@ -1144,7 +1300,8 @@ test('service worker caches the on-demand corpus for offline reuse', async ({ pa
 
 test('dictation keeps answers hidden through hints and supports skipping', async ({ page }) => {
   await page.goto('/ielts/index.html');
-  await page.getByRole('button', { name: /02 听写拼词/ }).click();
+  await seedSingleDueSkill(page, 'universal', 'spell');
+  await startSkill(page, 'spell');
 
   const question = page.locator('.question-lead');
   const input = page.getByLabel('TYPE WHAT YOU HEAR');
@@ -1190,7 +1347,8 @@ test('dictation keeps answers hidden through hints and supports skipping', async
 
 test('dictation double tap skips only one question', async ({ page }) => {
   await page.goto('/ielts/index.html');
-  await page.getByRole('button', { name: /02 听写拼词/ }).click();
+  await seedSingleDueSkill(page, 'universal', 'spell');
+  await startSkill(page, 'spell');
 
   const skipButton = page.getByRole('button', { name: '先跳过（稍后复习）' });
   await skipButton.scrollIntoViewIfNeeded();
@@ -1215,7 +1373,8 @@ test('dictation double tap skips only one question', async ({ page }) => {
 
 test('dictation waits for the learner after a correct spelling', async ({ page }) => {
   await page.goto('/ielts/index.html');
-  await page.getByRole('button', { name: /02 听写拼词/ }).click();
+  await seedSingleDueSkill(page, 'universal', 'spell');
+  await startSkill(page, 'spell');
 
   const answer = await page.locator('.listen-orb').evaluate((button) => {
     const id = (button as HTMLElement).dataset.audioId;
@@ -1236,11 +1395,99 @@ test('dictation waits for the learner after a correct spelling', async ({ page }
   await expect(page.locator('.training-count')).toHaveText('2 / 10');
 });
 
+test('connects image meaning to spelling and skips without revealing the target word', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await seedSingleDueSkill(page, 'fascinate', 'spell');
+  await startSkill(page, 'spell');
+
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', 'fascinate');
+  const meaningStage = page.locator('[data-integrated-meaning="game-guess-fascinate"]');
+  await expect(meaningStage).toBeVisible();
+  await expect(meaningStage.getByRole('heading', { name: '看图，选出最贴切的意思' })).toBeVisible();
+  await expect(meaningStage.locator('img')).toBeVisible();
+  await expect(
+    meaningStage.getByRole('group', { name: '词义选项' }).getByRole('button'),
+  ).toHaveCount(4);
+  await expect(meaningStage.getByText('fascinate', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('TYPE WHAT YOU HEAR')).toHaveCount(0);
+
+  await meaningStage.getByRole('button', { name: '先跳过' }).click();
+  const spellingInput = page.getByLabel('TYPE WHAT YOU HEAR');
+  await expect(spellingInput).toBeVisible();
+  await expect(page.getByText('fascinated', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('深深吸引，使着迷', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('fascinate', { exact: true })).toHaveCount(0);
+
+  await spellingInput.fill('fascinate');
+  await page.getByRole('button', { name: '检查拼写' }).click();
+  await expect(page.locator('#spellFeedback')).toContainText('首次正确');
+
+  const saved = await page.evaluate(() => {
+    const visual = JSON.parse(localStorage.getItem('els-ielts-visual-lab-v1') || '{}');
+    const core = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return {
+      visualTask: visual.tasks?.['game-guess-fascinate'],
+      visualHistory: visual.history?.at(-1),
+      spellingHistory: core.history?.find(
+        (item: { wordId?: string; skill?: string; correct?: boolean }) =>
+          item.wordId === 'fascinate' && item.skill === 'spell' && item.correct === true,
+      ),
+    };
+  });
+  expect(saved.visualTask).toMatchObject({
+    attempts: 1,
+    correct: 0,
+    mastered: false,
+    needsReview: true,
+  });
+  expect(saved.visualHistory).toMatchObject({
+    taskId: 'game-guess-fascinate',
+    correct: false,
+    choice: 'skip',
+  });
+  expect(saved.spellingHistory).toMatchObject({
+    wordId: 'fascinate',
+    skill: 'spell',
+    correct: true,
+  });
+
+  await page.locator('[data-view-link="progress"]:visible').first().click();
+  const progressRow = page.locator('.word-table tbody tr').filter({ hasText: 'fascinate' });
+  await expect(progressRow).toContainText('图义待练');
+  await expect(progressRow.locator('td').last()).toHaveText('今天');
+  await openPracticeHub(page);
+  await expect(page.locator('[data-action="start-weak"]')).toBeVisible();
+});
+
+test('disables integrated meaning choices when an image fails and restores them on retry', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await seedSingleDueSkill(page, 'fascinate', 'spell');
+  await startSkill(page, 'spell');
+
+  const stage = page.locator('[data-integrated-meaning="game-guess-fascinate"]');
+  const image = stage.locator('[data-visual-image]');
+  const choices = stage.locator('[data-action="integrated-meaning-choice"]');
+  await image.evaluate((element) => {
+    (element as HTMLImageElement).src = './images/semantic-lab/does-not-exist.webp';
+  });
+  await expect(stage.locator('[data-image-error]')).toBeVisible();
+  await expect(choices.first()).toBeDisabled();
+
+  await stage.getByRole('button', { name: '重新加载图片' }).click();
+  await expect(image).toBeVisible();
+  await expect(stage.locator('[data-image-error]')).toBeHidden();
+  await expect(choices.first()).toBeEnabled();
+});
+
 test('keeps collocation recall unprompted until the learner opens the three-step workshop detail', async ({
   page,
 }) => {
   await page.goto('/ielts/index.html');
-  await page.getByRole('button', { name: /04 句子工坊/ }).click();
+  await startSkill(page, 'sentence');
 
   const stepNumbers = page.locator('.sentence-step > .sentence-step-header .step-number');
   await expect(stepNumbers).toHaveText(['1', '2', '3']);
@@ -1271,7 +1518,7 @@ test('keeps collocation recall unprompted until the learner opens the three-step
 
 test('lets learners skip the sentence workshop without revealing an answer', async ({ page }) => {
   await page.goto('/ielts/index.html');
-  await page.getByRole('button', { name: /04 句子工坊/ }).click();
+  await startSkill(page, 'sentence');
 
   const skipButton = page.getByRole('button', {
     name: '先跳过表达任务，稍后复习',
@@ -1294,52 +1541,12 @@ test('lets learners skip the sentence workshop without revealing an answer', asy
 test('smart repair practises only the weak ability recorded for a word', async ({ page }) => {
   await page.goto('/ielts/index.html');
   const word = await page.evaluate(() => window.IELTS_VOCABULARY[0]);
-  await page.evaluate((target) => {
-    localStorage.setItem(
-      'els-ielts-wordlab-v1',
-      JSON.stringify({
-        version: 1,
-        settings: { accent: 'uk', dailyNew: 6 },
-        daily: { date: '', newIds: [] },
-        words: {
-          [target.id]: {
-            skills: {
-              sound: {
-                attempts: 3,
-                correct: 3,
-                level: 3,
-                due: 0,
-                last: Date.now(),
-              },
-              spell: {
-                attempts: 2,
-                correct: 0,
-                level: 0,
-                due: 0,
-                last: Date.now(),
-              },
-            },
-          },
-        },
-        history: [
-          {
-            wordId: target.id,
-            word: target.word,
-            skill: 'spell',
-            correct: false,
-            detail: '主动跳过；未显示答案',
-            at: Date.now(),
-          },
-        ],
-        journal: [],
-      }),
-    );
-  }, word);
-  await page.reload();
+  await seedSingleDueSkill(page, word.id, 'spell');
 
-  await page.getByRole('button', { name: '智能补弱（按错因）' }).click();
-  await expect(page.getByRole('heading', { name: '听写拼词' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '本轮错误修复' })).toBeVisible();
+  await openPracticeHub(page);
+  await page.locator('[data-action="start-weak"]').click();
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', word.id);
+  await expect(page.locator('.skill-badge')).toHaveText('听写拼词');
   await expect(page.locator('.learning-stage-track')).toHaveCount(0);
   await expect(page.locator('.training-count')).toHaveText('1 / 1');
 });
@@ -1354,7 +1561,7 @@ test('surface-complete nonsense stays pending and cannot raise sentence mastery'
     level: 2,
     needsReview: false,
   });
-  await page.getByRole('button', { name: /04 句子工坊/ }).click();
+  await startSkill(page, 'sentence');
   await unlockSentenceRecall(page, 'marine');
 
   await page.getByLabel('HIDDEN SENTENCE RECALL').fill('Marine marine marine marine marine.');
@@ -1393,7 +1600,7 @@ test('first hidden exact recall records controlled evidence and raises sentence 
 }) => {
   await page.goto('/ielts/index.html');
   await seedSingleDueSkill(page, 'sturdy', 'sentence');
-  await page.getByRole('button', { name: /04 句子工坊/ }).click();
+  await startSkill(page, 'sentence');
   const standardSentence = await unlockSentenceRecall(page, 'sturdy');
 
   await page.getByLabel('HIDDEN SENTENCE RECALL').fill(standardSentence);
@@ -1433,7 +1640,7 @@ test('exact recall after revealing the model remains corrected practice, not fir
     level: 2,
     needsReview: false,
   });
-  await page.getByRole('button', { name: /04 句子工坊/ }).click();
+  await startSkill(page, 'sentence');
   const standardSentence = await unlockSentenceRecall(page, 'sturdy', { reveal: true });
 
   await page.getByLabel('HIDDEN SENTENCE RECALL').fill(standardSentence);
@@ -1467,7 +1674,7 @@ test('exact recall after revealing the model remains corrected practice, not fir
 test('editing after sentence comparison invalidates the old finish actions', async ({ page }) => {
   await page.goto('/ielts/index.html');
   await seedSingleDueSkill(page, 'sturdy', 'sentence');
-  await page.getByRole('button', { name: /04 句子工坊/ }).click();
+  await startSkill(page, 'sentence');
   const standardSentence = await unlockSentenceRecall(page, 'sturdy');
   const input = page.getByLabel('HIDDEN SENTENCE RECALL');
 
@@ -1492,7 +1699,7 @@ test('editing after sentence comparison invalidates the old finish actions', asy
 test('hides sentence-order capitalization and punctuation until reveal', async ({ page }) => {
   await page.goto('/ielts/index.html');
 
-  await page.getByRole('button', { name: /04 句子工坊/ }).click();
+  await startSkill(page, 'sentence');
   const chunkPool = page.getByLabel('待选词块');
   const chunkLabels = await chunkPool.getByRole('button').allTextContents();
 

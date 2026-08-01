@@ -1,9 +1,10 @@
-const CACHE_NAME = 'wordlab-50-v16-evidence-safe';
+const CACHE_NAME = 'wordlab-v17-listening-cohort';
 const CORE_ASSETS = [
   './',
   './index.html',
   './styles.css',
   './vocabulary.js',
+  './listening-vocabulary.js',
   './visual-data.js',
   './app.js',
   './icon.svg',
