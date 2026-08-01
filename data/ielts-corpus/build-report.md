@@ -1,15 +1,15 @@
 # IELTS corpus build report
 
 - Generated: 2026-08-01T05:17:46+00:00
-- Input TSV files: 28
-- Extracted source rows: 27360
+- Input TSV files: 29
+- Extracted source rows: 27875
 - Target-reference rows: 12352
-- Candidate-only rows: 15008
+- Candidate-only rows: 15523
 - Enrichment-only rows: 0
 - Methods-only rows ignored by the lexical merge: 0
-- Deduplicated entries before proper-noun exclusion: 14213
+- Deduplicated entries before proper-noun exclusion: 14268
 - Active lexical entries: 7242
-- Supplementary target candidates awaiting approval: 6909
+- Supplementary target candidates awaiting approval: 6964
 - Supplementary support-only entries: 0
 - Proper-noun-only entries excluded from public learning data: 62
 - Proper-noun source senses excluded: 87

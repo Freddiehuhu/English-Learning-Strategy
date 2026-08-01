@@ -259,6 +259,70 @@ def count_evidence(paths: list[Path]) -> Counter[str]:
     return counts
 
 
+def evidence_file_provenance(paths: list[Path]) -> dict[str, dict[str, Any]]:
+    """Bind a dedicated evidence TSV to its exact bytes and row makeup.
+
+    Multi-source TSVs remain count-validated as before. An audit that declares
+    exact candidate provenance is intentionally stricter: its source must have
+    one dedicated evidence file so a same-row-count or same-byte-size content
+    substitution cannot pass the review-ledger check.
+    """
+
+    provenance: dict[str, dict[str, Any]] = {}
+    ambiguous: set[str] = set()
+    for path in sorted(paths):
+        source_counts: Counter[str] = Counter()
+        page_counts: Counter[str] = Counter()
+        row_count = 0
+        with path.open(encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle, delimiter="\t")
+            fields = set(reader.fieldnames or [])
+            if "registry_source_id" not in fields:
+                raise ValueError(
+                    f"{path}: missing registry_source_id column"
+                )
+            for row in reader:
+                source_id = str(row.get("registry_source_id") or "").strip()
+                if not source_id:
+                    raise ValueError(
+                        f"{path}: evidence row is missing registry_source_id"
+                    )
+                source_counts[source_id] += 1
+                row_count += 1
+                page = str(row.get("pdf_page") or "").strip()
+                if page:
+                    page_counts[page] += 1
+        if len(source_counts) != 1:
+            continue
+        source_id = next(iter(source_counts))
+        if source_id in ambiguous:
+            continue
+        if source_id in provenance:
+            del provenance[source_id]
+            ambiguous.add(source_id)
+            continue
+        raw = path.read_bytes()
+        provenance[source_id] = {
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "byte_size": len(raw),
+            "row_count": row_count,
+            "source_counts": dict(sorted(source_counts.items())),
+            "page_row_counts": dict(
+                sorted(page_counts.items(), key=lambda item: item[0])
+            ),
+        }
+    return provenance
+
+
+def evidence_file_digests(paths: list[Path]) -> dict[str, str]:
+    """Return the legacy digest-only view of dedicated evidence TSVs."""
+
+    return {
+        source_id: str(details["sha256"])
+        for source_id, details in evidence_file_provenance(paths).items()
+    }
+
+
 def page_count(source: dict[str, Any]) -> int:
     metadata = source.get("metadata")
     if not isinstance(metadata, dict):
@@ -308,13 +372,203 @@ def validate_audit(
     source: dict[str, Any],
     audit: dict[str, Any],
     evidence_count: int,
-) -> None:
+    evidence_file_sha256: str = "",
+    evidence_provenance: dict[str, Any] | None = None,
+    render_manifest: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     audit_count = int(audit.get("extracted_row_count") or 0)
     if audit_count != evidence_count:
         raise ValueError(
             f"{source_id}: audit extracted_row_count={audit_count} does not "
             f"match evidence rows={evidence_count}"
         )
+    audited_source_sha256 = audit.get("source_sha256")
+    if audited_source_sha256 is not None:
+        if not validate_sha256(audited_source_sha256):
+            raise ValueError(f"{source_id}: audit source_sha256 is invalid")
+        if audited_source_sha256 != source.get("sha256"):
+            raise ValueError(
+                f"{source_id}: audit source_sha256 does not match inventory"
+            )
+    audited_source_byte_size = audit.get("source_byte_size")
+    if audited_source_byte_size is not None:
+        if (
+            not isinstance(audited_source_byte_size, int)
+            or isinstance(audited_source_byte_size, bool)
+            or audited_source_byte_size < 1
+        ):
+            raise ValueError(f"{source_id}: audit source_byte_size is invalid")
+        if audited_source_byte_size != source.get("byte_size"):
+            raise ValueError(
+                f"{source_id}: audit source_byte_size does not match inventory"
+            )
+    audited_source_page_count = audit.get("source_page_count")
+    if audited_source_page_count is not None:
+        if (
+            not isinstance(audited_source_page_count, int)
+            or isinstance(audited_source_page_count, bool)
+            or audited_source_page_count < 1
+        ):
+            raise ValueError(
+                f"{source_id}: audit source_page_count is invalid"
+            )
+        if audited_source_page_count != page_count(source):
+            raise ValueError(
+                f"{source_id}: audit source_page_count does not match inventory"
+            )
+    audited_candidate_sha256 = audit.get("candidate_tsv_sha256")
+    if audited_candidate_sha256 is not None:
+        if not validate_sha256(audited_candidate_sha256):
+            raise ValueError(
+                f"{source_id}: audit candidate_tsv_sha256 is invalid"
+            )
+        if not evidence_file_sha256:
+            raise ValueError(
+                f"{source_id}: candidate digest requires one dedicated "
+                "evidence TSV"
+            )
+        if audited_candidate_sha256 != evidence_file_sha256:
+            raise ValueError(
+                f"{source_id}: audit candidate_tsv_sha256 does not match "
+                "evidence TSV"
+            )
+    candidate_field_names = {
+        "candidate_tsv_byte_size",
+        "candidate_tsv_row_count",
+        "candidate_tsv_source_counts",
+        "page_row_counts",
+    }
+    if any(field in audit for field in candidate_field_names):
+        if evidence_provenance is None:
+            raise ValueError(
+                f"{source_id}: exact candidate provenance requires one "
+                "dedicated evidence TSV"
+            )
+        candidate_byte_size = audit.get("candidate_tsv_byte_size")
+        if candidate_byte_size is not None:
+            if (
+                not isinstance(candidate_byte_size, int)
+                or isinstance(candidate_byte_size, bool)
+                or candidate_byte_size < 1
+            ):
+                raise ValueError(
+                    f"{source_id}: candidate_tsv_byte_size is invalid"
+                )
+            if candidate_byte_size != evidence_provenance.get("byte_size"):
+                raise ValueError(
+                    f"{source_id}: candidate_tsv_byte_size does not match "
+                    "evidence TSV"
+                )
+        candidate_row_count = audit.get("candidate_tsv_row_count")
+        if candidate_row_count is not None:
+            if (
+                not isinstance(candidate_row_count, int)
+                or isinstance(candidate_row_count, bool)
+                or candidate_row_count < 0
+            ):
+                raise ValueError(
+                    f"{source_id}: candidate_tsv_row_count is invalid"
+                )
+            if candidate_row_count != evidence_provenance.get("row_count"):
+                raise ValueError(
+                    f"{source_id}: candidate_tsv_row_count does not match "
+                    "evidence TSV"
+                )
+        candidate_source_counts = audit.get("candidate_tsv_source_counts")
+        if candidate_source_counts is not None:
+            if not isinstance(candidate_source_counts, dict) or any(
+                not isinstance(key, str)
+                or not key
+                or not isinstance(value, int)
+                or isinstance(value, bool)
+                or value < 0
+                for key, value in candidate_source_counts.items()
+            ):
+                raise ValueError(
+                    f"{source_id}: candidate_tsv_source_counts is invalid"
+                )
+            if candidate_source_counts != evidence_provenance.get(
+                "source_counts"
+            ):
+                raise ValueError(
+                    f"{source_id}: candidate_tsv_source_counts does not "
+                    "match evidence TSV"
+                )
+        audited_page_counts = audit.get("page_row_counts")
+        if audited_page_counts is not None:
+            if not isinstance(audited_page_counts, dict) or any(
+                not isinstance(key, str)
+                or not key
+                or not isinstance(value, int)
+                or isinstance(value, bool)
+                or value < 0
+                for key, value in audited_page_counts.items()
+            ):
+                raise ValueError(f"{source_id}: page_row_counts is invalid")
+            if audited_page_counts != evidence_provenance.get(
+                "page_row_counts"
+            ):
+                raise ValueError(
+                    f"{source_id}: page_row_counts does not match evidence TSV"
+                )
+
+    provenance_schema_version = audit.get("provenance_schema_version")
+    audited_manifest_sha256 = audit.get("render_manifest_sha256")
+    if audited_manifest_sha256 is not None:
+        if not validate_sha256(audited_manifest_sha256):
+            raise ValueError(
+                f"{source_id}: audit render_manifest_sha256 is invalid"
+            )
+        if render_manifest is None:
+            raise ValueError(
+                f"{source_id}: render_manifest_sha256 requires render evidence"
+            )
+        if audited_manifest_sha256 != render_manifest.get("_manifest_sha256"):
+            raise ValueError(
+                f"{source_id}: audit render_manifest_sha256 does not match "
+                "render evidence"
+            )
+    if render_manifest is not None and (
+        audited_manifest_sha256 is not None
+        or provenance_schema_version is not None
+    ):
+        if render_manifest.get("source_format") != source.get("format"):
+            raise ValueError(
+                f"{source_id}: render evidence source_format does not match "
+                "inventory"
+            )
+        if render_manifest.get("source_sha256") != source.get("sha256"):
+            raise ValueError(
+                f"{source_id}: render evidence source_sha256 does not match "
+                "inventory"
+            )
+        if render_manifest.get("source_page_count") != page_count(source):
+            raise ValueError(
+                f"{source_id}: render evidence source_page_count does not "
+                "match inventory"
+            )
+
+    if provenance_schema_version is not None:
+        if provenance_schema_version != 1:
+            raise ValueError(
+                f"{source_id}: provenance_schema_version must be 1"
+            )
+        required_provenance_fields = {
+            "source_sha256",
+            "source_byte_size",
+            "source_page_count",
+            "candidate_tsv_sha256",
+            "candidate_tsv_byte_size",
+            "candidate_tsv_row_count",
+            "candidate_tsv_source_counts",
+            "render_manifest_sha256",
+        }
+        missing_fields = sorted(required_provenance_fields - set(audit))
+        if missing_fields:
+            raise ValueError(
+                f"{source_id}: provenance schema is missing fields "
+                f"{missing_fields}"
+            )
     parsed, parsed_page_numbers = parsed_page_state(source_id, audit)
     available_pages = page_count(source)
     if parsed < 0 or (available_pages and parsed > available_pages):
@@ -342,6 +596,27 @@ def validate_audit(
         raise ValueError(
             f"{source_id}: visual sample exceeds page count"
         )
+    if provenance_schema_version == 1:
+        rendered_page_numbers = {
+            int(entry["page"])
+            for entry in (render_manifest or {}).get("rendered_pages", [])
+        }
+        missing_parsed_pages = sorted(
+            set(parsed_page_numbers) - rendered_page_numbers
+        )
+        if missing_parsed_pages:
+            raise ValueError(
+                f"{source_id}: render evidence is missing parsed pages "
+                f"{missing_parsed_pages}"
+            )
+        missing_visual_sample_pages = sorted(
+            set(samples) - rendered_page_numbers
+        )
+        if missing_visual_sample_pages:
+            raise ValueError(
+                f"{source_id}: render evidence is missing visual sample pages "
+                f"{missing_visual_sample_pages}"
+            )
     status = str(audit["status"])
     if status == "complete":
         if audit.get("editorial_review_complete") is not True:
@@ -356,6 +631,23 @@ def validate_audit(
             raise ValueError(
                 f"{source_id}: complete requires visual page samples"
             )
+    return {
+        "declared": provenance_schema_version == 1,
+        "passed": provenance_schema_version == 1,
+        "schema_version": provenance_schema_version or 0,
+        "source_sha256": str(audited_source_sha256 or ""),
+        "candidate_tsv_sha256": str(audited_candidate_sha256 or ""),
+        "candidate_tsv_byte_size": int(
+            audit.get("candidate_tsv_byte_size") or 0
+        ),
+        "candidate_tsv_row_count": int(
+            audit.get("candidate_tsv_row_count") or 0
+        ),
+        "candidate_tsv_source_counts": audit.get(
+            "candidate_tsv_source_counts", {}
+        ),
+        "render_manifest_sha256": str(audited_manifest_sha256 or ""),
+    }
 
 
 def completion_evidence_state(
@@ -451,11 +743,17 @@ def build_status(
     audits: dict[str, dict[str, Any]],
     evidence_counts: Counter[str],
     render_evidence: dict[str, dict[str, Any]] | None = None,
+    evidence_digests: dict[str, str] | None = None,
+    evidence_provenance: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     render_evidence = render_evidence or {}
+    evidence_digests = evidence_digests or {}
+    evidence_provenance = evidence_provenance or {}
     unknown_audits = set(audits) - set(inventory)
     unknown_evidence = set(evidence_counts) - set(inventory)
     unknown_render_evidence = set(render_evidence) - set(inventory)
+    unknown_evidence_digests = set(evidence_digests) - set(inventory)
+    unknown_evidence_provenance = set(evidence_provenance) - set(inventory)
     if unknown_audits:
         raise ValueError(f"Unknown audit source ids: {sorted(unknown_audits)}")
     if unknown_evidence:
@@ -467,6 +765,16 @@ def build_status(
             "Unknown render evidence source ids: "
             f"{sorted(unknown_render_evidence)}"
         )
+    if unknown_evidence_digests:
+        raise ValueError(
+            "Unknown evidence digest source ids: "
+            f"{sorted(unknown_evidence_digests)}"
+        )
+    if unknown_evidence_provenance:
+        raise ValueError(
+            "Unknown evidence provenance source ids: "
+            f"{sorted(unknown_evidence_provenance)}"
+        )
 
     rows: list[dict[str, Any]] = []
     for source_id, source in inventory.items():
@@ -475,8 +783,27 @@ def build_status(
             raise ValueError(f"{source_id}: unsupported corpus policy {policy}")
         count = int(evidence_counts[source_id])
         audit = audits.get(source_id)
+        provenance_evidence = {
+            "declared": False,
+            "passed": False,
+            "schema_version": 0,
+        }
         if audit is not None:
-            validate_audit(source_id, source, audit, count)
+            source_evidence_provenance = evidence_provenance.get(source_id)
+            evidence_file_sha256 = evidence_digests.get(source_id, "")
+            if source_evidence_provenance is not None:
+                evidence_file_sha256 = str(
+                    source_evidence_provenance.get("sha256") or ""
+                )
+            provenance_evidence = validate_audit(
+                source_id,
+                source,
+                audit,
+                count,
+                evidence_file_sha256,
+                source_evidence_provenance,
+                render_evidence.get(source_id),
+            )
             status = str(audit["status"])
         elif count:
             status = "candidate_extracted_audit_pending"
@@ -513,6 +840,7 @@ def build_status(
                 and completion_evidence["passed"]
             ),
             "completion_evidence": completion_evidence,
+            "provenance_evidence": provenance_evidence,
             "extracted_row_count": count,
             "pages_parsed": parsed_count,
             "parsed_page_numbers": parsed_page_numbers,
@@ -524,6 +852,16 @@ def build_status(
             ),
         }
         if audit:
+            if audit.get("source_sha256"):
+                row["audit_source_sha256"] = str(audit["source_sha256"])
+            if audit.get("candidate_tsv_sha256"):
+                row["candidate_tsv_sha256"] = str(
+                    audit["candidate_tsv_sha256"]
+                )
+            if audit.get("render_manifest_sha256"):
+                row["render_manifest_sha256"] = str(
+                    audit["render_manifest_sha256"]
+                )
             row["extraction_method"] = str(
                 audit.get("extraction_method") or ""
             )
@@ -540,6 +878,12 @@ def build_status(
         ),
         "editorial_review_complete_source_count": sum(
             row["editorial_review_complete"] for row in rows
+        ),
+        "provenance_evidence_gate_declared_source_count": sum(
+            row["provenance_evidence"]["declared"] for row in rows
+        ),
+        "provenance_evidence_gate_passed_source_count": sum(
+            row["provenance_evidence"]["passed"] for row in rows
         ),
         "completion_evidence_gate_required_source_count": sum(
             row["completion_evidence"]["required"] for row in rows
@@ -568,6 +912,13 @@ def build_status(
     }
     return {
         "schema_version": 2,
+        "candidate_provenance_rule": (
+            "A declared candidate-provenance gate passes only when the "
+            "inventory source profile, exact evidence-TSV bytes and row "
+            "counts, audit fields, and source-bound render manifest all "
+            "match. Partial page evidence proves only the declared pages and "
+            "never implies full-source review."
+        ),
         "completion_rule": (
             "A source is fully evaluated only after its review status is "
             "complete and a fail-closed evidence chain passes: exact full-page "
@@ -619,6 +970,14 @@ def render_markdown(payload: dict[str, Any]) -> str:
             "| 声称完成但被证据门禁阻断 | "
             f"{statistics['completion_claim_blocked_by_evidence_source_count']} |"
         ),
+        (
+            "| 已声明候选来源证据门禁 | "
+            f"{statistics['provenance_evidence_gate_declared_source_count']} |"
+        ),
+        (
+            "| 已通过候选来源证据门禁 | "
+            f"{statistics['provenance_evidence_gate_passed_source_count']} |"
+        ),
         f"| 已通过完成证据门禁 | {statistics['completion_evidence_gate_passed_source_count']} |",
         f"| 已产生候选词的来源 | {statistics['sources_with_extracted_rows']} |",
         f"| 候选来源行 | {statistics['extracted_row_count']} |",
@@ -652,12 +1011,19 @@ def render_markdown(payload: dict[str, Any]) -> str:
             [
                 f"## {STATUS_LABELS_ZH[status]}（{len(rows)}）",
                 "",
-                "| 来源 | 候选行 | 实际解析页 | 视觉抽查页 | 渲染证据页 | 完成证据门禁 |",
-                "|---|---:|---|---|---|---|",
+                "| 来源 | 候选行 | 实际解析页 | 视觉抽查页 | 渲染证据页 | 候选来源证据 | 完成证据门禁 |",
+                "|---|---:|---|---|---|---|---|",
             ]
         )
         for row in rows:
             gate = row["completion_evidence"]
+            provenance = row["provenance_evidence"]
+            if provenance["passed"]:
+                provenance_label = "通过"
+            elif provenance["declared"]:
+                provenance_label = "阻断"
+            else:
+                provenance_label = "未声明（旧批次）"
             if gate["passed"]:
                 gate_label = "通过"
             elif gate["required"]:
@@ -676,6 +1042,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
                         compact_pages(row["parsed_page_numbers"]),
                         compact_pages(row["visual_sample_pages"]),
                         compact_pages(gate["rendered_page_numbers"]),
+                        provenance_label,
                         gate_label,
                     ]
                 )
@@ -715,11 +1082,17 @@ def main() -> None:
     parser.add_argument("--markdown-output", type=Path)
     args = parser.parse_args()
 
+    evidence_provenance = evidence_file_provenance(args.evidence)
     payload = build_status(
         load_inventory(args.inventory),
         load_audits(args.audit),
         count_evidence(args.evidence),
         load_render_evidence(args.render_evidence),
+        {
+            source_id: str(details["sha256"])
+            for source_id, details in evidence_provenance.items()
+        },
+        evidence_provenance,
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

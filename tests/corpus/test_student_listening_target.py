@@ -85,19 +85,19 @@ class StudentListeningTargetTests(unittest.TestCase):
             evidence_rows = list(csv.DictReader(handle, delimiter="\t"))
         catalog = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
 
-        self.assertEqual(len(queue_rows), 10_967)
+        self.assertEqual(len(queue_rows), 11_092)
         self.assertEqual(
             Counter(row["candidate_status"] for row in queue_rows),
             Counter(
                 {
-                    "target_candidate": 6_909,
+                    "target_candidate": 6_964,
                     "excluded_proper_noun": 46,
-                    "support_for_active_target": 4_012,
+                    "support_for_active_target": 4_082,
                 }
             ),
         )
-        self.assertEqual(len(evidence_rows), 14_998)
-        self.assertEqual(len({row["registry_source_id"] for row in evidence_rows}), 22)
+        self.assertEqual(len(evidence_rows), 15_513)
+        self.assertEqual(len({row["registry_source_id"] for row in evidence_rows}), 23)
         self.assertTrue(
             all(row["corpus_policy"] == "candidate_only" for row in evidence_rows)
         )

@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "scope": "Explicit entries from PDF pages 250-255 labelled Word list; all rows remain candidate-only pending editorial review.",
+  "sources": [
+    {
+      "id": "english-for-everyone-junior-beginners",
+      "status": "candidate_extracted_needs_editorial_review",
+      "provenance_schema_version": 1,
+      "source_sha256": "3f1c62b724582a0987e35e8d8940106f0929d198c0630a3cbbe1beb4928f2e49",
+      "source_byte_size": 111955857,
+      "source_page_count": 256,
+      "candidate_tsv_sha256": "a271593869096cbdcf616abb1678cc0f186f66466046934a0d957de02aeb51f5",
+      "candidate_tsv_byte_size": 216829,
+      "candidate_tsv_row_count": 515,
+      "candidate_tsv_source_counts": {
+        "english-for-everyone-junior-beginners": 515
+      },
+      "render_manifest_sha256": "38eb072daa4e3354ddad1453cca564d167c1cb9bbe1f6d72bbaae26199b3bebd",
+      "extracted_row_count": 515,
+      "normalized_key_count": 504,
+      "page_row_counts": {
+        "250": 79,
+        "251": 96,
+        "252": 94,
+        "253": 91,
+        "254": 102,
+        "255": 53
+      },
+      "pos_counts": {
+        "adjective": 38,
+        "adverb": 4,
+        "conjunction": 3,
+        "expression": 24,
+        "noun": 311,
+        "number": 20,
+        "preposition": 7,
+        "pronoun": 14,
+        "question word": 11,
+        "verb": 83
+      },
+      "extraction_method": "sha256_size_page_count_gated_poppler_xml_explicit_word_list",
+      "pages_parsed": [
+        250,
+        251,
+        252,
+        253,
+        254,
+        255
+      ],
+      "visual_sample_pages": [
+        250,
+        251,
+        252,
+        253,
+        254,
+        255
+      ],
+      "editorial_review_complete": false,
+      "rights_boundary": "Retained printed lexical forms, teaching headwords, printed parts of speech and sanitized page/column/unit locators only; excluded definitions, examples, exercises, answers, illustrations, IPA, local paths and local filenames."
+    }
+  ]
+}

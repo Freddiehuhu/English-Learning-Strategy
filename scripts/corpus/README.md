@@ -45,6 +45,10 @@ the minimum lexical metadata needed by the learning app.
   resources.
 - `extract_edge_docx_wordboxes.py`: source-specific extraction of the two Edge
   Unit 7 word boxes, with repeated graded copies deduplicated.
+- `extract_english_for_everyone_junior_candidates.py`: SHA-256, byte-size and
+  page-count gated extraction of the explicit three-column Word list on PDF
+  pages 250-255. It preserves only lexical forms, printed POS and sanitized
+  unit locators; every row remains `candidate_only`.
 - `build_master_corpus.py`: quality gate, normalization, deduplication,
   target-promotion gate, four-skill labels, supplementary review queues, image
   queue and public catalog.
@@ -92,6 +96,41 @@ QA. The inventory requires Poppler's `pdfinfo` and `pdftotext`; `--check`
 fails when either probe is unavailable so a partial inventory cannot be
 accepted as complete.
 
+### English for Everyone Junior Word list
+
+First generate path-free render evidence for every parsed page. The local PDF
+path is runtime-only and must never be committed:
+
+```sh
+python3 scripts/corpus/build_pdf_render_evidence.py \
+  --source "/private/path/english-for-everyone-junior.pdf" \
+  --source-id english-for-everyone-junior-beginners \
+  --expected-source-sha256 3f1c62b724582a0987e35e8d8940106f0929d198c0630a3cbbe1beb4928f2e49 \
+  --page 250 --page 251 --page 252 --page 253 --page 254 --page 255 \
+  --output data/ielts-corpus/supplementary-render-evidence/english-for-everyone-junior-beginners.json
+```
+
+Then run the source-specific extractor against the same registry-matched PDF
+and bind the exact render manifest into its audit:
+
+```sh
+python3 scripts/corpus/extract_english_for_everyone_junior_candidates.py \
+  "/private/path/english-for-everyone-junior.pdf" \
+  --registry data/ielts-corpus/supplemental-source-registry.json \
+  --output data/ielts-corpus/supplementary-input/english-for-everyone-junior-candidates.tsv \
+  --audit-output data/ielts-corpus/supplementary-audits/english-for-everyone-junior-batch.json \
+  --render-evidence data/ielts-corpus/supplementary-render-evidence/english-for-everyone-junior-beginners.json
+```
+
+The extractor must produce exactly 515 source rows and 504 normalized lexical
+keys. It maps the source legend's `int` label to `question word`, leaves CEFR
+blank, and records the exact source, candidate-TSV and render-manifest hashes
+and sizes in the audit.
+
+This six-page evidence supports the candidate extraction and visual column
+check. It does not claim that the other 250 pages were reviewed and therefore
+cannot satisfy the ledger's full-source completion gate.
+
 ## Build
 
 After extracting the local PDFs:
@@ -109,6 +148,7 @@ python3 scripts/corpus/build_master_corpus.py \
   data/ielts-corpus/supplementary-input/curated-native-candidates.tsv \
   data/ielts-corpus/supplementary-input/edge-pdf-candidates.tsv \
   data/ielts-corpus/supplementary-input/edge-unit7-candidates.tsv \
+  data/ielts-corpus/supplementary-input/english-for-everyone-junior-candidates.tsv \
   data/ielts-corpus/supplementary-input/scholastic-240-candidates.tsv \
   data/ielts-corpus/supplementary-input/scholastic-success-candidates.tsv \
   data/ielts-corpus/supplementary-input/vocabulary-in-use-candidates.tsv \

@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import csv
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -65,6 +66,18 @@ class CorpusBuilderTests(unittest.TestCase):
         self.assertEqual(
             corpus.source_pdf_filename(cae_row),
             "CompleteCAE_WLM_ExtendedUnit07.pdf",
+        )
+
+    def test_preserves_source_expression_and_question_word_labels(self):
+        self.assertEqual(corpus.canonical_pos("expression"), ["phrase"])
+        self.assertEqual(corpus.canonical_pos("exp"), ["phrase"])
+        self.assertEqual(
+            corpus.canonical_pos("question word"),
+            ["question word"],
+        )
+        self.assertNotIn(
+            "exclamation",
+            corpus.canonical_pos("question word"),
         )
 
     def test_keeps_multiple_parts_of_speech_in_one_deduplicated_entry(self):
@@ -181,6 +194,50 @@ class CorpusBuilderTests(unittest.TestCase):
         )
         self.assertEqual(ordinary["status"], "active")
         self.assertEqual(proper["status"], "excluded_proper_noun")
+
+    def test_audited_weekdays_are_excluded_from_candidate_promotion(self):
+        def candidate(headword: str):
+            return corpus.SourceRow(
+                **{
+                    **self.row(
+                        source="English for Everyone Junior",
+                        headword=headword,
+                        pos="noun",
+                        cefr="",
+                    ).__dict__,
+                    "source_role": "lexical_candidate",
+                    "corpus_policy": "candidate_only",
+                    "source_format": "pdf",
+                }
+            )
+
+        for weekday in (
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+        ):
+            with self.subTest(weekday=weekday):
+                entry = corpus.build_entry(
+                    corpus.EntryGroup(weekday.casefold(), [candidate(weekday)])
+                )
+                self.assertEqual(entry["status"], "excluded_proper_noun")
+                self.assertTrue(
+                    entry["review_flags"]["proper_noun_sense_candidate"]
+                )
+
+        for ordinary in ("TV", "I'm sorry", "study English"):
+            with self.subTest(ordinary=ordinary):
+                entry = corpus.build_entry(
+                    corpus.EntryGroup(
+                        corpus.normalise_key(ordinary),
+                        [candidate(ordinary)],
+                    )
+                )
+                self.assertEqual(entry["status"], "candidate_only")
 
     def test_topic_excludes_a_proper_noun_only_entry(self):
         row = self.row(
@@ -557,6 +614,174 @@ class CorpusBuilderTests(unittest.TestCase):
             combined["candidate_sources"],
             ["Edge Vocabulary"],
         )
+
+    def test_cli_candidate_only_input_cannot_change_public_catalog_or_be_legacy_target(self):
+        fields = (
+            "source",
+            "registry_source_id",
+            "raw_term",
+            "headword",
+            "pos",
+            "cefr",
+            "topic_or_section",
+            "pdf_page",
+            "source_ref",
+            "definition",
+            "notes",
+            "source_role",
+            "corpus_policy",
+            "source_format",
+            "locator",
+        )
+
+        def write_fixture(path: Path, rows: list[dict[str, str]]) -> None:
+            with path.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=fields,
+                    delimiter="\t",
+                    lineterminator="\n",
+                )
+                writer.writeheader()
+                writer.writerows(rows)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target_path = root / "target.tsv"
+            candidate_path = root / "efe-candidates.tsv"
+            registry_path = root / "registry.json"
+            target_row = {
+                "source": "Verified IELTS Target",
+                "registry_source_id": "verified-ielts-target",
+                "raw_term": "add",
+                "headword": "add",
+                "pos": "noun",
+                "cefr": "C2",
+                "topic_or_section": "verified fixture",
+                "pdf_page": "1",
+                "source_ref": "fixture:target:add",
+                "definition": "",
+                "notes": "",
+                "source_role": "target_reference",
+                "corpus_policy": "target",
+                "source_format": "pdf",
+                "locator": "pdf:page=1;entry=1",
+            }
+            candidate_rows = [
+                {
+                    "source": "English for Everyone Junior: Beginners Course",
+                    "registry_source_id": (
+                        "english-for-everyone-junior-beginners"
+                    ),
+                    "raw_term": "add",
+                    "headword": "add",
+                    "pos": "verb",
+                    "cefr": "A1",
+                    "topic_or_section": "Alphabetical Word list",
+                    "pdf_page": "250",
+                    "source_ref": "registry:english-for-everyone-junior-beginners",
+                    "definition": "",
+                    "notes": "candidate overlap with conflicting POS and CEFR",
+                    "source_role": "lexical_candidate",
+                    "corpus_policy": "candidate_only",
+                    "source_format": "pdf",
+                    "locator": "pdf:page=250;entry=2",
+                },
+                {
+                    "source": "English for Everyone Junior: Beginners Course",
+                    "registry_source_id": (
+                        "english-for-everyone-junior-beginners"
+                    ),
+                    "raw_term": "airplane",
+                    "headword": "airplane",
+                    "pos": "noun",
+                    "cefr": "A1",
+                    "topic_or_section": "Alphabetical Word list",
+                    "pdf_page": "250",
+                    "source_ref": "registry:english-for-everyone-junior-beginners",
+                    "definition": "",
+                    "notes": "candidate-only novel term",
+                    "source_role": "lexical_candidate",
+                    "corpus_policy": "candidate_only",
+                    "source_format": "pdf",
+                    "locator": "pdf:page=250;entry=4",
+                },
+            ]
+            write_fixture(target_path, [target_row])
+            write_fixture(candidate_path, candidate_rows)
+            registry_path.write_text(
+                json.dumps(
+                    {
+                        "sources": [
+                            {
+                                "id": "english-for-everyone-junior-beginners",
+                                "source_role": "lexical_candidate",
+                                "corpus_policy": "candidate_only",
+                                "format": "pdf",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            def build(
+                output_name: str,
+                *inputs: Path,
+                legacy_target: Path | None = None,
+            ) -> subprocess.CompletedProcess[str]:
+                output_dir = root / output_name
+                command = [
+                    sys.executable,
+                    str(MODULE_PATH),
+                    *(str(path) for path in inputs),
+                    "--output-dir",
+                    str(output_dir),
+                    "--generated-at",
+                    "2026-08-01T00:00:00+00:00",
+                    "--supplementary-registry",
+                    str(registry_path),
+                    "--omit-local-json",
+                ]
+                if legacy_target is not None:
+                    command.extend(
+                        ["--legacy-target-input", str(legacy_target)]
+                    )
+                return subprocess.run(
+                    command,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                )
+
+            target_only = build("target-only", target_path)
+            with_candidates = build(
+                "with-candidates",
+                target_path,
+                candidate_path,
+            )
+            self.assertEqual(target_only.returncode, 0, target_only.stderr)
+            self.assertEqual(
+                with_candidates.returncode,
+                0,
+                with_candidates.stderr,
+            )
+            self.assertEqual(
+                (root / "target-only" / "catalog.json").read_bytes(),
+                (root / "with-candidates" / "catalog.json").read_bytes(),
+            )
+
+            legacy_candidate = build(
+                "candidate-as-legacy",
+                target_path,
+                candidate_path,
+                legacy_target=candidate_path,
+            )
+            self.assertNotEqual(legacy_candidate.returncode, 0)
+            self.assertIn(
+                "--legacy-target-input may contain only target rows",
+                legacy_candidate.stderr,
+            )
 
     def test_candidate_overlap_cannot_reactivate_an_excluded_proper_noun(self):
         target = self.row(
