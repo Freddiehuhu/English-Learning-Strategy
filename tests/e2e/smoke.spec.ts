@@ -683,17 +683,17 @@ test('legacy daily-new settings migrate to two bounded new words', async ({ page
   const saved = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}'),
   );
-  expect(saved.version).toBe(4);
+  expect(saved.version).toBe(5);
   expect(saved.settings.dailyNew).toBe(2);
   expect(saved.daily.newIds).toHaveLength(2);
   expect(saved.adaptive).toMatchObject({
-    version: 1,
+    version: 2,
     localOnly: true,
     observations: 0,
   });
-  await expect(plan).toHaveAttribute('data-adaptive-model', 'local-online-v1');
+  await expect(plan).toHaveAttribute('data-adaptive-model', 'local-online-v2-shadow');
   await expect(plan).toHaveAttribute('data-adaptive-observations', '0');
-  await expect(page.getByText('已按薄弱能力与遗忘风险排序 · 数据仅保存在本机')).toBeVisible();
+  await expect(page.getByText('均衡提升 · 稳定排期 · 数据仅存本机')).toBeVisible();
 
   await startDaily(page);
   await expect(page.locator('.training-count')).toHaveText('1 / 8');
@@ -763,7 +763,7 @@ test('v2 sentence self-ratings migrate to archived practice instead of mastery e
   const saved = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}'),
   );
-  expect(saved.version).toBe(4);
+  expect(saved.version).toBe(5);
   expect(saved.words[word.id].legacySentencePractice).toMatchObject(legacySentence);
   expect(saved.words[word.id].skills.sentence).toMatchObject({
     attempts: 0,
@@ -784,6 +784,87 @@ test('v2 sentence self-ratings migrate to archived practice instead of mastery e
     status: 'legacy_unverified',
     teacherVerified: false,
   });
+});
+
+test('v4 visual meaning repairs migrate out of sentence while direct form repairs remain', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'els-ielts-wordlab-v1',
+      JSON.stringify({
+        version: 4,
+        settings: { accent: 'uk', dailyNew: 0 },
+        daily: { date: '', newIds: [], carryoverIds: [], completedAt: 0 },
+        words: {
+          fascinate: { skills: {}, visualRepairPending: { sentence: true } },
+          distant: { skills: {}, visualRepairPending: { forms: true } },
+        },
+        history: [
+          {
+            wordId: 'fascinate',
+            skill: 'sentence',
+            correct: false,
+            source: 'visual',
+            visualGameType: 'guess',
+            visualTaskId: 'game-guess-fascinate',
+            coreAttempt: false,
+            at: Date.now() - 1000,
+          },
+          {
+            wordId: 'distant',
+            skill: 'forms',
+            correct: false,
+            source: 'visual',
+            visualGameType: 'analogy',
+            visualTaskId: 'game-analogy-distance-importance',
+            coreAttempt: false,
+            at: Date.now(),
+          },
+        ],
+        journal: [],
+      }),
+    );
+  });
+  await page.reload();
+
+  const words = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return saved.words;
+  });
+  expect(words.fascinate.visualRepairPending).toBeUndefined();
+  expect(words.fascinate.skills.sentence).toBeUndefined();
+  expect(words.distant.visualRepairPending).toEqual({ forms: true });
+});
+
+test('v5 keeps valid pending visual repairs after compact history is gone', async ({ page }) => {
+  await page.goto('/ielts/index.html');
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'els-ielts-wordlab-v1',
+      JSON.stringify({
+        version: 5,
+        settings: { accent: 'uk', dailyNew: 0 },
+        daily: { date: '', newIds: [], carryoverIds: [], completedAt: 0 },
+        words: {
+          distant: {
+            skills: {},
+            visualRepairPending: { forms: true, meaning: true, unknown: true },
+          },
+        },
+        history: [],
+        journal: [],
+      }),
+    );
+  });
+  await page.reload();
+
+  const pending = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return saved.words.distant.visualRepairPending;
+  });
+  expect(pending).toEqual({ forms: true });
 });
 
 test('v3 normalisation rejects impossible levels and lets the latest core error win', async ({
@@ -889,11 +970,13 @@ test('the local adaptive learner records effort signals and updates after a cont
   const saved = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}'),
   );
-  expect(saved.version).toBe(4);
+  expect(saved.version).toBe(5);
   expect(saved.adaptive).toMatchObject({
-    version: 1,
+    version: 2,
     localOnly: true,
     observations: 1,
+    shadow: { count: 1 },
+    skillObservations: { spell: 1 },
   });
   expect(saved.adaptive.weights.bias).not.toBe(-0.4);
   expect(saved.words.ecologist.skills.spell).toMatchObject({
@@ -906,7 +989,7 @@ test('the local adaptive learner records effort signals and updates after a cont
   });
   expect(saved.words.ecologist.skills.spell.lastResponseMs).toBeGreaterThan(0);
   expect(saved.history.at(-1).adaptive).toMatchObject({
-    modelVersion: 1,
+    modelVersion: 2,
     hintUses: 1,
     replayUses: 1,
     skipped: true,
@@ -916,6 +999,14 @@ test('the local adaptive learner records effort signals and updates after a cont
   expect(saved.history.at(-1).adaptive.predictedAfter).toBeLessThan(
     saved.history.at(-1).adaptive.predictedBefore,
   );
+  expect(saved.adaptive.events.at(-1)).toMatchObject({
+    id: 'local-1',
+    wordId: 'ecologist',
+    skill: 'spell',
+    label: 0,
+    labelSource: 'controlled_first_attempt',
+  });
+  expect(saved.adaptive.events.at(-1)).not.toHaveProperty('answer');
 });
 
 test('adaptive scheduling puts the higher forgetting-risk word first', async ({ page }) => {
@@ -970,7 +1061,73 @@ test('adaptive scheduling puts the higher forgetting-risk word first', async ({ 
   await expect(page.locator('.training-panel')).toHaveAttribute('data-adaptive-reason', '提示依赖');
 });
 
-test('adaptive state migration clamps current weights and resets unknown model versions', async ({
+test('an unresolved error cannot look easier merely because it is more than 14 days old', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await page.evaluate(() => {
+    const thirteenDaysAgo = Date.now() - 13 * 86_400_000;
+    const fifteenDaysAgo = Date.now() - 15 * 86_400_000;
+    const failedSkill = (last: number) => ({
+      attempts: 1,
+      correct: 0,
+      pending: 0,
+      level: 0,
+      due: 0,
+      last,
+      needsReview: true,
+      relearnRequired: false,
+    });
+    localStorage.setItem(
+      'els-ielts-wordlab-v1',
+      JSON.stringify({
+        version: 5,
+        settings: { accent: 'uk', dailyNew: 0, learningGoal: 'balanced' },
+        daily: {
+          date: '',
+          newIds: [],
+          carryoverIds: [],
+          newSelectionDone: false,
+          completedAt: 0,
+        },
+        words: {
+          ailment: { skills: { spell: failedSkill(thirteenDaysAgo) } },
+          fascinate: { skills: { spell: failedSkill(fifteenDaysAgo) } },
+        },
+        history: [
+          { wordId: 'ailment', skill: 'spell', correct: false, at: thirteenDaysAgo },
+          { wordId: 'fascinate', skill: 'spell', correct: false, at: fifteenDaysAgo },
+        ],
+        journal: [],
+        adaptive: {
+          version: 2,
+          featureSchemaVersion: 2,
+          observations: 50,
+          weights: { logDays: -0.05, recentError: -6 },
+          meaningWeights: {},
+          shadow: { count: 50, ruleBrier: 0.3, modelBrier: 0.1 },
+          meaningShadow: { count: 0, ruleBrier: 0, modelBrier: 0 },
+          skillObservations: {
+            sound: 0,
+            spell: 50,
+            forms: 0,
+            sentence: 0,
+            meaning: 0,
+          },
+          abilities: {},
+          events: [],
+        },
+      }),
+    );
+  });
+  await page.reload();
+
+  await startDaily(page);
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', 'fascinate');
+  await expectActiveDailySkill(page, 'spell');
+});
+
+test('adaptive state migration clamps weights and resets unknown model or feature versions', async ({
   page,
 }) => {
   await page.goto('/ielts/index.html');
@@ -989,7 +1146,13 @@ test('adaptive state migration clamps current weights and resets unknown model v
           localOnly: false,
           observations: -12,
           updatedAt: -10,
-          weights: { bias: 999, priorAccuracy: 'not-a-number', level: null },
+          weights: {
+            bias: 999,
+            priorAccuracy: 'not-a-number',
+            level: null,
+            logDays: 999,
+            skipRate: 2,
+          },
         },
       }),
     );
@@ -1000,7 +1163,7 @@ test('adaptive state migration clamps current weights and resets unknown model v
     () => JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}').adaptive,
   );
   expect(adaptive).toMatchObject({
-    version: 1,
+    version: 2,
     localOnly: true,
     observations: 0,
     updatedAt: 0,
@@ -1008,11 +1171,14 @@ test('adaptive state migration clamps current weights and resets unknown model v
   expect(adaptive.weights.bias).toBe(6);
   expect(adaptive.weights.priorAccuracy).toBe(1.4);
   expect(adaptive.weights.level).toBe(1.2);
+  expect(adaptive.weights.logDays).toBe(0);
+  expect(adaptive.weights.skipRate).toBe(0);
 
   await page.evaluate(() => {
     const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
     saved.adaptive = {
-      version: 99,
+      version: 2,
+      featureSchemaVersion: 99,
       localOnly: false,
       observations: 900,
       updatedAt: Date.now(),
@@ -1026,13 +1192,237 @@ test('adaptive state migration clamps current weights and resets unknown model v
     () => JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}').adaptive,
   );
   expect(resetAdaptive).toMatchObject({
-    version: 1,
+    version: 2,
     localOnly: true,
     observations: 0,
     updatedAt: 0,
   });
   expect(resetAdaptive.weights.bias).toBe(-0.4);
   expect(resetAdaptive.weights.priorAccuracy).toBe(1.4);
+
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    saved.adaptive = { version: 99, observations: 500, weights: { bias: 6 } };
+    saved.daily.date = '';
+    localStorage.setItem('els-ielts-wordlab-v1', JSON.stringify(saved));
+  });
+  await page.reload();
+  const unknownVersion = await page.evaluate(
+    () => JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}').adaptive,
+  );
+  expect(unknownVersion).toMatchObject({ version: 2, observations: 0, updatedAt: 0 });
+  expect(unknownVersion.weights.bias).toBe(-0.4);
+});
+
+test('shadow evaluation activates a better local model and falls back when it is worse', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    saved.settings = { accent: 'uk', dailyNew: 0, learningGoal: 'balanced' };
+    saved.daily = {
+      date: '',
+      newIds: [],
+      carryoverIds: [],
+      newSelectionDone: false,
+      completedAt: 0,
+    };
+    saved.adaptive = {
+      version: 2,
+      featureSchemaVersion: 2,
+      observations: 50,
+      weights: {},
+      meaningWeights: {},
+      shadow: { count: 50, ruleBrier: 0.24, modelBrier: 0.16 },
+      meaningShadow: { count: 0, ruleBrier: 0, modelBrier: 0 },
+      skillObservations: { sound: 20, spell: 10, forms: 10, sentence: 10, meaning: 0 },
+    };
+    localStorage.setItem('els-ielts-wordlab-v1', JSON.stringify(saved));
+  });
+  await page.reload();
+
+  const plan = page.locator('[data-daily-plan]');
+  await expect(plan).toHaveAttribute('data-adaptive-blend', '0.8');
+  await expect(page.getByText('均衡提升 · 动态复习 · 数据仅存本机')).toBeVisible();
+
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    saved.adaptive.shadow = { count: 50, ruleBrier: 0.1, modelBrier: 0.4 };
+    localStorage.setItem('els-ielts-wordlab-v1', JSON.stringify(saved));
+  });
+  await page.reload();
+  await expect(plan).toHaveAttribute('data-adaptive-blend', '0');
+  await expect(page.getByText('均衡提升 · 稳定排期 · 数据仅存本机')).toBeVisible();
+});
+
+test('meaning-only evidence cannot enable the four core scheduling models', async ({ page }) => {
+  await page.goto('/ielts/index.html');
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    saved.adaptive = {
+      version: 2,
+      featureSchemaVersion: 2,
+      observations: 20,
+      weights: { bias: 6, logDays: -6 },
+      meaningWeights: {},
+      shadow: { count: 20, ruleBrier: 0.4, modelBrier: 0.05 },
+      meaningShadow: { count: 20, ruleBrier: 0.4, modelBrier: 0.05 },
+      skillObservations: { sound: 0, spell: 0, forms: 0, sentence: 0, meaning: 20 },
+      abilities: {},
+      events: [],
+    };
+    saved.daily.date = '';
+    localStorage.setItem('els-ielts-wordlab-v1', JSON.stringify(saved));
+  });
+  await page.reload();
+
+  await expect(page.locator('[data-daily-plan]')).toHaveAttribute('data-adaptive-blend', '0');
+  await expect(page.getByText('均衡提升 · 稳定排期 · 数据仅存本机')).toBeVisible();
+  const saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}'),
+  );
+  expect(saved.adaptive.shadow.count).toBe(0);
+  expect(saved.adaptive.meaningShadow.count).toBe(20);
+});
+
+test('the selected learning goal changes only the priority inside the review layer', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await page.evaluate(() => {
+    const old = Date.now() - 2 * 86_400_000;
+    const dueSkill = {
+      attempts: 3,
+      correct: 2,
+      pending: 0,
+      level: 2,
+      due: 0,
+      last: old,
+      needsReview: false,
+      relearnRequired: false,
+    };
+    localStorage.setItem(
+      'els-ielts-wordlab-v1',
+      JSON.stringify({
+        version: 5,
+        settings: { accent: 'uk', dailyNew: 0, learningGoal: 'balanced' },
+        daily: {
+          date: '',
+          newIds: [],
+          carryoverIds: [],
+          newSelectionDone: false,
+          completedAt: 0,
+        },
+        words: {
+          ecologist: { skills: { forms: { ...dueSkill } } },
+          fascinate: { skills: { spell: { ...dueSkill } } },
+        },
+        history: [],
+        journal: [],
+      }),
+    );
+  });
+  await page.reload();
+
+  await page.locator('#openSettings').click();
+  await page.getByLabel('当前学习重点').selectOption('listening');
+  await page.locator('#saveSettings').click();
+  await expect(page.locator('[data-daily-plan]')).toHaveAttribute(
+    'data-learning-goal',
+    'listening',
+  );
+  await startDaily(page);
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', 'fascinate');
+  await expectActiveDailySkill(page, 'spell');
+
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    saved.settings.learningGoal = 'writing';
+    saved.daily.date = '';
+    localStorage.setItem('els-ielts-wordlab-v1', JSON.stringify(saved));
+  });
+  await page.reload();
+  await startDaily(page);
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', 'ecologist');
+  await expectActiveDailySkill(page, 'forms');
+});
+
+test('a higher spelling retention goal schedules the same mature model sooner', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+
+  const measureInterval = async (goal: 'listening' | 'writing') => {
+    await page.evaluate((learningGoal) => {
+      const old = Date.now() - 2 * 86_400_000;
+      localStorage.setItem(
+        'els-ielts-wordlab-v1',
+        JSON.stringify({
+          version: 5,
+          settings: { accent: 'uk', dailyNew: 0, learningGoal },
+          daily: {
+            date: '',
+            newIds: [],
+            carryoverIds: [],
+            newSelectionDone: false,
+            completedAt: 0,
+          },
+          words: {
+            sturdy: {
+              skills: {
+                spell: {
+                  attempts: 3,
+                  correct: 3,
+                  pending: 0,
+                  level: 3,
+                  due: 0,
+                  last: old,
+                  needsReview: false,
+                  relearnRequired: false,
+                },
+              },
+            },
+          },
+          history: [],
+          journal: [],
+          adaptive: {
+            version: 2,
+            featureSchemaVersion: 2,
+            observations: 50,
+            weights: { bias: 1, priorAccuracy: 2, level: 1, logDays: -4 },
+            meaningWeights: {},
+            shadow: { count: 50, ruleBrier: 0.3, modelBrier: 0.1 },
+            meaningShadow: { count: 0, ruleBrier: 0, modelBrier: 0 },
+            skillObservations: {
+              sound: 0,
+              spell: 50,
+              forms: 0,
+              sentence: 0,
+              meaning: 0,
+            },
+            abilities: {},
+            events: [],
+          },
+        }),
+      );
+    }, goal);
+    await page.reload();
+    await startSkill(page, 'spell');
+    await resolveIntegratedMeaningIfPresent(page);
+    await page.getByLabel('TYPE WHAT YOU HEAR').fill('sturdy');
+    await page.getByRole('button', { name: '检查拼写' }).click();
+    return page.evaluate(() => {
+      const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+      return saved.words.sturdy.skills.spell.lastIntervalDays;
+    });
+  };
+
+  const listeningInterval = await measureInterval('listening');
+  const writingInterval = await measureInterval('writing');
+  expect(listeningInterval).toBeGreaterThanOrEqual(1);
+  expect(listeningInterval).toBeLessThan(writingInterval);
+  expect(writingInterval).toBeLessThanOrEqual(34);
 });
 
 test('a latest spelling error removes level-five stability until independent correction', async ({
@@ -1647,10 +2037,8 @@ test('connects image meaning to spelling and skips without revealing the target 
 
   await page.locator('[data-view-link="progress"]:visible').first().click();
   const progressRow = page.locator('.word-table tbody tr').filter({ hasText: 'fascinate' });
-  await expect(progressRow).toContainText('图义待练');
-  await expect(progressRow.locator('td').last()).toHaveText('今天');
-  await openPracticeHub(page);
-  await expect(page.locator('[data-action="start-weak"]')).toBeVisible();
+  await expect(progressRow).not.toContainText('图义待练');
+  await expect(progressRow.locator('td').last()).not.toHaveText('今天');
 });
 
 test('disables integrated meaning choices when an image fails and restores them on retry', async ({
@@ -1858,6 +2246,22 @@ test('an online model update reorders only the not-yet-started daily words', asy
         },
         history: [],
         journal: [],
+        adaptive: {
+          version: 2,
+          featureSchemaVersion: 2,
+          observations: 50,
+          weights: {},
+          meaningWeights: {},
+          shadow: { count: 50, ruleBrier: 0.24, modelBrier: 0.16 },
+          meaningShadow: { count: 0, ruleBrier: 0, modelBrier: 0 },
+          skillObservations: {
+            sound: 20,
+            spell: 30,
+            forms: 0,
+            sentence: 0,
+            meaning: 0,
+          },
+        },
       }),
     );
   });
@@ -1986,6 +2390,46 @@ test('an independent high-confidence answer lengthens the fixed review baseline 
   expect(skillState.lastIntervalDays).toBeGreaterThan(30);
   expect(skillState.lastIntervalDays).toBeLessThanOrEqual(45);
   expect(skillState.due).toBeGreaterThan(Date.now() + 29 * 86_400_000);
+});
+
+test('a model without a learned forgetting slope cannot stretch a short review to 45 days', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await seedSingleDueSkill(page, 'sturdy', 'spell', {
+    attempts: 1,
+    correct: 1,
+    level: 1,
+    needsReview: false,
+  });
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    saved.adaptive = {
+      version: 2,
+      featureSchemaVersion: 2,
+      observations: 50,
+      weights: { bias: 4, logDays: 0 },
+      meaningWeights: {},
+      shadow: { count: 50, ruleBrier: 0.3, modelBrier: 0.1 },
+      meaningShadow: { count: 0, ruleBrier: 0, modelBrier: 0 },
+      skillObservations: { sound: 0, spell: 50, forms: 0, sentence: 0, meaning: 0 },
+      abilities: {},
+      events: [],
+    };
+    localStorage.setItem('els-ielts-wordlab-v1', JSON.stringify(saved));
+  });
+  await page.reload();
+  await startSkill(page, 'spell');
+  await resolveIntegratedMeaningIfPresent(page);
+  await page.getByLabel('TYPE WHAT YOU HEAR').fill('sturdy');
+  await page.getByRole('button', { name: '检查拼写' }).click();
+
+  const interval = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return saved.words.sturdy.skills.spell.lastIntervalDays;
+  });
+  expect(interval).toBeGreaterThanOrEqual(1);
+  expect(interval).toBeLessThanOrEqual(4);
 });
 
 test('first hidden exact recall records controlled evidence and raises sentence level', async ({

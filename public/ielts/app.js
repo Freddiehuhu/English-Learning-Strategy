@@ -9,10 +9,16 @@
   var STORAGE_KEY = 'els-ielts-wordlab-v1';
   var VISUAL_STORAGE_KEY = 'els-ielts-visual-lab-v1';
   var AUDIO_ASSET_VERSION = 'natural-20260801';
-  var STATE_VERSION = 4;
-  var ADAPTIVE_MODEL_VERSION = 1;
+  var STATE_VERSION = 5;
+  var VISUAL_STATE_VERSION = 5;
+  var ADAPTIVE_MODEL_VERSION = 2;
+  var ADAPTIVE_FEATURE_SCHEMA_VERSION = 2;
   var DAY_MS = 86400000;
   var SKILLS = ['sound', 'spell', 'forms', 'sentence'];
+  var MODEL_SKILLS = SKILLS.concat('meaning');
+  var ADAPTIVE_SHADOW_MIN = 20;
+  var ADAPTIVE_SHADOW_FULL = 50;
+  var ADAPTIVE_SKILL_MIN = 5;
   var DAILY_NEW_LIMIT = 2;
   var DAILY_MAX_SECONDS = 720;
   var STAGE_SECONDS = {
@@ -53,6 +59,7 @@
     'skillSpell',
     'skillForms',
     'skillSentence',
+    'skillMeaning',
   ];
   var ADAPTIVE_DEFAULT_WEIGHTS = {
     bias: -0.4,
@@ -68,21 +75,59 @@
     skillSpell: 0,
     skillForms: 0,
     skillSentence: 0,
+    skillMeaning: 0,
   };
-  // Visual tasks feed the same word × skill repair queue as the four core gates.
-  // Meaning/context relations return to sentence use; sound–spelling relations
-  // return to spelling; part-of-speech and morphology relations return to forms.
+  var ADAPTIVE_NONPOSITIVE_WEIGHTS = [
+    'logDays',
+    'recentError',
+    'hintRate',
+    'replayRate',
+    'skipRate',
+    'slowResponse',
+  ];
+  var ADAPTIVE_NONNEGATIVE_WEIGHTS = ['priorAccuracy', 'level'];
+  var LEARNING_GOALS = {
+    balanced: {
+      label: '均衡提升',
+      retention: { sound: 0.68, spell: 0.72, meaning: 0.7, forms: 0.72, sentence: 0.74 },
+      priority: { sound: 1, spell: 1, meaning: 1, forms: 1, sentence: 1 },
+    },
+    listening: {
+      label: '听力与拼写',
+      retention: { sound: 0.76, spell: 0.78, meaning: 0.72, forms: 0.68, sentence: 0.68 },
+      priority: { sound: 1.3, spell: 1.25, meaning: 1.05, forms: 0.85, sentence: 0.85 },
+    },
+    writing: {
+      label: '词形与写作',
+      retention: { sound: 0.66, spell: 0.74, meaning: 0.72, forms: 0.78, sentence: 0.8 },
+      priority: { sound: 0.8, spell: 1.1, meaning: 1.05, forms: 1.3, sentence: 1.3 },
+    },
+  };
+  // Only visual tasks that directly test a core gate can enter its repair queue.
+  // Meaning recognition remains separate so it cannot invalidate sentence mastery.
   var VISUAL_REPAIR_SKILLS = {
     pos: 'forms',
     family: 'forms',
-    synonym: 'sentence',
-    antonym: 'sentence',
-    guess: 'sentence',
+    synonym: '',
+    antonym: '',
+    guess: '',
     homophone: 'spell',
-    homograph: 'forms',
+    homograph: '',
     analogy: 'forms',
-    taxonomy: 'sentence',
+    taxonomy: '',
     collocation: 'sentence',
+  };
+  var VISUAL_MODEL_SKILLS = {
+    pos: 'forms',
+    family: 'forms',
+    synonym: 'meaning',
+    antonym: 'meaning',
+    guess: 'meaning',
+    homophone: 'spell',
+    homograph: 'meaning',
+    analogy: 'forms',
+    taxonomy: 'meaning',
+    collocation: 'meaning',
   };
   var POS_LABELS = {
     'n.': '名词',
@@ -701,6 +746,7 @@
       settings: {
         accent: 'uk',
         dailyNew: DAILY_NEW_LIMIT,
+        learningGoal: 'balanced',
       },
       daily: {
         date: '',
@@ -717,12 +763,32 @@
   }
 
   function defaultAdaptiveState() {
+    var skillObservations = {};
+    MODEL_SKILLS.forEach(function (skill) {
+      skillObservations[skill] = 0;
+    });
     return {
       version: ADAPTIVE_MODEL_VERSION,
+      featureSchemaVersion: ADAPTIVE_FEATURE_SCHEMA_VERSION,
       localOnly: true,
       observations: 0,
       updatedAt: 0,
       weights: Object.assign({}, ADAPTIVE_DEFAULT_WEIGHTS),
+      meaningWeights: Object.assign({}, ADAPTIVE_DEFAULT_WEIGHTS),
+      skillObservations: skillObservations,
+      abilities: {},
+      shadow: {
+        count: 0,
+        ruleBrier: 0,
+        modelBrier: 0,
+      },
+      meaningShadow: {
+        count: 0,
+        ruleBrier: 0,
+        modelBrier: 0,
+      },
+      eventSeq: 0,
+      events: [],
     };
   }
 
@@ -752,7 +818,7 @@
 
   function defaultVisualState() {
     return {
-      version: 4,
+      version: VISUAL_STATE_VERSION,
       tasks: {},
       history: [],
     };
@@ -779,6 +845,8 @@
         targetWordId: String(VISUAL_LAB.posScene.targetWordId || ''),
         gameType: 'pos',
         repairSkill: VISUAL_REPAIR_SKILLS.pos,
+        modelSkill: VISUAL_MODEL_SKILLS.pos,
+        optionCount: 0,
       };
     }
     var familyTask = visualFamilyAtlases().find(function (task) {
@@ -789,6 +857,8 @@
         targetWordId: String(familyTask.targetWordId || ''),
         gameType: 'family',
         repairSkill: VISUAL_REPAIR_SKILLS.family,
+        modelSkill: VISUAL_MODEL_SKILLS.family,
+        optionCount: 0,
       };
     }
     var comparisonTask = Array.isArray(VISUAL_LAB.groups)
@@ -802,6 +872,8 @@
         targetWordId: String(comparisonTask.targetWordId || ''),
         gameType: relation,
         repairSkill: VISUAL_REPAIR_SKILLS[relation],
+        modelSkill: VISUAL_MODEL_SKILLS[relation],
+        optionCount: Array.isArray(comparisonTask.choices) ? comparisonTask.choices.length : 0,
       };
     }
     var gameMetadata = null;
@@ -816,7 +888,11 @@
       gameMetadata = {
         targetWordId: String(task.targetWordId || ''),
         gameType: String(mode.id || 'game'),
-        repairSkill: VISUAL_REPAIR_SKILLS[mode.id] || 'sentence',
+        repairSkill: Object.prototype.hasOwnProperty.call(VISUAL_REPAIR_SKILLS, mode.id)
+          ? VISUAL_REPAIR_SKILLS[mode.id]
+          : '',
+        modelSkill: VISUAL_MODEL_SKILLS[mode.id] || 'meaning',
+        optionCount: Array.isArray(task.choices) ? task.choices.length : 0,
       };
       return true;
     });
@@ -825,6 +901,8 @@
         targetWordId: '',
         gameType: 'unknown',
         repairSkill: '',
+        modelSkill: '',
+        optionCount: 0,
       }
     );
   }
@@ -849,6 +927,14 @@
           last: Math.max(0, Number(task.last) || 0),
           step: Math.max(0, Number(task.step) || 0),
           skipped: Boolean(task.skipped),
+          modelCycle: Math.min(10000, Math.max(0, Math.round(Number(task.modelCycle) || 0))),
+          modelRecorded: Array.isArray(task.modelRecorded)
+            ? task.modelRecorded
+                .filter(function (key) {
+                  return typeof key === 'string' && /^[a-z0-9-]+-v\d+::[a-z0-9-]+$/.test(key);
+                })
+                .slice(-64)
+            : [],
         };
       });
     }
@@ -862,21 +948,19 @@
             var metadata = visualTaskMetadata(taskId);
             return {
               taskId: taskId,
-              targetWordId: String(item.targetWordId || metadata.targetWordId || ''),
-              gameType: String(item.gameType || metadata.gameType || 'unknown'),
-              repairSkill:
-                SKILLS.indexOf(item.repairSkill) >= 0
-                  ? item.repairSkill
-                  : metadata.repairSkill || '',
+              targetWordId: metadata.targetWordId || '',
+              gameType: metadata.gameType || 'unknown',
+              repairSkill: metadata.repairSkill || '',
+              modelSkill: metadata.modelSkill || '',
               correct: Boolean(item.correct),
-              choice: String(item.choice || ''),
+              choice: String(item.choice || '') === 'skip' ? 'skip' : '',
               at: Math.max(0, Number(item.at) || 0),
             };
           })
           .slice(-240)
       : [];
     return {
-      version: 4,
+      version: VISUAL_STATE_VERSION,
       tasks: tasks,
       history: history.slice(-240),
     };
@@ -911,15 +995,56 @@
         last: 0,
         step: 0,
         skipped: false,
+        modelCycle: 0,
+        modelRecorded: [],
       };
     }
     return visualState.tasks[taskId];
   }
 
-  function recordVisualResult(taskId, correct, choice) {
+  function visualTaskVersion(metadata) {
+    return 'visual-' + String((metadata && metadata.gameType) || 'unknown') + '-v2';
+  }
+
+  function claimVisualModelEvidence(taskState, metadata, promptId) {
+    if (!Array.isArray(taskState.modelRecorded)) taskState.modelRecorded = [];
+    var safePromptId = /^[a-z0-9-]+$/.test(String(promptId || '')) ? String(promptId) : 'prompt-0';
+    var taskVersion = visualTaskVersion(metadata);
+    var key = taskVersion + '::' + safePromptId;
+    if (taskState.modelRecorded.indexOf(key) >= 0) {
+      return {
+        independent: false,
+        promptId: safePromptId,
+        attemptCycle: Number(taskState.modelCycle || 0),
+        taskVersion: taskVersion,
+      };
+    }
+    taskState.modelRecorded.push(key);
+    taskState.modelRecorded = taskState.modelRecorded.slice(-64);
+    return {
+      independent: true,
+      promptId: safePromptId,
+      attemptCycle: Number(taskState.modelCycle || 0),
+      taskVersion: taskVersion,
+    };
+  }
+
+  function beginNewVisualModelCycle(taskId) {
+    var taskState = getVisualTaskState(taskId);
+    taskState.modelCycle = Math.min(10000, Number(taskState.modelCycle || 0) + 1);
+    taskState.modelRecorded = [];
+  }
+
+  function recordVisualResult(taskId, correct, choice, promptId) {
     var taskState = getVisualTaskState(taskId);
     var metadata = visualTaskMetadata(taskId);
     var now = Date.now();
+    var evidence = claimVisualModelEvidence(taskState, metadata, promptId);
+    if (evidence.independent && Number(taskState.modelCycle || 0) > 0) {
+      taskState.completed = false;
+      taskState.mastered = false;
+      taskState.needsReview = false;
+    }
     taskState.attempts += 1;
     if (correct) taskState.correct += 1;
     if (!correct) {
@@ -934,23 +1059,34 @@
       targetWordId: metadata.targetWordId,
       gameType: metadata.gameType,
       repairSkill: metadata.repairSkill,
+      modelSkill: metadata.modelSkill,
       correct: Boolean(correct),
-      choice: String(choice || ''),
+      choice: String(choice || '') === 'skip' ? 'skip' : '',
       at: now,
     });
     visualState.history = visualState.history.slice(-240);
     saveVisualState();
-    if (!correct) bridgeVisualError(taskId, choice, metadata);
+    if (evidence.independent) {
+      recordVisualAdaptiveResult(metadata, Boolean(correct), choice, now, evidence);
+    }
+    if (!correct && evidence.independent) bridgeVisualError(taskId, choice, metadata);
     return metadata;
   }
 
   function bridgeVisualError(taskId, choice, metadata) {
     if (!metadata.targetWordId || SKILLS.indexOf(metadata.repairSkill) < 0) return;
-    if (visualRuntime.repairRecorded[taskId]) return;
     var word = WORDS.find(function (candidate) {
       return candidate.id === metadata.targetWordId;
     });
     if (!word) return;
+    var existingState = state.words[word.id];
+    if (
+      existingState &&
+      existingState.visualRepairPending &&
+      existingState.visualRepairPending[metadata.repairSkill]
+    ) {
+      return;
+    }
     visualRuntime.repairRecorded[taskId] = true;
     recordVisualRepairNeed(
       word,
@@ -1206,6 +1342,7 @@
     });
     var settings = Object.assign({}, base.settings, saved.settings || {});
     settings.dailyNew = normaliseDailyNew(settings.dailyNew);
+    settings.learningGoal = normaliseLearningGoal(settings.learningGoal);
     var savedDaily = saved.daily && typeof saved.daily === 'object' ? saved.daily : base.daily;
     var words = saved.words && typeof saved.words === 'object' ? saved.words : {};
     Object.keys(words).forEach(function (wordId) {
@@ -1255,6 +1392,11 @@
         });
       });
     }
+    if (Number(saved.version || 1) < STATE_VERSION) {
+      migrateLegacyVisualRepairFlags(words, history);
+    } else {
+      normaliseCurrentVisualRepairFlags(words);
+    }
     normaliseSkillReviewFlags(words, history);
     return {
       version: STATE_VERSION,
@@ -1282,25 +1424,190 @@
   function normaliseAdaptiveState(saved) {
     var base = defaultAdaptiveState();
     if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return base;
-    if (Number(saved.version) !== ADAPTIVE_MODEL_VERSION) return base;
-    var savedWeights =
-      saved.weights && typeof saved.weights === 'object' && !Array.isArray(saved.weights)
-        ? saved.weights
-        : {};
-    ADAPTIVE_WEIGHT_KEYS.forEach(function (key) {
-      var rawValue = savedWeights[key];
-      var value = Number(rawValue);
-      base.weights[key] =
-        typeof rawValue === 'number' && Number.isFinite(value)
-          ? Math.max(-6, Math.min(6, value))
-          : ADAPTIVE_DEFAULT_WEIGHTS[key];
-    });
+    var savedVersion = Number(saved.version);
+    if (savedVersion !== 1 && savedVersion !== ADAPTIVE_MODEL_VERSION) return base;
+    if (
+      savedVersion === ADAPTIVE_MODEL_VERSION &&
+      Number(saved.featureSchemaVersion) !== ADAPTIVE_FEATURE_SCHEMA_VERSION
+    ) {
+      return base;
+    }
+    base.weights = normaliseAdaptiveWeights(saved.weights);
     base.observations = Math.min(
       1000000,
       Math.round(normaliseNonnegativeNumber(saved.observations)),
     );
     base.updatedAt = normaliseNonnegativeNumber(saved.updatedAt);
+    if (savedVersion === ADAPTIVE_MODEL_VERSION) {
+      var savedSkillObservations =
+        saved.skillObservations &&
+        typeof saved.skillObservations === 'object' &&
+        !Array.isArray(saved.skillObservations)
+          ? saved.skillObservations
+          : {};
+      MODEL_SKILLS.forEach(function (skill) {
+        base.skillObservations[skill] = Math.min(
+          base.observations,
+          Math.round(normaliseNonnegativeNumber(savedSkillObservations[skill])),
+        );
+      });
+      base.meaningWeights = normaliseAdaptiveWeights(saved.meaningWeights);
+      base.abilities = normaliseAdaptiveAbilities(saved.abilities);
+      var coreObservations = Math.min(
+        base.observations,
+        SKILLS.reduce(function (total, skill) {
+          return total + Number(base.skillObservations[skill] || 0);
+        }, 0),
+      );
+      base.shadow = normaliseAdaptiveShadow(saved.shadow, coreObservations);
+      base.meaningShadow = normaliseAdaptiveShadow(
+        saved.meaningShadow,
+        Number(base.skillObservations.meaning || 0),
+      );
+      base.eventSeq = Math.min(1000000000, Math.round(normaliseNonnegativeNumber(saved.eventSeq)));
+      base.events = normaliseAdaptiveEvents(saved.events);
+      if (base.events.length) {
+        base.eventSeq = Math.max(
+          base.eventSeq,
+          base.events.reduce(function (maximum, event) {
+            return Math.max(maximum, Number(event.sequence || 0));
+          }, 0),
+        );
+      }
+    }
     return base;
+  }
+
+  function normaliseAdaptiveWeights(value) {
+    var savedWeights = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var weights = {};
+    ADAPTIVE_WEIGHT_KEYS.forEach(function (key) {
+      var rawValue = savedWeights[key];
+      var number = Number(rawValue);
+      var normalised =
+        typeof rawValue === 'number' && Number.isFinite(number)
+          ? number
+          : ADAPTIVE_DEFAULT_WEIGHTS[key];
+      weights[key] = constrainAdaptiveWeight(key, normalised);
+    });
+    return weights;
+  }
+
+  function normaliseAdaptiveShadow(value, maximumCount) {
+    var saved = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    var hasValidLoss =
+      typeof saved.ruleBrier === 'number' &&
+      Number.isFinite(saved.ruleBrier) &&
+      typeof saved.modelBrier === 'number' &&
+      Number.isFinite(saved.modelBrier);
+    return {
+      count: hasValidLoss
+        ? Math.min(Math.max(0, Number(maximumCount) || 0), normaliseNonnegativeNumber(saved.count))
+        : 0,
+      ruleBrier: normaliseProbability(saved.ruleBrier),
+      modelBrier: normaliseProbability(saved.modelBrier),
+    };
+  }
+
+  function normaliseAdaptiveAbilities(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    var abilities = {};
+    Object.keys(value)
+      .slice(0, 4000)
+      .forEach(function (key) {
+        var parts = key.split('::');
+        var skill = parts.pop();
+        var wordId = parts.join('::');
+        var ability = value[key];
+        if (
+          !isKnownAdaptiveWordId(wordId) ||
+          MODEL_SKILLS.indexOf(skill) < 0 ||
+          !ability ||
+          typeof ability !== 'object' ||
+          Array.isArray(ability)
+        ) {
+          return;
+        }
+        var attempts = Math.min(1000000, normaliseNonnegativeNumber(ability.attempts));
+        abilities[wordId + '::' + skill] = {
+          attempts: attempts,
+          correct: Math.min(attempts, normaliseNonnegativeNumber(ability.correct)),
+          level: Math.min(
+            5,
+            attempts,
+            normaliseNonnegativeNumber(ability.correct),
+            normaliseNonnegativeNumber(ability.level),
+          ),
+          last: normaliseNonnegativeNumber(ability.last),
+          lastResponseMs: Math.min(
+            20 * 60 * 1000,
+            normaliseNonnegativeNumber(ability.lastResponseMs),
+          ),
+          hintUses: Math.round(normaliseNonnegativeNumber(ability.hintUses)),
+          replayUses: Math.round(normaliseNonnegativeNumber(ability.replayUses)),
+          skipCount: Math.round(normaliseNonnegativeNumber(ability.skipCount)),
+          mastery: normaliseProbability(ability.mastery),
+          lastPredictedRecall: normaliseProbability(ability.lastPredictedRecall),
+          needsReview: Boolean(ability.needsReview),
+        };
+      });
+    return abilities;
+  }
+
+  function normaliseAdaptiveEvents(value) {
+    if (!Array.isArray(value)) return [];
+    return value
+      .filter(function (event) {
+        return (
+          event &&
+          typeof event === 'object' &&
+          MODEL_SKILLS.indexOf(event.skill) >= 0 &&
+          typeof event.wordId === 'string' &&
+          isKnownAdaptiveWordId(event.wordId) &&
+          isAllowedAdaptiveTaskVersion(event.taskVersion) &&
+          ['controlled_first_attempt', 'controlled_visual_first_attempt'].indexOf(
+            event.labelSource,
+          ) >= 0 &&
+          (event.label === 0 || event.label === 1)
+        );
+      })
+      .map(function (event) {
+        return {
+          id: 'local-' + Math.round(normaliseNonnegativeNumber(event.sequence)),
+          sequence: Math.round(normaliseNonnegativeNumber(event.sequence)),
+          at: normaliseNonnegativeNumber(event.at),
+          wordId: String(event.wordId || ''),
+          skill: event.skill,
+          taskVersion: String(event.taskVersion),
+          label: event.label === 1 ? 1 : 0,
+          labelSource: String(event.labelSource),
+          independent: event.independent !== false,
+          optionCount: Math.max(0, Math.round(normaliseNonnegativeNumber(event.optionCount))),
+          evidenceWeight: normaliseProbability(event.evidenceWeight || 1),
+          hintLevel: Math.max(0, Math.round(normaliseNonnegativeNumber(event.hintLevel))),
+          replayCount: Math.max(0, Math.round(normaliseNonnegativeNumber(event.replayCount))),
+          activeResponseMs: Math.min(
+            20 * 60 * 1000,
+            Math.round(normaliseNonnegativeNumber(event.activeResponseMs)),
+          ),
+          predictedRuleBefore: normaliseProbability(event.predictedRuleBefore),
+          predictedModelBefore: normaliseProbability(event.predictedModelBefore),
+          promptId: /^[a-z0-9-]+$/.test(String(event.promptId || ''))
+            ? String(event.promptId)
+            : 'core',
+          attemptCycle: Math.min(10000, Math.round(normaliseNonnegativeNumber(event.attemptCycle))),
+        };
+      })
+      .slice(-160);
+  }
+
+  function isAllowedAdaptiveTaskVersion(value) {
+    return (
+      /^(sound|spell|forms|sentence)-controlled-v2$/.test(String(value || '')) ||
+      /^visual-(pos|family|synonym|antonym|guess|homophone|homograph|analogy|taxonomy|collocation)-v2$/.test(
+        String(value || ''),
+      )
+    );
   }
 
   function archiveLegacySentenceEvidence(words) {
@@ -1325,6 +1632,50 @@
         needsReview: true,
         relearnRequired: true,
       };
+    });
+  }
+
+  function migrateLegacyVisualRepairFlags(words, history) {
+    var supportedRepairs = new Set();
+    history.forEach(function (item) {
+      if (!item || item.coreAttempt !== false || item.source !== 'visual') return;
+      var currentSkill = VISUAL_REPAIR_SKILLS[String(item.visualGameType || '')];
+      if (SKILLS.indexOf(currentSkill) >= 0) {
+        supportedRepairs.add(String(item.wordId || '') + '::' + currentSkill);
+      }
+    });
+    Object.keys(words).forEach(function (wordId) {
+      var wordState = words[wordId];
+      if (!wordState || !wordState.visualRepairPending) return;
+      var migrated = {};
+      SKILLS.forEach(function (skill) {
+        if (wordState.visualRepairPending[skill] && supportedRepairs.has(wordId + '::' + skill)) {
+          migrated[skill] = true;
+        }
+      });
+      if (Object.keys(migrated).length) wordState.visualRepairPending = migrated;
+      else delete wordState.visualRepairPending;
+    });
+  }
+
+  function normaliseCurrentVisualRepairFlags(words) {
+    Object.keys(words).forEach(function (wordId) {
+      var wordState = words[wordId];
+      if (
+        !wordState ||
+        !wordState.visualRepairPending ||
+        typeof wordState.visualRepairPending !== 'object' ||
+        Array.isArray(wordState.visualRepairPending)
+      ) {
+        if (wordState) delete wordState.visualRepairPending;
+        return;
+      }
+      var pending = {};
+      SKILLS.forEach(function (skill) {
+        if (wordState.visualRepairPending[skill]) pending[skill] = true;
+      });
+      if (Object.keys(pending).length) wordState.visualRepairPending = pending;
+      else delete wordState.visualRepairPending;
     });
   }
 
@@ -1355,6 +1706,21 @@
     return Math.max(0, Math.min(DAILY_NEW_LIMIT, parsed));
   }
 
+  function normaliseLearningGoal(value) {
+    return Object.prototype.hasOwnProperty.call(LEARNING_GOALS, value) ? value : 'balanced';
+  }
+
+  function isKnownAdaptiveWordId(wordId) {
+    return (
+      WORDS.some(function (word) {
+        return word.id === wordId;
+      }) ||
+      FORM_FOUNDATIONS.some(function (word) {
+        return word.id === wordId;
+      })
+    );
+  }
+
   function normaliseDailyIds(value, validWordIds) {
     if (!Array.isArray(value)) return [];
     var seen = new Set();
@@ -1382,6 +1748,9 @@
         wordState.skills = {};
         return;
       }
+      Object.keys(wordState.skills).forEach(function (skill) {
+        if (SKILLS.indexOf(skill) < 0) delete wordState.skills[skill];
+      });
       SKILLS.forEach(function (skill) {
         var skillState = wordState.skills[skill];
         if (!skillState || typeof skillState !== 'object' || Array.isArray(skillState)) {
@@ -1434,6 +1803,13 @@
   function normaliseProbability(value) {
     var number = Number(value);
     return Number.isFinite(number) ? Math.max(0, Math.min(1, number)) : 0;
+  }
+
+  function constrainAdaptiveWeight(key, value) {
+    var bounded = Math.max(-6, Math.min(6, Number(value) || 0));
+    if (ADAPTIVE_NONPOSITIVE_WEIGHTS.indexOf(key) >= 0) return Math.min(0, bounded);
+    if (ADAPTIVE_NONNEGATIVE_WEIGHTS.indexOf(key) >= 0) return Math.max(0, bounded);
+    return bounded;
   }
 
   function saveState() {
@@ -1502,6 +1878,30 @@
     return wordState.skills[skill];
   }
 
+  function getAdaptiveAbility(wordId, skill) {
+    if (!state.adaptive) state.adaptive = defaultAdaptiveState();
+    if (!state.adaptive.abilities || typeof state.adaptive.abilities !== 'object') {
+      state.adaptive.abilities = {};
+    }
+    var key = wordId + '::' + skill;
+    if (!state.adaptive.abilities[key]) {
+      state.adaptive.abilities[key] = {
+        attempts: 0,
+        correct: 0,
+        level: 0,
+        last: 0,
+        lastResponseMs: 0,
+        hintUses: 0,
+        replayUses: 0,
+        skipCount: 0,
+        mastery: 0,
+        lastPredictedRecall: 0,
+        needsReview: false,
+      };
+    }
+    return state.adaptive.abilities[key];
+  }
+
   function recordResult(word, skill, correct, detail, source, interactionOverrides) {
     var skillState = getSkillState(word.id, skill);
     clearVisualRepairNeed(word.id, skill);
@@ -1513,7 +1913,13 @@
     // replays, response time and skipping describe the attempt itself; they are
     // persisted after scoring so they can inform the next recall prediction.
     var features = adaptiveFeatures(word.id, skill, null, now);
-    var predictedBefore = predictRecallProbability(word.id, skill, null, now, features);
+    var rulePredictedBefore = predictRuleRecallProbability(features);
+    var modelPredictedBefore = predictModelRecallProbability(features, skill);
+    var predictedBefore = blendAdaptivePredictions(
+      rulePredictedBefore,
+      modelPredictedBefore,
+      skill,
+    );
     skillState.attempts += 1;
     skillState.lastResponseMs = interaction.responseMs;
     skillState.hintUses += interaction.hintUses;
@@ -1522,13 +1928,6 @@
     if (correct) {
       skillState.correct += 1;
       skillState.level = Math.min(5, skillState.level + 1);
-      skillState.lastIntervalDays = adaptiveIntervalDays(
-        skill,
-        skillState.level,
-        predictedBefore,
-        interaction,
-      );
-      skillState.due = addCalendarDays(startOfToday(), skillState.lastIntervalDays);
       skillState.needsReview = false;
     } else {
       skillState.level = Math.max(0, skillState.level - 1);
@@ -1538,7 +1937,34 @@
     }
     skillState.last = now;
     skillState.lastPredictedRecall = predictedBefore;
-    updateAdaptiveModel(features, Boolean(correct), predictedBefore, now);
+    updateAdaptiveModel(
+      word.id,
+      skill,
+      features,
+      Boolean(correct),
+      rulePredictedBefore,
+      modelPredictedBefore,
+      now,
+      {
+        taskVersion: skill + '-controlled-v2',
+        labelSource: 'controlled_first_attempt',
+        optionCount: 0,
+        hintLevel: interaction.hintUses,
+        replayCount: interaction.replayUses,
+        activeResponseMs: interaction.responseMs,
+      },
+    );
+    if (correct) {
+      skillState.lastIntervalDays = adaptiveIntervalDays(
+        word.id,
+        skill,
+        skillState.level,
+        predictedBefore,
+        interaction,
+        now,
+      );
+      skillState.due = addCalendarDays(startOfToday(), skillState.lastIntervalDays);
+    }
 
     var historyItem = {
       wordId: word.id,
@@ -1550,6 +1976,8 @@
       adaptive: {
         modelVersion: ADAPTIVE_MODEL_VERSION,
         predictedBefore: roundProbability(predictedBefore),
+        predictedRuleBefore: roundProbability(rulePredictedBefore),
+        predictedModelBefore: roundProbability(modelPredictedBefore),
         predictedAfter: 0,
         responseMs: interaction.responseMs,
         hintUses: interaction.hintUses,
@@ -1575,6 +2003,75 @@
       session.stats[skill].attempts += 1;
       if (correct) session.stats[skill].correct += 1;
     }
+  }
+
+  function recordVisualAdaptiveResult(metadata, correct, choice, now, evidence) {
+    if (!metadata || !metadata.targetWordId || MODEL_SKILLS.indexOf(metadata.modelSkill) < 0) {
+      return;
+    }
+    var skill = metadata.modelSkill;
+    var skillState = getAdaptiveAbility(metadata.targetWordId, skill);
+    var features = adaptiveFeaturesFromState(
+      skillState,
+      skill,
+      null,
+      now,
+      Boolean(skillState.needsReview),
+    );
+    var rulePredictedBefore = predictRuleRecallProbability(features);
+    var modelPredictedBefore = predictModelRecallProbability(features, skill);
+    var predictedBefore = blendAdaptivePredictions(
+      rulePredictedBefore,
+      modelPredictedBefore,
+      skill,
+    );
+    var skipped = String(choice || '') === 'skip';
+
+    skillState.attempts += 1;
+    if (correct) {
+      skillState.correct += 1;
+      skillState.level = Math.min(5, skillState.level + 1);
+      skillState.needsReview = false;
+    } else {
+      skillState.level = Math.max(0, skillState.level - 1);
+      skillState.needsReview = true;
+    }
+    if (skipped) skillState.skipCount += 1;
+    skillState.last = now;
+    skillState.lastPredictedRecall = predictedBefore;
+
+    updateAdaptiveModel(
+      metadata.targetWordId,
+      skill,
+      features,
+      correct,
+      rulePredictedBefore,
+      modelPredictedBefore,
+      now,
+      {
+        taskVersion: (evidence && evidence.taskVersion) || visualTaskVersion(metadata),
+        labelSource: 'controlled_visual_first_attempt',
+        optionCount: metadata.optionCount,
+        hintLevel: 0,
+        replayCount: 0,
+        activeResponseMs: 0,
+        promptId: (evidence && evidence.promptId) || 'prompt-0',
+        attemptCycle: (evidence && evidence.attemptCycle) || 0,
+      },
+    );
+    var afterFeatures = adaptiveFeaturesFromState(
+      skillState,
+      skill,
+      null,
+      now,
+      Boolean(skillState.needsReview),
+    );
+    skillState.mastery = blendAdaptivePredictions(
+      predictRuleRecallProbability(afterFeatures),
+      predictModelRecallProbability(afterFeatures, skill),
+      skill,
+    );
+    saveState();
   }
 
   function recordPendingResult(word, skill, detail) {
@@ -1645,6 +2142,16 @@
 
   function adaptiveFeatures(wordId, skill, interaction, now) {
     var skillState = peekSkillState(wordId, skill);
+    return adaptiveFeaturesFromState(
+      skillState,
+      skill,
+      interaction,
+      now,
+      hasUnresolvedControlledError(wordId, skill, skillState),
+    );
+  }
+
+  function adaptiveFeaturesFromState(skillState, skill, interaction, now, recentError) {
     var attempts = Math.max(0, Number(skillState.attempts || 0));
     var denominator = Math.max(1, attempts + (interaction ? 1 : 0));
     var responseMs = interaction
@@ -1657,11 +2164,7 @@
       priorAccuracy: (Number(skillState.correct || 0) + 1) / (attempts + 2),
       level: Math.max(0, Math.min(1, Number(skillState.level || 0) / 5)),
       logDays: Math.max(0, Math.min(1.5, Math.log1p(elapsedDays) / Math.log(31))),
-      recentError: hasUnresolvedControlledError(wordId, skill, skillState)
-        ? !skillState.last || now - skillState.last <= 14 * DAY_MS
-          ? 1
-          : 0.5
-        : 0,
+      recentError: recentError ? 1 : 0,
       hintRate: Math.min(
         1,
         (Number(skillState.hintUses || 0) + (interaction ? interaction.hintUses : 0)) / denominator,
@@ -1681,6 +2184,7 @@
       skillSpell: skill === 'spell' ? 1 : 0,
       skillForms: skill === 'forms' ? 1 : 0,
       skillSentence: skill === 'sentence' ? 1 : 0,
+      skillMeaning: skill === 'meaning' ? 1 : 0,
     };
   }
 
@@ -1709,40 +2213,210 @@
   }
 
   function predictRecallProbability(wordId, skill, interaction, now, preparedFeatures) {
-    var model = state.adaptive || defaultAdaptiveState();
     var features =
       preparedFeatures || adaptiveFeatures(wordId, skill, interaction, now || Date.now());
+    return blendAdaptivePredictions(
+      predictRuleRecallProbability(features),
+      predictModelRecallProbability(features, skill),
+      skill,
+    );
+  }
+
+  function predictRuleRecallProbability(features) {
+    return predictWithAdaptiveWeights(ADAPTIVE_DEFAULT_WEIGHTS, features);
+  }
+
+  function predictModelRecallProbability(features, skill) {
+    var model = state.adaptive || defaultAdaptiveState();
+    var weights = skill === 'meaning' ? model.meaningWeights : model.weights;
+    return predictWithAdaptiveWeights(weights || ADAPTIVE_DEFAULT_WEIGHTS, features);
+  }
+
+  function predictWithAdaptiveWeights(weights, features) {
     var score = ADAPTIVE_WEIGHT_KEYS.reduce(function (total, key) {
-      return total + Number(model.weights[key] || 0) * Number(features[key] || 0);
+      return total + Number(weights[key] || 0) * Number(features[key] || 0);
     }, 0);
     score = Math.max(-12, Math.min(12, score));
     return 1 / (1 + Math.exp(-score));
   }
 
-  function updateAdaptiveModel(features, correct, prediction, now) {
-    if (!state.adaptive) state.adaptive = defaultAdaptiveState();
-    var model = state.adaptive;
-    var learningRate = Math.max(0.025, 0.16 / Math.sqrt(1 + model.observations / 40));
-    var error = (correct ? 1 : 0) - prediction;
-    ADAPTIVE_WEIGHT_KEYS.forEach(function (key) {
-      var current = Number(model.weights[key] || 0);
-      var updated = current * 0.9995 + learningRate * error * Number(features[key] || 0);
-      model.weights[key] = Math.max(-6, Math.min(6, updated));
-    });
-    model.version = ADAPTIVE_MODEL_VERSION;
-    model.localOnly = true;
-    model.observations = Math.min(1000000, Number(model.observations || 0) + 1);
-    model.updatedAt = now;
+  function shadowModelBlend(shadow) {
+    var count = Number((shadow && shadow.count) || 0);
+    if (count < ADAPTIVE_SHADOW_MIN) return 0;
+    var ruleLoss = Number(shadow.ruleBrier);
+    var modelLoss = Number(shadow.modelBrier);
+    if (!Number.isFinite(ruleLoss) || !Number.isFinite(modelLoss) || modelLoss > ruleLoss) {
+      return 0;
+    }
+    var progress = Math.max(
+      0,
+      Math.min(1, (count - ADAPTIVE_SHADOW_MIN) / (ADAPTIVE_SHADOW_FULL - ADAPTIVE_SHADOW_MIN)),
+    );
+    return 0.15 + progress * 0.65;
   }
 
-  function adaptiveIntervalDays(skill, level, predictedRecall, interaction) {
+  function adaptiveModelBlend(skill) {
+    var model = state.adaptive || defaultAdaptiveState();
+    if (skill === 'meaning') return shadowModelBlend(model.meaningShadow);
+    var coreBlend = shadowModelBlend(model.shadow);
+    if (!skill || SKILLS.indexOf(skill) < 0) return coreBlend;
+    var observations = Number((model.skillObservations && model.skillObservations[skill]) || 0);
+    if (observations < ADAPTIVE_SKILL_MIN) return 0;
+    return coreBlend * Math.min(1, observations / ADAPTIVE_SHADOW_MIN);
+  }
+
+  function blendAdaptivePredictions(rulePrediction, modelPrediction, skill) {
+    var blend = adaptiveModelBlend(skill);
+    return normaliseProbability(rulePrediction * (1 - blend) + modelPrediction * blend);
+  }
+
+  function updateAdaptiveModel(
+    wordId,
+    skill,
+    features,
+    correct,
+    rulePrediction,
+    modelPrediction,
+    now,
+    eventMetadata,
+  ) {
+    if (!state.adaptive) state.adaptive = defaultAdaptiveState();
+    var model = state.adaptive;
+    var skillObservations = Number(
+      (model.skillObservations && model.skillObservations[skill]) || 0,
+    );
+    var learningRate = Math.max(0.025, 0.16 / Math.sqrt(1 + skillObservations / 20));
+    var evidenceWeight = evidenceWeightForOptionCount((eventMetadata || {}).optionCount);
+    learningRate *= evidenceWeight;
+    var label = correct ? 1 : 0;
+    var error = label - modelPrediction;
+    var shadowKey = skill === 'meaning' ? 'meaningShadow' : 'shadow';
+    if (!model[shadowKey] || typeof model[shadowKey] !== 'object') {
+      model[shadowKey] = { count: 0, ruleBrier: 0, modelBrier: 0 };
+    }
+    updateAdaptiveShadow(model[shadowKey], label, rulePrediction, modelPrediction, evidenceWeight);
+    var weightKey = skill === 'meaning' ? 'meaningWeights' : 'weights';
+    if (!model[weightKey] || typeof model[weightKey] !== 'object') {
+      model[weightKey] = Object.assign({}, ADAPTIVE_DEFAULT_WEIGHTS);
+    }
+    ADAPTIVE_WEIGHT_KEYS.forEach(function (key) {
+      var current = Number(model[weightKey][key] || 0);
+      var updated = current * 0.9995 + learningRate * error * Number(features[key] || 0);
+      model[weightKey][key] = constrainAdaptiveWeight(key, updated);
+    });
+    model.version = ADAPTIVE_MODEL_VERSION;
+    model.featureSchemaVersion = ADAPTIVE_FEATURE_SCHEMA_VERSION;
+    model.localOnly = true;
+    model.observations = Math.min(1000000, Number(model.observations || 0) + 1);
+    if (!model.skillObservations || typeof model.skillObservations !== 'object') {
+      model.skillObservations = {};
+    }
+    model.skillObservations[skill] = Math.min(
+      1000000,
+      Number(model.skillObservations[skill] || 0) + 1,
+    );
+    model.updatedAt = now;
+    appendAdaptiveEvent(wordId, skill, label, rulePrediction, modelPrediction, now, eventMetadata);
+  }
+
+  function updateAdaptiveShadow(shadow, label, rulePrediction, modelPrediction, evidenceWeight) {
+    var previousCount = Number(shadow.count || 0);
+    var count = Math.min(1000000, previousCount + Math.max(0.1, Number(evidenceWeight) || 1));
+    var alpha = previousCount === 0 ? 1 : 0.12;
+    var ruleLoss = Math.pow(label - rulePrediction, 2);
+    var modelLoss = Math.pow(label - modelPrediction, 2);
+    shadow.count = count;
+    shadow.ruleBrier = normaliseProbability(
+      Number(shadow.ruleBrier || 0) + alpha * (ruleLoss - Number(shadow.ruleBrier || 0)),
+    );
+    shadow.modelBrier = normaliseProbability(
+      Number(shadow.modelBrier || 0) + alpha * (modelLoss - Number(shadow.modelBrier || 0)),
+    );
+  }
+
+  function appendAdaptiveEvent(
+    wordId,
+    skill,
+    label,
+    rulePrediction,
+    modelPrediction,
+    now,
+    eventMetadata,
+  ) {
+    var model = state.adaptive;
+    var metadata = eventMetadata || {};
+    model.eventSeq = Math.min(1000000000, Number(model.eventSeq || 0) + 1);
+    if (!Array.isArray(model.events)) model.events = [];
+    model.events.push({
+      id: 'local-' + model.eventSeq,
+      sequence: model.eventSeq,
+      at: now,
+      wordId: String(wordId || ''),
+      skill: skill,
+      taskVersion: String(metadata.taskVersion || 'controlled-v2'),
+      label: label,
+      labelSource: String(metadata.labelSource || 'controlled_first_attempt'),
+      independent: true,
+      optionCount: Math.max(0, Math.round(Number(metadata.optionCount || 0))),
+      evidenceWeight: roundProbability(evidenceWeightForOptionCount(metadata.optionCount)),
+      hintLevel: Math.max(0, Math.round(Number(metadata.hintLevel || 0))),
+      replayCount: Math.max(0, Math.round(Number(metadata.replayCount || 0))),
+      activeResponseMs: Math.min(
+        20 * 60 * 1000,
+        Math.max(0, Math.round(Number(metadata.activeResponseMs || 0))),
+      ),
+      predictedRuleBefore: roundProbability(rulePrediction),
+      predictedModelBefore: roundProbability(modelPrediction),
+      promptId: /^[a-z0-9-]+$/.test(String(metadata.promptId || ''))
+        ? String(metadata.promptId)
+        : 'core',
+      attemptCycle: Math.min(10000, Math.max(0, Math.round(Number(metadata.attemptCycle || 0)))),
+    });
+    model.events = model.events.slice(-160);
+  }
+
+  function evidenceWeightForOptionCount(optionCount) {
+    var count = Math.max(0, Math.round(Number(optionCount || 0)));
+    return count > 1 ? 1 - 1 / count : 1;
+  }
+
+  function adaptiveIntervalDays(wordId, skill, level, predictedRecall, interaction, now) {
     var baseDays = INTERVAL_DAYS[Math.max(0, Math.min(5, level))] || 1;
     var quality = 0.78 + Math.max(0, Math.min(1, predictedRecall)) * 0.5;
     var expectedMs = (STAGE_SECONDS[skill] || 60) * 1000;
     if (interaction.responseMs > expectedMs * 1.25) quality *= 0.86;
     if (interaction.hintUses > 0) quality *= Math.max(0.65, 1 - interaction.hintUses * 0.1);
     if (interaction.replayUses > 0) quality *= Math.max(0.75, 1 - interaction.replayUses * 0.06);
-    return Math.max(1, Math.min(45, Math.round(baseDays * quality)));
+    var safeBaseline = Math.max(1, Math.min(45, Math.round(baseDays * quality)));
+    var blend = adaptiveModelBlend(skill);
+    if (!blend || !wordId) return safeBaseline;
+    var model = state.adaptive || defaultAdaptiveState();
+    var weights = skill === 'meaning' ? model.meaningWeights : model.weights;
+    if (Number((weights && weights.logDays) || 0) > -0.05) return safeBaseline;
+
+    var threshold = learningGoalRetention(skill);
+    var maximumModelDays = Math.min(45, Math.max(safeBaseline, safeBaseline * 2));
+    var modelDays = maximumModelDays;
+    var skillState = peekSkillState(wordId, skill);
+    for (var day = 1; day <= maximumModelDays; day += 1) {
+      var futureFeatures = adaptiveFeaturesFromState(
+        skillState,
+        skill,
+        null,
+        now + day * DAY_MS,
+        false,
+      );
+      var futureRecall = blendAdaptivePredictions(
+        predictRuleRecallProbability(futureFeatures),
+        predictModelRecallProbability(futureFeatures, skill),
+        skill,
+      );
+      if (futureRecall < threshold) {
+        modelDays = Math.max(1, day - 1);
+        break;
+      }
+    }
+    return Math.max(1, Math.min(45, Math.round(safeBaseline * (1 - blend) + modelDays * blend)));
   }
 
   function roundProbability(value) {
@@ -1820,6 +2494,23 @@
     });
   }
 
+  function currentLearningGoal() {
+    return LEARNING_GOALS[normaliseLearningGoal(state.settings.learningGoal)];
+  }
+
+  function learningGoalPriority(skill) {
+    return Number(currentLearningGoal().priority[skill] || 1);
+  }
+
+  function learningGoalRetention(skill) {
+    return Number(currentLearningGoal().retention[skill] || 0.7);
+  }
+
+  function adaptiveStatusText() {
+    var goal = currentLearningGoal().label;
+    return goal + (adaptiveModelBlend() > 0 ? ' · 动态复习' : ' · 稳定排期');
+  }
+
   function renderToday() {
     currentView = 'today';
     setActiveNav('today');
@@ -1846,8 +2537,12 @@
       newCount +
       '" data-estimated-seconds="' +
       estimatedSeconds +
-      '" data-adaptive-model="local-online-v1" data-adaptive-observations="' +
+      '" data-adaptive-model="local-online-v2-shadow" data-adaptive-observations="' +
       Number(state.adaptive.observations || 0) +
+      '" data-adaptive-blend="' +
+      roundProbability(adaptiveModelBlend()) +
+      '" data-learning-goal="' +
+      esc(normaliseLearningGoal(state.settings.learningGoal)) +
       '">' +
       '<div class="focus-summary"><span>' +
       (plan.length ? Math.max(1, Math.ceil(estimatedSeconds / 60)) + ' 分钟' : '已完成') +
@@ -1857,7 +2552,9 @@
       '<div class="compact-loop" aria-label="听音、拼写与辨义、词形、句用">' +
       '<span>听音</span><i>→</i><span>拼写＋辨义</span><i>→</i><span>词形</span><i>→</i><span>句用</span>' +
       '</div>' +
-      '<p class="adaptive-note">已按薄弱能力与遗忘风险排序 · 数据仅保存在本机</p>' +
+      '<p class="adaptive-note">' +
+      esc(adaptiveStatusText()) +
+      ' · 数据仅存本机</p>' +
       '<div class="start-actions primary-start-actions">' +
       '<button class="primary-button" type="button" data-action="start-daily"' +
       (plan.length ? '' : ' disabled') +
@@ -2060,7 +2757,7 @@
     var taskState = getVisualTaskState(scene.id);
     var retrying = Boolean(visualRuntime.unlockedTasks[scene.id]);
     var complete = taskState.completed && !retrying;
-    var step = Math.min(visualRuntime.posStep, scene.questions.length - 1);
+    var step = Math.min(Number(taskState.step) || 0, scene.questions.length - 1);
     var question = scene.questions[step];
     return (
       '<article class="panel visual-pos-card" data-visual-task-id="' +
@@ -2403,9 +3100,11 @@
   function renderVisualComparisonCard(task) {
     var taskState = getVisualTaskState(task.id);
     var retrying = Boolean(visualRuntime.unlockedTasks[task.id]);
-    var skipped = Boolean(visualRuntime.skippedTasks && visualRuntime.skippedTasks[task.id]);
+    var skipped = Boolean(
+      taskState.skipped || (visualRuntime.skippedTasks && visualRuntime.skippedTasks[task.id]),
+    );
     var complete = taskState.completed && !retrying;
-    var step = Math.min(Number(visualRuntime.taskSteps[task.id]) || 0, task.scenes.length - 1);
+    var step = Math.min(Number(taskState.step) || 0, task.scenes.length - 1);
     var scene = task.scenes[step];
     var relationLabel = task.relation === 'synonym' ? '近义辨析' : '反义对照';
     var stateClass = complete ? ' is-complete' : skipped ? ' is-skipped' : '';
@@ -4375,7 +5074,7 @@
           '</ul>'
         : '<div class="empty-state">句子工坊中的草稿会保存在本机。</div>') +
       '</article>' +
-      '<article class="panel progress-panel" style="margin-top:18px"><h3>数据备份</h3><p class="fine-print">换设备或清理浏览器数据前，请先导出 JSON。</p>' +
+      '<article class="panel progress-panel" style="margin-top:18px"><h3>数据备份</h3><p class="fine-print">换设备或清理浏览器数据前，请先导出 JSON；文件可能包含本机造句草稿，请妥善保管。</p>' +
       '<div class="data-actions"><button class="secondary-button" type="button" data-action="export-data">导出进度</button><label class="import-label">导入进度<input type="file" accept="application/json" data-action="import-data"></label><button class="danger-button" type="button" data-action="reset-data">清空本机进度</button></div>' +
       '</article>' +
       '</div>' +
@@ -4523,12 +5222,13 @@
     var card = button.closest('[data-visual-task-id]');
     var scene = VISUAL_LAB.posScene;
     if (!card || !scene || card.dataset.locked === 'true') return;
-    var step = Math.min(visualRuntime.posStep, scene.questions.length - 1);
+    var taskState = getVisualTaskState(scene.id);
+    var step = Math.min(Number(taskState.step) || 0, scene.questions.length - 1);
     var question = scene.questions[step];
     var choice = String(button.dataset.token || '');
     var correct = question.answers.indexOf(choice) >= 0;
     card.dataset.locked = 'true';
-    recordVisualResult(scene.id, correct, choice);
+    recordVisualResult(scene.id, correct, choice, 'question-' + step);
     if (!correct) {
       button.classList.add('is-wrong');
       setFeedback('visualPosFeedback', '再想想：' + question.clue, 'is-wrong');
@@ -4545,13 +5245,15 @@
     });
     setFeedback('visualPosFeedback', '正确。' + question.explanation, 'is-correct');
     setTimeout(function () {
-      visualRuntime.posStep += 1;
-      if (visualRuntime.posStep >= scene.questions.length) {
+      taskState.step = step + 1;
+      visualRuntime.posStep = taskState.step;
+      if (taskState.step >= scene.questions.length) {
         completeVisualTask(scene.id);
+        taskState.step = 0;
         visualRuntime.posStep = 0;
         delete visualRuntime.unlockedTasks[scene.id];
-        saveVisualState();
       }
+      saveVisualState();
       renderVisualSection();
       updateVisualProgress();
       focusVisualSectionTask();
@@ -4588,7 +5290,7 @@
 
     var correct = normaliseAnswer(answer) === normaliseAnswer(slot.answer);
     card.dataset.locked = 'true';
-    recordVisualResult(task.id, correct, answer);
+    recordVisualResult(task.id, correct, answer, 'form-' + step);
     if (!correct) {
       input.setAttribute('aria-invalid', 'true');
       setFeedback(
@@ -4635,9 +5337,10 @@
     var task = findVisualFamilyTask(button.dataset.taskId);
     var card = button.closest('[data-visual-task-id]');
     if (!task || !card || card.dataset.locked === 'true') return;
-    card.dataset.locked = 'true';
-    recordVisualResult(task.id, false, 'skip');
     var taskState = getVisualTaskState(task.id);
+    var step = Math.min(Number(taskState.step) || 0, visualFamilyPracticeSlots(task).length - 1);
+    card.dataset.locked = 'true';
+    recordVisualResult(task.id, false, 'skip', 'form-' + step);
     taskState.step = 0;
     taskState.skipped = true;
     visualRuntime.skippedTasks[task.id] = true;
@@ -4651,12 +5354,13 @@
     var task = findVisualTask(button.dataset.taskId);
     var card = button.closest('[data-visual-task-id]');
     if (!task || !card || card.dataset.locked === 'true') return;
-    var step = Math.min(Number(visualRuntime.taskSteps[task.id]) || 0, task.scenes.length - 1);
+    var taskState = getVisualTaskState(task.id);
+    var step = Math.min(Number(taskState.step) || 0, task.scenes.length - 1);
     var scene = task.scenes[step];
     var choice = String(button.dataset.choice || '');
     var correct = choice === scene.answer;
     card.dataset.locked = 'true';
-    recordVisualResult(task.id, correct, choice);
+    recordVisualResult(task.id, correct, choice, 'scene-' + step);
     if (!correct) {
       button.classList.add('is-wrong');
       button.setAttribute('aria-invalid', 'true');
@@ -4681,9 +5385,12 @@
       var nextStep = step + 1;
       if (nextStep >= task.scenes.length) {
         completeVisualTask(task.id);
+        taskState.step = 0;
+        taskState.skipped = false;
         visualRuntime.taskSteps[task.id] = 0;
         delete visualRuntime.unlockedTasks[task.id];
       } else {
+        taskState.step = nextStep;
         visualRuntime.taskSteps[task.id] = nextStep;
       }
       if (visualRuntime.skippedTasks) delete visualRuntime.skippedTasks[task.id];
@@ -4697,28 +5404,38 @@
     var task = findVisualTask(button.dataset.taskId);
     var card = button.closest('[data-visual-task-id]');
     if (!task || !card || card.dataset.locked === 'true') return;
-    var step = Math.min(Number(visualRuntime.taskSteps[task.id]) || 0, task.scenes.length - 1);
+    var taskState = getVisualTaskState(task.id);
+    var step = Math.min(Number(taskState.step) || 0, task.scenes.length - 1);
     card.dataset.locked = 'true';
-    recordVisualResult(task.id, false, 'skip');
+    recordVisualResult(task.id, false, 'skip', 'scene-' + step);
     if (step + 1 < task.scenes.length) {
+      taskState.step = step + 1;
+      taskState.skipped = false;
       visualRuntime.taskSteps[task.id] = step + 1;
     } else {
       if (!visualRuntime.skippedTasks) visualRuntime.skippedTasks = {};
+      taskState.step = 0;
+      taskState.skipped = true;
       visualRuntime.skippedTasks[task.id] = true;
       visualRuntime.taskSteps[task.id] = 0;
     }
+    saveVisualState();
     replaceVisualComparisonCard(task);
     updateVisualProgress();
   }
 
   function retryVisualTask(taskId) {
+    beginNewVisualModelCycle(taskId);
     delete visualRuntime.unlockedTasks[taskId];
     visualRuntime.unlockedTasks[taskId] = true;
     delete visualRuntime.repairRecorded[taskId];
     getVisualTaskState(taskId).hadError = false;
     if (visualRuntime.skippedTasks) delete visualRuntime.skippedTasks[taskId];
     if (VISUAL_LAB.posScene && VISUAL_LAB.posScene.id === taskId) {
+      getVisualTaskState(taskId).step = 0;
+      getVisualTaskState(taskId).skipped = false;
       visualRuntime.posStep = 0;
+      saveVisualState();
       renderVisualSection();
       return;
     }
@@ -4734,7 +5451,10 @@
     }
     var task = findVisualTask(taskId);
     if (!task) return;
+    getVisualTaskState(taskId).step = 0;
+    getVisualTaskState(taskId).skipped = false;
     visualRuntime.taskSteps[taskId] = 0;
+    saveVisualState();
     replaceVisualComparisonCard(task);
   }
 
@@ -4770,7 +5490,7 @@
     var choice = String(button.dataset.choice || '');
     var correct = choice === task.answer;
     card.dataset.locked = 'true';
-    recordVisualResult(task.id, correct, choice);
+    recordVisualResult(task.id, correct, choice, 'prompt-0');
     if (!correct) {
       button.classList.add('is-wrong');
       button.setAttribute('aria-invalid', 'true');
@@ -4796,7 +5516,7 @@
     if (!found || !card || card.dataset.locked === 'true') return;
     card.dataset.locked = 'true';
     stopAudio();
-    recordVisualResult(found.task.id, false, 'skip');
+    recordVisualResult(found.task.id, false, 'skip', 'prompt-0');
     delete visualRuntime.gameAnswered[found.task.id];
     visualRuntime.gameIndices[found.mode.id] =
       (Number(visualRuntime.gameIndices[found.mode.id]) || 0) + 1;
@@ -4826,6 +5546,12 @@
     var firstIncomplete = mode.tasks.findIndex(function (task) {
       return !(visualState.tasks[task.id] && visualState.tasks[task.id].mastered);
     });
+    mode.tasks.forEach(function (task) {
+      if (!(visualState.tasks[task.id] && visualState.tasks[task.id].mastered)) {
+        beginNewVisualModelCycle(task.id);
+      }
+    });
+    saveVisualState();
     visualRuntime.gameIndices[mode.id] = firstIncomplete < 0 ? mode.tasks.length : firstIncomplete;
     renderVisualSection();
     focusVisualGameStage(false);
@@ -4838,10 +5564,12 @@
     visualRuntime.gameReplay[mode.id] = true;
     visualRuntime.gameIndices[mode.id] = 0;
     mode.tasks.forEach(function (task) {
+      beginNewVisualModelCycle(task.id);
       delete visualRuntime.gameAnswered[task.id];
       delete visualRuntime.repairRecorded[task.id];
       getVisualTaskState(task.id).hadError = false;
     });
+    saveVisualState();
     renderVisualSection();
     focusVisualGameStage(false);
   }
@@ -5169,7 +5897,7 @@
     if (!task || session.taskState.meaningResolved || button.disabled) return;
     var choice = String(button.dataset.choice || '');
     var correct = choice === task.meaningAnswer;
-    recordVisualResult(task.id, correct, choice);
+    recordVisualResult(task.id, correct, choice, 'prompt-0');
     if (!correct) {
       session.taskState.meaningAttempts =
         Math.max(0, Number(session.taskState.meaningAttempts) || 0) + 1;
@@ -5191,7 +5919,7 @@
     if (!session || currentSkill() !== 'spell') return;
     var task = integratedMeaningTask(currentWord());
     if (!task || session.taskState.meaningResolved || !acquireSkipLock()) return;
-    recordVisualResult(task.id, false, 'skip');
+    recordVisualResult(task.id, false, 'skip', 'prompt-0');
     session.taskState.meaningResolved = true;
     session.taskState.meaningSkipped = true;
     delete visualRuntime.repairRecorded[task.id];
@@ -6242,7 +6970,7 @@
     var unresolvedError = hasUnresolvedControlledError(wordId, skill, skillState);
     var pendingOnly = Number(skillState.pending || 0) > 0 && !unresolvedError;
     return (
-      (1 - predictedRecall) * 100 +
+      (1 - predictedRecall) * 100 * learningGoalPriority(skill) +
       (unresolvedError ? 22 : 0) +
       (skillState.relearnRequired ? 24 : 0) +
       (pendingOnly ? 8 : 0) +
@@ -6326,7 +7054,11 @@
 
   function makeDailyPlan(word, kind, stages, planningNow) {
     var now = planningNow || Date.now();
-    var rankedStages = stages
+    var priorityStages = stages.filter(function (stage) {
+      return stage.role !== 'transfer';
+    });
+    if (!priorityStages.length) priorityStages = stages;
+    var rankedStages = priorityStages
       .map(function (stage) {
         return {
           skill: stage.skill,
@@ -7027,6 +7759,7 @@
     var form = document.getElementById('settingsForm');
     form.elements.accent.value = state.settings.accent;
     form.elements.dailyNew.value = String(state.settings.dailyNew);
+    form.elements.learningGoal.value = normaliseLearningGoal(state.settings.learningGoal);
     settingsDialog.showModal();
   }
 
@@ -7045,6 +7778,7 @@
       state.daily.newSelectionDone = false;
     }
     state.settings.dailyNew = nextDailyNew;
+    state.settings.learningGoal = normaliseLearningGoal(form.elements.learningGoal.value);
     saveState();
     settingsDialog.close();
     showToast('训练设置已保存。');

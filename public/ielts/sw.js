@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wordlab-v19-adaptive-local';
+const CACHE_NAME = 'wordlab-v20-adaptive-shadow';
 const CORE_ASSETS = [
   './',
   './index.html',

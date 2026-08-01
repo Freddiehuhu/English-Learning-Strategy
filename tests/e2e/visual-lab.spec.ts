@@ -312,7 +312,11 @@ test('persists strength progress and prevents a double submit from scoring twice
 }) => {
   const pageErrors = capturePageErrors(page);
   await openFamilyAtlases(page);
-  const coreBefore = await page.evaluate(() => localStorage.getItem('els-ielts-wordlab-v1'));
+  const coreBefore = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    delete saved.adaptive;
+    return saved;
+  });
 
   const atlas = FAMILY_ATLASES.find(({ id }) => id === 'family-atlas-strength');
   if (!atlas) throw new Error('The strength atlas fixture is missing.');
@@ -327,12 +331,15 @@ test('persists strength progress and prevents a double submit from scoring twice
 
   const firstStep = await page.evaluate(() => {
     const visual = JSON.parse(localStorage.getItem('els-ielts-visual-lab-v1') || '{}');
+    const core = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
     return {
       task: visual.tasks?.['family-atlas-strength'],
       historyCount:
         visual.history?.filter(
           (item: { taskId: string }) => item.taskId === 'family-atlas-strength',
         ).length || 0,
+      modelObservations: core.adaptive?.observations || 0,
+      modelEvents: core.adaptive?.events?.length || 0,
     };
   });
   expect(firstStep.task).toMatchObject({
@@ -342,6 +349,8 @@ test('persists strength progress and prevents a double submit from scoring twice
     step: 1,
   });
   expect(firstStep.historyCount).toBe(1);
+  expect(firstStep.modelObservations).toBe(1);
+  expect(firstStep.modelEvents).toBe(1);
 
   await page.reload();
   await showVisualLab(page);
@@ -385,8 +394,11 @@ test('persists strength progress and prevents a double submit from scoring twice
 
   const completed = await page.evaluate(() => {
     const visual = JSON.parse(localStorage.getItem('els-ielts-visual-lab-v1') || '{}');
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    const { adaptive, ...core } = saved;
     return {
-      core: localStorage.getItem('els-ielts-wordlab-v1'),
+      core,
+      adaptive,
       task: visual.tasks?.['family-atlas-strength'],
       historyCount:
         visual.history?.filter(
@@ -394,7 +406,23 @@ test('persists strength progress and prevents a double submit from scoring twice
         ).length || 0,
     };
   });
-  expect(completed.core).toBe(coreBefore);
+  expect(completed.core).toEqual(coreBefore);
+  expect(completed.adaptive).toMatchObject({
+    observations: 3,
+    shadow: { count: 3 },
+    skillObservations: { forms: 3 },
+  });
+  expect(completed.adaptive.abilities['foundation-strength::forms']).toMatchObject({
+    attempts: 3,
+    correct: 3,
+    needsReview: false,
+  });
+  expect(completed.adaptive.events).toHaveLength(3);
+  expect(completed.adaptive.events.map((event: { promptId: string }) => event.promptId)).toEqual([
+    'form-0',
+    'form-1',
+    'form-2',
+  ]);
   expect(completed.task).toMatchObject({
     attempts: 3,
     correct: 3,
@@ -537,14 +565,9 @@ test('uses pictures to distinguish precise synonyms and prevents double scoring'
   expect(saved.visualError).toMatchObject({
     targetWordId: 'fascinate',
     gameType: 'synonym',
-    repairSkill: 'sentence',
+    repairSkill: '',
   });
-  expect(saved.repair).toMatchObject({
-    wordId: 'fascinate',
-    skill: 'sentence',
-    source: 'visual',
-    visualGameType: 'synonym',
-  });
+  expect(saved.repair).toBeUndefined();
 });
 
 test('keeps image failures recoverable and mobile navigation usable', async ({ page }) => {
@@ -697,25 +720,15 @@ test('supports homophone, homograph, analogy and taxonomy games without revealin
       }),
     ]),
   );
-  expect(saved.repairHistory).toHaveLength(2);
-  expect(saved.repairHistory).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({
-        wordId: 'fir',
-        skill: 'spell',
-        coreAttempt: false,
-        visualTaskId: 'game-homophone-fir',
-        visualGameType: 'homophone',
-      }),
-      expect.objectContaining({
-        wordId: 'fir',
-        skill: 'spell',
-        coreAttempt: false,
-        visualTaskId: 'game-homophone-fur',
-        visualGameType: 'homophone',
-      }),
-    ]),
-  );
+  expect(saved.repairHistory).toEqual([
+    expect.objectContaining({
+      wordId: 'fir',
+      skill: 'spell',
+      coreAttempt: false,
+      visualTaskId: 'game-homophone-fir',
+      visualGameType: 'homophone',
+    }),
+  ]);
   expect(saved.spellState).toBeUndefined();
   expect(saved.visualRepairPending).toMatchObject({ spell: true });
   const overflow = await page.evaluate(
@@ -913,9 +926,17 @@ test('extends the semantic network with expert roles, word-form analogies and ta
   });
   expect(repairMappings.core).toEqual([
     {
+      taskId: 'game-analogy-distance-importance',
+      wordId: 'distant',
+      skill: 'forms',
+      gameType: 'analogy',
+    },
+  ]);
+  expect(repairMappings.visual).toEqual([
+    {
       taskId: 'game-homograph-expert-noun',
       wordId: 'expert',
-      skill: 'forms',
+      skill: '',
       gameType: 'homograph',
     },
     {
@@ -927,12 +948,68 @@ test('extends the semantic network with expert roles, word-form analogies and ta
     {
       taskId: 'game-taxonomy-organ-lung',
       wordId: 'lung',
-      skill: 'sentence',
+      skill: '',
       gameType: 'taxonomy',
     },
   ]);
-  expect(repairMappings.visual).toEqual(repairMappings.core);
 
+  expect(pageErrors).toEqual([]);
+});
+
+test('a first visual meaning decision trains meaning without becoming sentence mastery', async ({
+  page,
+}) => {
+  const pageErrors = capturePageErrors(page);
+  await openVisualLab(page);
+  await page.getByRole('button', { name: /词网游戏/ }).click();
+  await page.getByRole('button', { name: /看图猜词/ }).click();
+
+  const task = page.locator('[data-visual-task-id="game-guess-fascinate"]');
+  await task.getByRole('button', { name: 'interested', exact: true }).click();
+
+  let saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}'),
+  );
+  expect(saved.adaptive).toMatchObject({
+    version: 2,
+    observations: 1,
+    shadow: { count: 0 },
+    meaningShadow: { count: 0.75 },
+    skillObservations: { meaning: 1 },
+  });
+  expect(saved.adaptive.abilities['fascinate::meaning']).toMatchObject({
+    attempts: 1,
+    correct: 0,
+    needsReview: true,
+  });
+  expect(saved.words.fascinate?.skills?.sentence).toBeUndefined();
+  expect(saved.adaptive.events).toHaveLength(1);
+  expect(saved.adaptive.events[0]).toMatchObject({
+    wordId: 'fascinate',
+    skill: 'meaning',
+    taskVersion: 'visual-guess-v2',
+    label: 0,
+    labelSource: 'controlled_visual_first_attempt',
+    optionCount: 4,
+    evidenceWeight: 0.75,
+    promptId: 'prompt-0',
+    attemptCycle: 0,
+  });
+  expect(saved.adaptive.events[0]).not.toHaveProperty('choice');
+  expect(saved.adaptive.events[0]).not.toHaveProperty('answer');
+
+  await page.reload();
+  await showVisualLab(page);
+  await page.getByRole('button', { name: /词网游戏/ }).click();
+  await page.getByRole('button', { name: /看图猜词/ }).click();
+  const reloadedTask = page.locator('[data-visual-task-id="game-guess-fascinate"]');
+  await reloadedTask.getByRole('button', { name: 'fascinated', exact: true }).click();
+  saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}'),
+  );
+  expect(saved.adaptive.observations).toBe(1);
+  expect(saved.adaptive.events).toHaveLength(1);
+  expect(saved.words.fascinate?.visualRepairPending).toBeUndefined();
   expect(pageErrors).toEqual([]);
 });
 
@@ -1017,14 +1094,9 @@ test('uses original scene clues for insulate, blubber and logger without early a
   expect(guessRepair.visual).toMatchObject({
     targetWordId: 'insulate',
     gameType: 'guess',
-    repairSkill: 'sentence',
+    repairSkill: '',
   });
-  expect(guessRepair.core).toMatchObject({
-    wordId: 'insulate',
-    skill: 'sentence',
-    source: 'visual',
-    visualGameType: 'guess',
-  });
+  expect(guessRepair.core).toBeUndefined();
 
   expect(pageErrors).toEqual([]);
 });
