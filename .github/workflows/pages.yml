@@ -39,22 +39,9 @@ jobs:
       - name: Verify supplementary review ledger is current
         run: |
           python3 scripts/corpus/build_supplementary_review_status.py \
-            --audit data/ielts-corpus/supplementary-audits/curated-native-batch.json \
-            --audit data/ielts-corpus/supplementary-audits/edge-docx-batch.json \
-            --audit data/ielts-corpus/supplementary-audits/edge-pdf-batch.json \
-            --audit data/ielts-corpus/supplementary-audits/english-for-everyone-junior-batch.json \
-            --audit data/ielts-corpus/supplementary-audits/scholastic-240-batch.json \
-            --audit data/ielts-corpus/supplementary-audits/scholastic-success-batch.json \
-            --audit data/ielts-corpus/supplementary-audits/vocabulary-in-use-batch.json \
-            --evidence data/ielts-corpus/supplementary-input/curated-native-candidates.tsv \
-            --evidence data/ielts-corpus/supplementary-input/edge-pdf-candidates.tsv \
-            --evidence data/ielts-corpus/supplementary-input/edge-unit7-candidates.tsv \
-            --evidence data/ielts-corpus/supplementary-input/english-for-everyone-junior-candidates.tsv \
-            --evidence data/ielts-corpus/supplementary-input/scholastic-240-candidates.tsv \
-            --evidence data/ielts-corpus/supplementary-input/scholastic-success-candidates.tsv \
-            --evidence data/ielts-corpus/supplementary-input/vocabulary-in-use-candidates.tsv \
-            --render-evidence data/ielts-corpus/supplementary-render-evidence/english-for-everyone-junior-beginners.json \
-            --render-evidence data/ielts-corpus/supplementary-render-evidence/js-vocabulary-starter-pack.json \
+            --audit-directory data/ielts-corpus/supplementary-audits \
+            --evidence-directory data/ielts-corpus/supplementary-input \
+            --render-evidence-directory data/ielts-corpus/supplementary-render-evidence \
             --output /tmp/supplementary-review-status.json \
             --markdown-output /tmp/supplementary-review-status.md
           diff -u data/ielts-corpus/supplementary-review-status.json /tmp/supplementary-review-status.json

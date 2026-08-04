@@ -26,6 +26,16 @@ SPEC.loader.exec_module(extractor)
 
 
 class CuratedNativeCandidateTests(unittest.TestCase):
+    def test_oef_is_excluded_from_the_legacy_multi_source_batch(self):
+        self.assertIn(
+            "oef-1bu5-vocabulary-writing-book",
+            extractor.SUPPORTED_SOURCE_IDS,
+        )
+        self.assertNotIn(
+            "oef-1bu5-vocabulary-writing-book",
+            extractor.CURATED_BATCH_SOURCE_IDS,
+        )
+
     def test_expands_common_slash_alternative_shapes(self):
         self.assertEqual(
             extractor.expand_slash_alternatives("law/rule/regulation"),

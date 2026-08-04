@@ -4,20 +4,21 @@
   "completion_rule": "A source is fully evaluated only after its review status is complete and a fail-closed evidence chain passes: exact full-page coverage, a verified source SHA-256, and a source-bound manifest of rendered page SHA-256 hashes. Lexical sources additionally require completed editorial review. Registration, extraction, or an audit JSON claim alone is never completion.",
   "statistics": {
     "registered_source_count": 46,
-    "fully_evaluated_source_count": 1,
-    "editorial_review_complete_source_count": 0,
-    "provenance_evidence_gate_declared_source_count": 1,
-    "provenance_evidence_gate_passed_source_count": 1,
-    "completion_evidence_gate_required_source_count": 1,
-    "completion_evidence_gate_passed_source_count": 1,
+    "fully_evaluated_source_count": 2,
+    "editorial_review_complete_source_count": 1,
+    "provenance_evidence_gate_declared_source_count": 2,
+    "provenance_evidence_gate_passed_source_count": 2,
+    "completion_evidence_gate_required_source_count": 2,
+    "completion_evidence_gate_passed_source_count": 2,
     "completion_claim_blocked_by_evidence_source_count": 0,
     "sources_with_extracted_rows": 23,
     "extracted_row_count": 15523,
     "sources_with_missing_pages": 6,
     "sources_with_quality_blocker": 0,
     "review_status_counts": {
-      "candidate_extracted_needs_editorial_review": 17,
+      "candidate_extracted_needs_editorial_review": 16,
       "candidate_extracted_source_pages_missing": 6,
+      "complete": 1,
       "content_reviewed_no_lexical_targets": 1,
       "registered_extraction_pending": 14,
       "registered_method_review_pending": 8
@@ -894,45 +895,100 @@
       "corpus_policy": "candidate_only",
       "text_route": "pdf_native_text",
       "page_count": 8,
-      "review_status": "candidate_extracted_needs_editorial_review",
-      "fully_evaluated": false,
+      "review_status": "complete",
+      "fully_evaluated": true,
       "completion_evidence": {
-        "required": false,
-        "passed": false,
+        "required": true,
+        "passed": true,
         "failure_codes": [],
         "source_sha256": "d2a23c2ad9e1b203879a3f1ee667cd233eddcd7d74c1b94c237025f7ca0557d6",
-        "manifest_sha256": "",
-        "rendered_page_numbers": [],
-        "rendered_page_hashes": []
+        "manifest_sha256": "c67af88f5e2d0fe022dc3bca750c8ddd3b27c2238f70fd02021ed77768255bb7",
+        "rendered_page_numbers": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "rendered_page_hashes": [
+          {
+            "page": 1,
+            "sha256": "12f2c7ac57371604061ede078a026e970cc9672505200bf9d650fda79b939707"
+          },
+          {
+            "page": 2,
+            "sha256": "76748ff1c68f316e3e6938846e1f287e66ed08f9b0384debe05cda9be0c5f415"
+          },
+          {
+            "page": 3,
+            "sha256": "b2c1c546034a7e531d2468ec90146b8cb99f9a4b2dc9d4e282af9f7a704273b8"
+          },
+          {
+            "page": 4,
+            "sha256": "2e0e17de94388074cf415c6f673d8066e317d0e0c19bb17625a6e96904f7a960"
+          },
+          {
+            "page": 5,
+            "sha256": "b2599c4c07dc1e67287a170b203ecbbd66531eb51b6eb6699dd2d27d06a456c4"
+          },
+          {
+            "page": 6,
+            "sha256": "50b2d82cf09f6f79cc6c9aee2211104cd1906d538c393cdecda610d5c26c7bd9"
+          },
+          {
+            "page": 7,
+            "sha256": "73447c23be525b929c8a5818d03466118420ec159144333490eba5a86e3021ce"
+          },
+          {
+            "page": 8,
+            "sha256": "0f1059ac32f74bd63344bafca7c581a8d19d8a85f864ba92db466acbf021ca37"
+          }
+        ]
       },
       "provenance_evidence": {
-        "declared": false,
-        "passed": false,
-        "schema_version": 0,
-        "source_sha256": "",
-        "candidate_tsv_sha256": "",
-        "candidate_tsv_byte_size": 0,
-        "candidate_tsv_row_count": 0,
-        "candidate_tsv_source_counts": {},
-        "render_manifest_sha256": ""
+        "declared": true,
+        "passed": true,
+        "schema_version": 1,
+        "source_sha256": "d2a23c2ad9e1b203879a3f1ee667cd233eddcd7d74c1b94c237025f7ca0557d6",
+        "candidate_tsv_sha256": "6a1e18dd08726fd59ae4c210e6fb14b83e2b05e9b24992494370b51549e78661",
+        "candidate_tsv_byte_size": 18065,
+        "candidate_tsv_row_count": 45,
+        "candidate_tsv_source_counts": {
+          "oef-1bu5-vocabulary-writing-book": 45
+        },
+        "render_manifest_sha256": "c67af88f5e2d0fe022dc3bca750c8ddd3b27c2238f70fd02021ed77768255bb7"
       },
       "extracted_row_count": 45,
-      "pages_parsed": 4,
+      "pages_parsed": 8,
       "parsed_page_numbers": [
         1,
         2,
+        3,
+        4,
         5,
-        7
+        6,
+        7,
+        8
       ],
       "visual_sample_pages": [
         1,
         2,
+        3,
+        4,
         5,
-        7
+        6,
+        7,
+        8
       ],
-      "editorial_review_complete": false,
-      "extraction_method": "pdfplumber_font_and_position",
-      "rights_boundary": "lexical_forms_only_no_book_body_content"
+      "editorial_review_complete": true,
+      "audit_source_sha256": "d2a23c2ad9e1b203879a3f1ee667cd233eddcd7d74c1b94c237025f7ca0557d6",
+      "candidate_tsv_sha256": "6a1e18dd08726fd59ae4c210e6fb14b83e2b05e9b24992494370b51549e78661",
+      "render_manifest_sha256": "c67af88f5e2d0fe022dc3bca750c8ddd3b27c2238f70fd02021ed77768255bb7",
+      "extraction_method": "pdfplumber_font_and_position_plus_full_page_visual_editorial_review",
+      "rights_boundary": "lexical_forms_and_sanitized_locators_only_no_book_body_content"
     },
     {
       "id": "edge-2e-1bu7-vocabulary-moves",

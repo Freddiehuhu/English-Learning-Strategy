@@ -136,6 +136,30 @@ def provenance_audit(
 
 
 class SupplementaryReviewStatusTests(unittest.TestCase):
+    def test_directory_collection_is_sorted_deduplicated_and_fail_closed(self):
+        with tempfile.TemporaryDirectory() as raw_dir:
+            directory = Path(raw_dir)
+            first = directory / "a-batch.json"
+            second = directory / "b-batch.json"
+            ignored = directory / "target-metadata.json"
+            for path in (first, second, ignored):
+                path.write_text("{}", encoding="utf-8")
+            collected = status_builder.collect_paths(
+                [second],
+                directory,
+                "*-batch.json",
+                label="audit",
+            )
+            self.assertEqual(collected, [first, second])
+
+        with self.assertRaisesRegex(ValueError, "does not exist"):
+            status_builder.collect_paths(
+                [],
+                Path(raw_dir) / "missing",
+                "*.json",
+                label="audit",
+            )
+
     def test_registration_is_not_reported_as_evaluation(self):
         payload = status_builder.build_status(
             {"source-a": inventory_source("source-a")},

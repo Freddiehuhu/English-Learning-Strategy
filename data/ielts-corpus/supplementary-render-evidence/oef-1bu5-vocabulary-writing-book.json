@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "source_id": "oef-1bu5-vocabulary-writing-book",
+  "source_format": "pdf",
+  "source_sha256": "d2a23c2ad9e1b203879a3f1ee667cd233eddcd7d74c1b94c237025f7ca0557d6",
+  "source_page_count": 8,
+  "renderer": {
+    "name": "pdftoppm",
+    "version": "26.07.0"
+  },
+  "render_settings": {
+    "format": "png",
+    "dpi": 144,
+    "single_file_per_page": true
+  },
+  "rendered_pages": [
+    {
+      "page": 1,
+      "sha256": "12f2c7ac57371604061ede078a026e970cc9672505200bf9d650fda79b939707",
+      "byte_size": 552444,
+      "width_px": 840,
+      "height_px": 1191
+    },
+    {
+      "page": 2,
+      "sha256": "76748ff1c68f316e3e6938846e1f287e66ed08f9b0384debe05cda9be0c5f415",
+      "byte_size": 462658,
+      "width_px": 840,
+      "height_px": 1191
+    },
+    {
+      "page": 3,
+      "sha256": "b2c1c546034a7e531d2468ec90146b8cb99f9a4b2dc9d4e282af9f7a704273b8",
+      "byte_size": 173884,
+      "width_px": 840,
+      "height_px": 1191
+    },
+    {
+      "page": 4,
+      "sha256": "2e0e17de94388074cf415c6f673d8066e317d0e0c19bb17625a6e96904f7a960",
+      "byte_size": 37930,
+      "width_px": 840,
+      "height_px": 1191
+    },
+    {
+      "page": 5,
+      "sha256": "b2599c4c07dc1e67287a170b203ecbbd66531eb51b6eb6699dd2d27d06a456c4",
+      "byte_size": 137520,
+      "width_px": 840,
+      "height_px": 1191
+    },
+    {
+      "page": 6,
+      "sha256": "50b2d82cf09f6f79cc6c9aee2211104cd1906d538c393cdecda610d5c26c7bd9",
+      "byte_size": 211144,
+      "width_px": 840,
+      "height_px": 1191
+    },
+    {
+      "page": 7,
+      "sha256": "73447c23be525b929c8a5818d03466118420ec159144333490eba5a86e3021ce",
+      "byte_size": 121373,
+      "width_px": 840,
+      "height_px": 1191
+    },
+    {
+      "page": 8,
+      "sha256": "0f1059ac32f74bd63344bafca7c581a8d19d8a85f864ba92db466acbf021ca37",
+      "byte_size": 41460,
+      "width_px": 840,
+      "height_px": 1191
+    }
+  ]
+}
