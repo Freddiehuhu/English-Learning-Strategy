@@ -45,25 +45,6 @@
         1
       ],
       "rights_boundary": "lexical_forms_only_no_book_body_content"
-    },
-    {
-      "id": "oef-1bu5-vocabulary-writing-book",
-      "status": "candidate_extracted_needs_editorial_review",
-      "extracted_row_count": 45,
-      "extraction_method": "pdfplumber_font_and_position",
-      "pages_parsed": [
-        1,
-        2,
-        5,
-        7
-      ],
-      "visual_sample_pages": [
-        1,
-        2,
-        5,
-        7
-      ],
-      "rights_boundary": "lexical_forms_only_no_book_body_content"
     }
   ]
 }

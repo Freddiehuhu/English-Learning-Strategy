@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract review-only vocabulary from three small native-text PDF sources.
+"""Extract review-only vocabulary from the small curated native-PDF batch.
 
 The source PDFs stay local. The exported TSV contains only lexical forms,
 sanitized source locators and corpus-policy metadata. Definitions, examples,
@@ -44,6 +44,14 @@ OUTPUT_COLUMNS = (
 SUPPORTED_SOURCE_IDS = {
     "c1-vocabulary-pack-cae",
     "oef-1bu5-vocabulary-writing-book",
+    "js-vocabulary-starter-pack",
+}
+
+# OEF now has its own full-source, editorially reviewed extractor and exact
+# provenance bundle.  Keep its parsing helpers here for reuse, but never mix
+# its dedicated evidence TSV back into this legacy multi-source batch.
+CURATED_BATCH_SOURCE_IDS = {
+    "c1-vocabulary-pack-cae",
     "js-vocabulary-starter-pack",
 }
 
@@ -696,13 +704,18 @@ def main() -> None:
     seen_sources: set[str] = set()
     for path in args.pdf_files:
         source, extracted, audit = extract_path(path, registry)
+        if source.id not in CURATED_BATCH_SOURCE_IDS:
+            raise ValueError(
+                f"{source.id} has a dedicated extractor and must not be "
+                "written to curated-native-candidates.tsv"
+            )
         if source.id in seen_sources:
             raise ValueError(f"Duplicate source input: {source.id}")
         seen_sources.add(source.id)
         rows.extend(extracted)
         audits.append(audit)
-    if seen_sources != SUPPORTED_SOURCE_IDS:
-        missing = SUPPORTED_SOURCE_IDS - seen_sources
+    if seen_sources != CURATED_BATCH_SOURCE_IDS:
+        missing = CURATED_BATCH_SOURCE_IDS - seen_sources
         raise ValueError(f"Missing supported source inputs: {sorted(missing)}")
 
     write_tsv(args.output, deduplicate_rows(rows))

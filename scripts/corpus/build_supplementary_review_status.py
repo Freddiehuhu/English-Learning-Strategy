@@ -1052,6 +1052,34 @@ def render_markdown(payload: dict[str, Any]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def collect_paths(
+    explicit: list[Path],
+    directory: Path | None,
+    pattern: str,
+    *,
+    label: str,
+) -> list[Path]:
+    """Combine explicit inputs with a fail-closed, convention-bound directory."""
+
+    paths = list(explicit)
+    if directory is not None:
+        if not directory.is_dir():
+            raise ValueError(f"{label} directory does not exist: {directory}")
+        discovered = sorted(
+            path for path in directory.glob(pattern) if path.is_file()
+        )
+        if not discovered:
+            raise ValueError(
+                f"{label} directory contains no files matching {pattern}: "
+                f"{directory}"
+            )
+        paths.extend(discovered)
+    unique: dict[Path, Path] = {}
+    for path in paths:
+        unique[path.resolve()] = path
+    return [unique[key] for key in sorted(unique, key=lambda item: str(item))]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -1063,10 +1091,24 @@ def main() -> None:
     )
     parser.add_argument("--audit", action="append", type=Path, default=[])
     parser.add_argument(
+        "--audit-directory",
+        type=Path,
+        help=(
+            "Load every *-batch.json supplementary audit in this directory. "
+            "Target-batch metadata without a sources array is intentionally "
+            "excluded by the naming convention."
+        ),
+    )
+    parser.add_argument(
         "--evidence",
         action="append",
         type=Path,
         default=[],
+    )
+    parser.add_argument(
+        "--evidence-directory",
+        type=Path,
+        help="Load every candidate/enrichment TSV in this directory.",
     )
     parser.add_argument(
         "--render-evidence",
@@ -1078,16 +1120,39 @@ def main() -> None:
             "multiple manifests."
         ),
     )
+    parser.add_argument(
+        "--render-evidence-directory",
+        type=Path,
+        help="Load every source-bound render-evidence JSON in this directory.",
+    )
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--markdown-output", type=Path)
     args = parser.parse_args()
 
-    evidence_provenance = evidence_file_provenance(args.evidence)
+    audit_paths = collect_paths(
+        args.audit,
+        args.audit_directory,
+        "*-batch.json",
+        label="audit",
+    )
+    evidence_paths = collect_paths(
+        args.evidence,
+        args.evidence_directory,
+        "*.tsv",
+        label="evidence",
+    )
+    render_paths = collect_paths(
+        args.render_evidence,
+        args.render_evidence_directory,
+        "*.json",
+        label="render evidence",
+    )
+    evidence_provenance = evidence_file_provenance(evidence_paths)
     payload = build_status(
         load_inventory(args.inventory),
-        load_audits(args.audit),
-        count_evidence(args.evidence),
-        load_render_evidence(args.render_evidence),
+        load_audits(audit_paths),
+        count_evidence(evidence_paths),
+        load_render_evidence(render_paths),
         {
             source_id: str(details["sha256"])
             for source_id, details in evidence_provenance.items()

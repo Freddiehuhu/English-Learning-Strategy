@@ -49,6 +49,10 @@ the minimum lexical metadata needed by the learning app.
   page-count gated extraction of the explicit three-column Word list on PDF
   pages 250-255. It preserves only lexical forms, printed POS and sanitized
   unit locators; every row remains `candidate_only`.
+- `extract_oef_1bu5_candidates.py`: full eight-page, source-hash-gated review
+  of OEF 1B Unit 5. It verifies all 46 printed target occurrences, exports 45
+  deduplicated candidate rows, binds the exact TSV and all-page render manifest
+  into the audit, and still does not promote any row into the target corpus.
 - `build_master_corpus.py`: quality gate, normalization, deduplication,
   target-promotion gate, four-skill labels, supplementary review queues, image
   queue and public catalog.
@@ -62,6 +66,13 @@ Supplementary extractors also write:
 
 `registry_source_id`, `source_role`, `corpus_policy`, `source_format`,
 `locator`.
+
+The review-ledger command should use `--audit-directory`,
+`--evidence-directory` and `--render-evidence-directory`. It automatically
+loads every `*-batch.json`, candidate/enrichment TSV and render manifest in
+the three controlled directories, so a newly committed batch cannot be missed
+because a CI argument list was not updated. The separately named learner
+target audit is not part of this supplementary ledger.
 
 Legacy rows default to `target_reference`, `target`, `pdf` only when their
 input is explicitly named with `--legacy-target-input`. Every new source must
@@ -131,6 +142,40 @@ This six-page evidence supports the candidate extraction and visual column
 check. It does not claim that the other 250 pages were reviewed and therefore
 cannot satisfy the ledger's full-source completion gate.
 
+### OEF 1B Unit 5 full-source review
+
+Generate render evidence for all eight pages of the hash-matched local source:
+
+```sh
+python3 scripts/corpus/build_pdf_render_evidence.py \
+  --source "/private/path/oef-1bu5-vocabulary-writing-book.pdf" \
+  --source-id oef-1bu5-vocabulary-writing-book \
+  --expected-source-sha256 d2a23c2ad9e1b203879a3f1ee667cd233eddcd7d74c1b94c237025f7ca0557d6 \
+  --all-pages \
+  --output data/ielts-corpus/supplementary-render-evidence/oef-1bu5-vocabulary-writing-book.json
+```
+
+Then regenerate its dedicated candidate TSV and provenance audit:
+
+```sh
+python3 scripts/corpus/extract_oef_1bu5_candidates.py \
+  "/private/path/oef-1bu5-vocabulary-writing-book.pdf" \
+  --registry data/ielts-corpus/supplemental-source-registry.json \
+  --render-evidence data/ielts-corpus/supplementary-render-evidence/oef-1bu5-vocabulary-writing-book.json \
+  --output data/ielts-corpus/supplementary-input/oef-1bu5-candidates.tsv \
+  --audit-output data/ielts-corpus/supplementary-audits/oef-1bu5-batch.json
+```
+
+Pages 1, 2, 5 and 7 contain 46 explicit target occurrences; `cultural`
+appears on pages 1 and 5, so the dedicated TSV contains 45 normalized rows.
+Pages 3, 4, 6 and 8 were visually reviewed and contain practice/writing
+prompts but no additional fully printed lexical target list. CEFR remains
+blank because the source does not supply it. Completion here means that this
+source and its candidate rows were reviewed. POS also stays blank because the
+source does not label it consistently; context-based POS guesses are not
+presented as source facts. `candidate_only` still prevents
+target-corpus, image-game or answer-key publication.
+
 ## Build
 
 After extracting the local PDFs:
@@ -149,6 +194,7 @@ python3 scripts/corpus/build_master_corpus.py \
   data/ielts-corpus/supplementary-input/edge-pdf-candidates.tsv \
   data/ielts-corpus/supplementary-input/edge-unit7-candidates.tsv \
   data/ielts-corpus/supplementary-input/english-for-everyone-junior-candidates.tsv \
+  data/ielts-corpus/supplementary-input/oef-1bu5-candidates.tsv \
   data/ielts-corpus/supplementary-input/scholastic-240-candidates.tsv \
   data/ielts-corpus/supplementary-input/scholastic-success-candidates.tsv \
   data/ielts-corpus/supplementary-input/vocabulary-in-use-candidates.tsv \

@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "scope": "oef_1bu5_full_source_editorial_batch",
+  "sources": [
+    {
+      "id": "oef-1bu5-vocabulary-writing-book",
+      "status": "complete",
+      "provenance_schema_version": 1,
+      "source_sha256": "d2a23c2ad9e1b203879a3f1ee667cd233eddcd7d74c1b94c237025f7ca0557d6",
+      "source_byte_size": 1278408,
+      "source_page_count": 8,
+      "candidate_tsv_sha256": "6a1e18dd08726fd59ae4c210e6fb14b83e2b05e9b24992494370b51549e78661",
+      "candidate_tsv_byte_size": 18065,
+      "candidate_tsv_row_count": 45,
+      "candidate_tsv_source_counts": {
+        "oef-1bu5-vocabulary-writing-book": 45
+      },
+      "render_manifest_sha256": "c67af88f5e2d0fe022dc3bca750c8ddd3b27c2238f70fd02021ed77768255bb7",
+      "extracted_row_count": 45,
+      "target_occurrence_count": 46,
+      "normalized_headword_count": 2,
+      "ordered_occurrence_sha256": "d8f0b78d37f01d7094bc029ae83dcbf6456f549640c5cf3e40f1123ca514c772",
+      "ordered_candidate_sha256": "d5f97f3950ade23e5d3c155a2e07540f27dd98920dc56f40094d5911fc181e99",
+      "page_target_occurrence_counts": {
+        "1": 12,
+        "2": 12,
+        "3": 0,
+        "4": 0,
+        "5": 12,
+        "6": 0,
+        "7": 10,
+        "8": 0
+      },
+      "page_row_counts": {
+        "1": 12,
+        "2": 12,
+        "5": 11,
+        "7": 10
+      },
+      "duplicate_target_occurrences": [
+        {
+          "headword": "cultural",
+          "pages": [
+            1,
+            5
+          ]
+        }
+      ],
+      "zero_target_pages": [
+        3,
+        4,
+        6,
+        8
+      ],
+      "extraction_method": "pdfplumber_font_and_position_plus_full_page_visual_editorial_review",
+      "pages_parsed": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "visual_sample_pages": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "editorial_review_complete": true,
+      "cefr_policy": "blank_source_does_not_supply_cefr",
+      "pos_policy": "blank_source_does_not_supply_pos",
+      "promotion_result": "reviewed_candidate_only_not_promoted",
+      "rights_boundary": "lexical_forms_and_sanitized_locators_only_no_book_body_content"
+    }
+  ]
+}

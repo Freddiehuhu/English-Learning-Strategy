@@ -32,6 +32,14 @@ normalized keys from its explicit Word list on PDF pages 250-255. All six pages
 have source-bound render evidence, but this remains a candidate-only partial
 page review rather than a claim that the full 256-page book was evaluated.
 
+OEF 1B Unit 5 is the first lexical supplementary source to complete both the
+full-source evidence gate and row-level editorial selection: all eight pages
+were rendered and reviewed, 46 explicit printed target occurrences were
+checked, and the repeated `cultural` attestation was deduplicated into 45
+candidate rows. The source does not supply CEFR or consistent POS labels, so
+both fields remain blank instead of being inferred. Every OEF row is still
+`candidate_only`; completion does not mean promotion into the public corpus.
+
 The active corpus increased by exactly 13 new lemmas from the explicitly
 approved 36-word student batch; its 23 existing lemmas were merged as new
 listening evidence. Supplementary candidates did not alter the active catalog.
