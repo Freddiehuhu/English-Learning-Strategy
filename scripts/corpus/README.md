@@ -56,6 +56,10 @@ the minimum lexical metadata needed by the learning app.
 - `build_master_corpus.py`: quality gate, normalization, deduplication,
   target-promotion gate, four-skill labels, supplementary review queues, image
   queue and public catalog.
+- `build_learner_difficulty_archive.py`: rebuilds the 2026-08-12
+  learner-difficulty archive from the preserved report, applies only the
+  explicitly confirmed corrections (including `pluse3` to `pulse`), retains
+  the raw token, and leaves lexical and sense-specific fields fail-closed.
 
 The original extractors write these required/legacy columns:
 

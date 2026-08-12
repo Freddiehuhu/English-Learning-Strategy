@@ -1,10 +1,11 @@
-const CACHE_NAME = 'wordlab-v21-delayed-relearn';
+const CACHE_NAME = 'wordlab-v22-sound-form-rescue';
 const CORE_ASSETS = [
   './',
   './index.html',
   './styles.css',
   './vocabulary.js',
   './listening-vocabulary.js',
+  './rescue-vocabulary.js',
   './visual-data.js',
   './app.js',
   './icon.svg',

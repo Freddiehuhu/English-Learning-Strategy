@@ -45,6 +45,224 @@
   margin: 0 auto;
 }
 
+.rescue-entry-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 24px;
+  border-color: color-mix(in srgb, var(--teal) 28%, var(--line));
+  background:
+    radial-gradient(circle at 94% 8%, rgba(64, 145, 139, 0.14), transparent 34%), var(--paper);
+}
+
+.rescue-entry-copy {
+  min-width: 0;
+}
+
+.rescue-entry-copy h2,
+.rescue-entry-copy p {
+  margin: 7px 0 0;
+}
+
+.rescue-context-alert {
+  margin: -4px 0 18px;
+  padding: 10px 14px;
+  color: var(--ink-soft);
+  font-size: 0.92rem;
+}
+
+.rescue-entry-copy p {
+  color: var(--ink-soft);
+  max-width: 580px;
+}
+
+.rescue-training-shell {
+  max-width: 820px;
+  margin-inline: auto;
+}
+
+.rescue-training-panel {
+  min-height: 470px;
+  padding: clamp(22px, 5vw, 46px);
+}
+
+.rescue-stage {
+  display: grid;
+  gap: 22px;
+  max-width: 650px;
+  margin: 34px auto 0;
+  text-align: center;
+}
+
+.rescue-target-word {
+  margin: 0;
+  font-size: clamp(2.2rem, 8vw, 4.2rem);
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+
+.rescue-listen-orb {
+  margin-inline: auto;
+}
+
+.rescue-context,
+.rescue-pending-note {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.65;
+}
+
+.rescue-context-note {
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  color: var(--ink-soft);
+}
+
+.rescue-context-note textarea {
+  width: 100%;
+  min-height: 92px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--paper);
+  resize: vertical;
+}
+
+.rescue-context-note textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+  border-color: var(--teal);
+}
+
+.rescue-block-options,
+.rescue-meaning-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rescue-block-options label,
+.rescue-meaning-options label {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.rescue-block-options input,
+.rescue-meaning-options input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.rescue-block-options span,
+.rescue-meaning-options span {
+  display: grid;
+  place-items: center;
+  min-height: 52px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.rescue-block-options input:focus-visible + span,
+.rescue-meaning-options input:focus-visible + span {
+  outline: 3px solid color-mix(in srgb, var(--teal) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.rescue-block-options input:checked + span,
+.rescue-meaning-options input:checked + span {
+  border-color: var(--teal);
+  background: color-mix(in srgb, var(--teal) 12%, var(--paper));
+  box-shadow: inset 0 0 0 1px var(--teal);
+}
+
+.rescue-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rescue-actions button {
+  min-height: 46px;
+}
+
+.rescue-reveal {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  padding: 20px;
+  border-radius: 18px;
+  background: var(--soft-surface, #f5f7f6);
+}
+
+.rescue-reveal strong {
+  font-size: clamp(1.8rem, 6vw, 3.2rem);
+  overflow-wrap: anywhere;
+}
+
+.rescue-reveal span,
+.rescue-reveal small {
+  color: var(--ink-soft);
+}
+
+@media (max-width: 560px) {
+  .rescue-entry-card {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .rescue-entry-card > button {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  .rescue-training-panel {
+    min-height: 430px;
+    padding: 20px 16px;
+  }
+
+  .rescue-stage {
+    gap: 18px;
+    margin-top: 24px;
+  }
+
+  .rescue-block-options,
+  .rescue-meaning-options {
+    grid-template-columns: 1fr;
+  }
+
+  .rescue-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .rescue-actions button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rescue-training-panel *,
+  .rescue-entry-card * {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 .compact-start-panel {
   min-height: 0;
   padding: clamp(28px, 5vw, 54px);
