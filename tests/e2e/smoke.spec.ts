@@ -57,6 +57,18 @@ async function startDaily(page: import('@playwright/test').Page) {
   await page.locator('[data-action="start-daily"]').click();
 }
 
+async function clickAndWaitForTaskAdvance(
+  page: import('@playwright/test').Page,
+  button: import('@playwright/test').Locator,
+) {
+  const currentPanel = await page.locator('.training-panel').elementHandle();
+  expect(currentPanel).toBeTruthy();
+  await button.click();
+  await expect
+    .poll(() => currentPanel!.evaluate((element) => !element.isConnected))
+    .toBe(true);
+}
+
 async function resolveIntegratedMeaningIfPresent(page: import('@playwright/test').Page) {
   const stage = page.locator('[data-integrated-meaning]');
   if (!(await stage.count()) || !(await stage.isVisible())) return;
@@ -132,6 +144,49 @@ async function seedSingleDueSkill(
     },
     { targetId: wordId, targetSkill: skill, skillOverrides: overrides },
   );
+  await page.reload();
+}
+
+async function seedDueSentenceWords(page: import('@playwright/test').Page, wordIds: string[]) {
+  await page.evaluate((targets) => {
+    const old = Date.now() - 2 * 86_400_000;
+    const words = Object.fromEntries(
+      targets.map((wordId) => [
+        wordId,
+        {
+          skills: {
+            sentence: {
+              attempts: 1,
+              correct: 0,
+              pending: 0,
+              level: 0,
+              due: 0,
+              last: old,
+              needsReview: true,
+              relearnRequired: false,
+            },
+          },
+        },
+      ]),
+    );
+    localStorage.setItem(
+      'els-ielts-wordlab-v1',
+      JSON.stringify({
+        version: 5,
+        settings: { accent: 'uk', dailyNew: 0, learningGoal: 'balanced' },
+        daily: {
+          date: '',
+          newIds: [],
+          carryoverIds: [],
+          newSelectionDone: false,
+          completedAt: 0,
+        },
+        words,
+        history: [],
+        journal: [],
+      }),
+    );
+  }, wordIds);
   await page.reload();
 }
 
@@ -691,6 +746,7 @@ test('legacy daily-new settings migrate to two bounded new words', async ({ page
     localOnly: true,
     observations: 0,
   });
+  expect(saved.relearn).toEqual({ sequence: 0, practiceSeconds: 0, queue: [] });
   await expect(plan).toHaveAttribute('data-adaptive-model', 'local-online-v2-shadow');
   await expect(plan).toHaveAttribute('data-adaptive-observations', '0');
   await expect(page.getByText('均衡提升 · 稳定排期 · 数据仅存本机')).toBeVisible();
@@ -1031,6 +1087,454 @@ test('the local adaptive learner records effort signals and updates after a cont
     labelSource: 'controlled_first_attempt',
   });
   expect(saved.adaptive.events.at(-1)).not.toHaveProperty('answer');
+});
+
+test('a failed task returns after three other tasks without exceeding the daily budget or looping', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await seedDueSentenceWords(page, ['ailment', 'ecologist', 'fascinate', 'marine']);
+
+  const dailyPlan = page.locator('[data-daily-plan]');
+  expect(Number(await dailyPlan.getAttribute('data-estimated-seconds'))).toBeLessThanOrEqual(720);
+  await startDaily(page);
+  const firstWordId = await page.locator('.training-panel').getAttribute('data-word-id');
+  expect(firstWordId).toBeTruthy();
+
+  const skipSentence = async () => {
+    await clickAndWaitForTaskAdvance(
+      page,
+      page.getByRole('button', { name: '先跳过表达任务，稍后复习' }),
+    );
+  };
+  await skipSentence();
+
+  const queued = await page.evaluate((wordId) => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return {
+      clock: saved.relearn,
+      entry: saved.relearn.queue.find(
+        (candidate: { wordId: string; skill: string }) =>
+          candidate.wordId === wordId && candidate.skill === 'sentence',
+      ),
+    };
+  }, firstWordId);
+  expect(queued.entry).toMatchObject({
+    wordId: firstWordId,
+    skill: 'sentence',
+    scheduledSequence: 1,
+    scheduledPracticeSeconds: 135,
+    notBeforeSequence: 4,
+    notBeforePracticeSeconds: 435,
+  });
+  expect(queued.entry.notBeforeAt - queued.entry.scheduledAt).toBe(5 * 60 * 1000);
+  expect(queued.clock.sequence).toBe(1);
+  expect(queued.clock.practiceSeconds).toBe(135);
+  expect(
+    await page.evaluate(() => {
+      const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+      return saved.daily.practicedSeconds;
+    }),
+  ).toBe(135);
+
+  for (let index = 0; index < 3; index += 1) {
+    await expect(page.locator('.training-panel')).not.toHaveAttribute('data-word-id', firstWordId!);
+    await expect(page.locator('.training-panel')).toHaveAttribute('data-relearn-attempt', 'false');
+    await skipSentence();
+  }
+
+  const retry = page.locator('.training-panel');
+  await expect(retry).toHaveAttribute('data-word-id', firstWordId!);
+  await expect(retry).toHaveAttribute('data-relearn-attempt', 'true');
+  await expect(retry).toHaveAttribute('data-session-estimated-seconds', '675');
+  await expect(page.getByText('延迟重测 · 提示已重置')).toBeVisible();
+
+  let firstHistory = await page.evaluate((wordId) => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return saved.history.filter(
+      (item: { wordId: string; skill: string }) =>
+        item.wordId === wordId && item.skill === 'sentence',
+    );
+  }, firstWordId);
+  expect(firstHistory).toHaveLength(1);
+  expect(firstHistory[0]).toMatchObject({
+    correct: false,
+    adaptive: { relearnAttempt: false },
+  });
+
+  await skipSentence();
+  await expect(page.getByRole('heading', { name: '本轮训练完成' })).toBeVisible();
+  firstHistory = await page.evaluate((wordId) => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return saved.history.filter(
+      (item: { wordId: string; skill: string }) =>
+        item.wordId === wordId && item.skill === 'sentence',
+    );
+  }, firstWordId);
+  expect(firstHistory).toHaveLength(2);
+  expect(firstHistory[1]).toMatchObject({
+    correct: false,
+    adaptive: { relearnAttempt: true, attemptCycle: 1 },
+  });
+  await page.reload();
+  const attemptEvents = await page.evaluate((wordId) => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return saved.adaptive.events.filter(
+      (event: { wordId: string; skill: string }) =>
+        event.wordId === wordId && event.skill === 'sentence',
+    );
+  }, firstWordId);
+  expect(attemptEvents).toMatchObject([
+    { labelSource: 'controlled_first_attempt', attemptCycle: 0 },
+    { labelSource: 'controlled_delayed_retest', attemptCycle: 1 },
+  ]);
+  const stillQueued = await page.evaluate((wordId) => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return saved.relearn.queue.some(
+      (entry: { wordId: string; skill: string }) =>
+        entry.wordId === wordId && entry.skill === 'sentence',
+    );
+  }, firstWordId);
+  expect(stillQueued).toBe(false);
+});
+
+test('the delayed relearn queue survives refresh and resumes after enough intervening work', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await seedDueSentenceWords(page, ['ailment', 'ecologist', 'fascinate', 'marine']);
+  await startDaily(page);
+  const failedWordId = await page.locator('.training-panel').getAttribute('data-word-id');
+  await page.getByRole('button', { name: '先跳过表达任务，稍后复习' }).click();
+
+  await page.reload();
+  await expect(page.locator('[data-daily-plan]')).toHaveAttribute('data-relearn-pending', '1');
+  await startDaily(page);
+  for (let index = 0; index < 3; index += 1) {
+    await expect(page.locator('.training-panel')).not.toHaveAttribute(
+      'data-word-id',
+      failedWordId!,
+    );
+    await clickAndWaitForTaskAdvance(
+      page,
+      page.getByRole('button', { name: '先跳过表达任务，稍后复习' }),
+    );
+  }
+
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', failedWordId!);
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-relearn-attempt', 'true');
+  await expect(page.locator('.training-panel')).toHaveAttribute(
+    'data-session-estimated-seconds',
+    '540',
+  );
+});
+
+test('a damaged imported relearn gate is rescheduled with exact fail-closed thresholds', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  const beforeImport = Date.now();
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'els-ielts-wordlab-v1',
+      JSON.stringify({
+        version: 5,
+        settings: { accent: 'uk', dailyNew: 0, learningGoal: 'balanced' },
+        daily: {
+          date: '',
+          newIds: [],
+          carryoverIds: [],
+          newSelectionDone: false,
+          completedAt: 0,
+          practicedSeconds: 0,
+        },
+        words: {
+          ecologist: {
+            skills: {
+              spell: {
+                attempts: 1,
+                correct: 0,
+                pending: 0,
+                level: 0,
+                due: 0,
+                last: Date.now() - 86_400_000,
+                needsReview: true,
+              },
+            },
+          },
+        },
+        history: [],
+        journal: [],
+        relearn: {
+          sequence: 50,
+          practiceSeconds: 5000,
+          queue: [{ key: 'ecologist::spell', wordId: 'ecologist', skill: 'spell' }],
+        },
+      }),
+    );
+  });
+  await page.reload();
+
+  const saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}'),
+  );
+  const entry = saved.relearn.queue[0];
+  expect(entry).toMatchObject({
+    key: 'ecologist::spell',
+    scheduledSequence: 50,
+    scheduledPracticeSeconds: 5000,
+    notBeforeSequence: 53,
+    notBeforePracticeSeconds: 5300,
+  });
+  expect(entry.scheduledAt).toBeGreaterThanOrEqual(beforeImport);
+  expect(entry.notBeforeAt).toBe(entry.scheduledAt + 5 * 60 * 1000);
+  await expect(page.locator('[data-daily-plan]')).toHaveAttribute('data-estimated-seconds', '0');
+  await expect(page.locator('[data-action="start-daily"]')).toBeDisabled();
+});
+
+test('daily practiced seconds survive refresh and keep delayed retests inside 720 seconds', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await seedDueSentenceWords(page, ['ailment', 'ecologist', 'fascinate', 'marine', 'birch']);
+  await startDaily(page);
+  const failedWordId = await page.locator('.training-panel').getAttribute('data-word-id');
+  const skipSentence = async () => {
+    await clickAndWaitForTaskAdvance(
+      page,
+      page.getByRole('button', { name: '先跳过表达任务，稍后复习' }),
+    );
+  };
+  for (let index = 0; index < 4; index += 1) await skipSentence();
+
+  let saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}'),
+  );
+  expect(saved.daily.practicedSeconds).toBe(540);
+  expect(
+    saved.relearn.queue.some((entry: { wordId: string }) => entry.wordId === failedWordId),
+  ).toBe(true);
+
+  await page.reload();
+  await expect(page.locator('[data-daily-plan]')).toHaveAttribute('data-estimated-seconds', '135');
+  await startDaily(page);
+  await expect(page.locator('.training-panel')).not.toHaveAttribute('data-word-id', failedWordId!);
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-relearn-attempt', 'false');
+  await skipSentence();
+
+  saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}'),
+  );
+  expect(saved.daily.practicedSeconds).toBe(675);
+  expect(saved.daily.practicedSeconds).toBeLessThanOrEqual(720);
+  expect(
+    saved.relearn.queue.some((entry: { wordId: string }) => entry.wordId === failedWordId),
+  ).toBe(true);
+});
+
+test('one daily round selects at most two unique ready relearn keys ahead of review and new work', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  const targets = ['ecologist', 'fascinate', 'marine'];
+  await page.evaluate((wordIds) => {
+    const scheduledAt = Date.now() - 6 * 60 * 1000;
+    const old = Date.now() - 2 * 86_400_000;
+    const skillState = {
+      attempts: 1,
+      correct: 0,
+      pending: 0,
+      level: 0,
+      due: 0,
+      last: old,
+      needsReview: true,
+      relearnRequired: false,
+    };
+    const words = Object.fromEntries(
+      wordIds.map((wordId) => [wordId, { skills: { spell: { ...skillState } } }]),
+    );
+    words.birch = { skills: { spell: { ...skillState } } };
+    localStorage.setItem(
+      'els-ielts-wordlab-v1',
+      JSON.stringify({
+        version: 5,
+        settings: { accent: 'uk', dailyNew: 1, learningGoal: 'balanced' },
+        daily: {
+          date: '',
+          newIds: [],
+          carryoverIds: [],
+          newSelectionDone: false,
+          completedAt: 0,
+          practicedSeconds: 0,
+        },
+        words,
+        history: [],
+        journal: [],
+        relearn: {
+          sequence: 3,
+          practiceSeconds: 300,
+          queue: wordIds.map((wordId) => ({
+            key: `${wordId}::spell`,
+            wordId,
+            skill: 'spell',
+            scheduledAt,
+            scheduledSequence: 0,
+            scheduledPracticeSeconds: 0,
+            notBeforeAt: scheduledAt + 5 * 60 * 1000,
+            notBeforeSequence: 3,
+            notBeforePracticeSeconds: 300,
+            variant: '',
+          })),
+        },
+      }),
+    );
+  }, targets);
+  await page.reload();
+  await startDaily(page);
+
+  for (let index = 0; index < 2; index += 1) {
+    await expect(page.locator('.training-panel')).toHaveAttribute('data-relearn-attempt', 'true');
+    await resolveIntegratedMeaningIfPresent(page);
+    await clickAndWaitForTaskAdvance(
+      page,
+      page.getByRole('button', { name: '先跳过（稍后复习）' }),
+    );
+  }
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-relearn-attempt', 'false');
+  const remaining = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return saved.relearn.queue.map((entry: { key: string }) => entry.key);
+  });
+  expect(remaining).toHaveLength(1);
+  expect(targets.map((wordId) => `${wordId}::spell`)).toContain(remaining[0]);
+});
+
+test('a completed day reopens only when its delayed retest reaches the time gate', async ({
+  page,
+}) => {
+  await page.goto('/ielts/index.html');
+  await page.evaluate(() => {
+    const scheduledAt = Date.now();
+    const date = new Date();
+    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+      date.getDate(),
+    ).padStart(2, '0')}`;
+    localStorage.setItem(
+      'els-ielts-wordlab-v1',
+      JSON.stringify({
+        version: 5,
+        settings: { accent: 'uk', dailyNew: 0, learningGoal: 'balanced' },
+        daily: {
+          date: dateKey,
+          newIds: [],
+          carryoverIds: [],
+          newSelectionDone: true,
+          completedAt: Date.now(),
+          practicedSeconds: 135,
+        },
+        words: {
+          ecologist: {
+            skills: {
+              spell: {
+                attempts: 1,
+                correct: 0,
+                pending: 0,
+                level: 0,
+                due: 0,
+                last: Date.now() - 86_400_000,
+                needsReview: true,
+              },
+            },
+          },
+        },
+        history: [],
+        journal: [],
+        relearn: {
+          sequence: 3,
+          practiceSeconds: 0,
+          queue: [
+            {
+              key: 'ecologist::spell',
+              wordId: 'ecologist',
+              skill: 'spell',
+              scheduledAt,
+              scheduledSequence: 0,
+              scheduledPracticeSeconds: 0,
+              notBeforeAt: scheduledAt + 5 * 60 * 1000,
+              notBeforeSequence: 3,
+              notBeforePracticeSeconds: 300,
+              variant: '',
+            },
+          ],
+        },
+      }),
+    );
+  });
+  await page.reload();
+  await expect(page.locator('[data-action="start-daily"]')).toBeDisabled();
+
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    const scheduledAt = Date.now() - 5 * 60 * 1000 - 1;
+    saved.relearn.queue[0].scheduledAt = scheduledAt;
+    saved.relearn.queue[0].notBeforeAt = scheduledAt + 5 * 60 * 1000;
+    localStorage.setItem('els-ielts-wordlab-v1', JSON.stringify(saved));
+  });
+  await page.reload();
+  await expect(page.locator('[data-daily-plan]')).toHaveAttribute('data-estimated-seconds', '75');
+  await expect(page.locator('[data-action="start-daily"]')).toBeEnabled();
+  await startDaily(page);
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', 'ecologist');
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-relearn-attempt', 'true');
+});
+
+test('foundation beauty survives refresh and returns as a safe family relearn task', async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  await page.goto('/ielts/index.html');
+  await startSkill(page, 'forms');
+  await expect(page.locator('.training-panel')).toHaveAttribute(
+    'data-word-id',
+    'foundation-beauty',
+  );
+  await page.getByRole('button', { name: '先跳过本题，稍后复习' }).click();
+
+  let saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}'),
+  );
+  expect(saved.relearn.queue[0]).toMatchObject({
+    key: 'foundation-beauty::forms',
+    wordId: 'foundation-beauty',
+    skill: 'forms',
+    variant: 'family',
+  });
+
+  await page.reload();
+  await startSkill(page, 'forms');
+  for (let index = 0; index < 4; index += 1) {
+    await expect(page.locator('.training-panel')).not.toHaveAttribute(
+      'data-word-id',
+      'foundation-beauty',
+    );
+    await page.getByRole('button', { name: '先跳过本题，稍后复习' }).click();
+  }
+
+  await expect(page.locator('.training-panel')).toHaveAttribute(
+    'data-word-id',
+    'foundation-beauty',
+  );
+  await expect(page.locator('.training-panel')).toHaveAttribute('data-relearn-attempt', 'true');
+  await expect(page.locator('[data-form-task-type="family"]')).toBeVisible();
+  await page.getByRole('button', { name: '先跳过本题，稍后复习' }).click();
+  saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}'),
+  );
+  expect(
+    saved.relearn.queue.some((entry: { key: string }) => entry.key === 'foundation-beauty::forms'),
+  ).toBe(false);
+  expect(pageErrors).toEqual([]);
 });
 
 test('adaptive scheduling puts the higher forgetting-risk word first', async ({ page }) => {
@@ -1689,6 +2193,16 @@ test('a latest spelling error removes level-five stability until independent cor
     correct: false,
   });
 
+  // This case isolates mastery repair; delayed retry timing is covered above.
+  await page.evaluate((wordId) => {
+    const next = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    next.relearn.queue = next.relearn.queue.filter(
+      (entry) => entry.wordId !== wordId || entry.skill !== 'spell',
+    );
+    localStorage.setItem('els-ielts-wordlab-v1', JSON.stringify(next));
+  }, word.id);
+  await page.reload();
+
   await startSkill(page, 'spell');
   await expect(page.locator('.training-panel')).toHaveAttribute('data-word-id', word.id);
   await resolveIntegratedMeaningIfPresent(page);
@@ -2323,6 +2837,10 @@ test('surface-complete nonsense stays pending and cannot raise sentence mastery'
   });
   await startSkill(page, 'sentence');
   await unlockSentenceRecall(page, 'marine');
+  const relearnClockBefore = await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('els-ielts-wordlab-v1') || '{}');
+    return saved.relearn;
+  });
 
   await page.getByLabel('HIDDEN SENTENCE RECALL').fill('Marine marine marine marine marine.');
   await page.getByRole('button', { name: '提交复现并对照' }).click();
@@ -2358,6 +2876,9 @@ test('surface-complete nonsense stays pending and cannot raise sentence mastery'
     trained: false,
     excludedReason: 'pending_human_review',
   });
+  expect(saved.relearn.queue).toHaveLength(0);
+  expect(saved.relearn.sequence).toBe(relearnClockBefore.sequence);
+  expect(saved.relearn.practiceSeconds).toBe(relearnClockBefore.practiceSeconds);
 
   await page.reload();
   await openPracticeHub(page);
