@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wordlab-v23-student-hard-words';
+const CACHE_NAME = 'wordlab-v24-hard-word-practice';
 const CORE_ASSETS = [
   './',
   './index.html',

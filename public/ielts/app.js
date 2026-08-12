@@ -11,6 +11,7 @@
       : { posScene: null, familyAtlases: [], groups: [], gameModes: [] };
   var STORAGE_KEY = 'els-ielts-wordlab-v1';
   var VISUAL_STORAGE_KEY = 'els-ielts-visual-lab-v1';
+  var HARD_WORD_PRACTICE_STORAGE_KEY = 'els-ielts-hard-word-practice-v1';
   var AUDIO_ASSET_VERSION = 'natural-20260812-rescue';
   var STATE_VERSION = 5;
   var VISUAL_STATE_VERSION = 5;
@@ -663,6 +664,8 @@
   var hardWordsReviewFilter = 'all';
   var hardWordsPracticeFilter = 'all';
   var hardWordsVisible = 60;
+  var hardWordPracticeState = loadHardWordPracticeState();
+  var hardWordMemoryTimer = null;
   var currentView = 'today';
   var session = null;
   var currentAudio = null;
@@ -757,7 +760,11 @@
         navigate((event.state && event.state.wordlabView) || 'today', { fromPopState: true });
       });
     }
-    renderToday();
+    if (hardWordPracticeState.active) {
+      resumeHardWordPractice();
+    } else {
+      renderToday();
+    }
     scrollToTop();
 
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || isLocalhost())) {
@@ -3313,7 +3320,12 @@
 
   function navigate(view, options) {
     clearTimeout(advanceTimer);
+    clearTimeout(hardWordMemoryTimer);
     cleanupMedia();
+    if (currentView === 'hard-word-practice' && view !== 'hard-word-practice') {
+      hardWordPracticeState.active = null;
+      saveHardWordPracticeState();
+    }
     var previousHistoryState = Object.assign({}, history.state || {});
     var isSessionHistoryEntry = Boolean(previousHistoryState.wordlabSession);
     var isLeavingSession = Boolean(session) || isSessionHistoryEntry;
@@ -3345,6 +3357,8 @@
       renderPracticeHub();
     } else if (view === 'hard-words') {
       renderHardWordsCatalog();
+    } else if (view === 'hard-word-practice') {
+      resumeHardWordPractice();
     } else if (view === 'visual') {
       renderVisualLab();
     } else if (SKILLS.indexOf(view) >= 0) {
@@ -3661,6 +3675,7 @@
   function acceptHardWordsCatalog(payload) {
     validateHardWordsCatalog(payload);
     hardWordsCatalog = payload;
+    sanitiseHardWordPracticeForCatalog();
     hardWordsCatalog.entries.forEach(function (entry) {
       entry._searchText = normaliseAnswer(
         String(entry.displayWord || '') + ' ' + String(entry.normalizedHeadword || ''),
@@ -3669,6 +3684,31 @@
     hardWordsLoadState = 'ready';
     hardWordsLoadError = '';
     if (currentView === 'hard-words') renderHardWordsContent();
+  }
+
+  function sanitiseHardWordPracticeForCatalog() {
+    if (!hardWordsCatalog) return;
+    var validIds = new Set(
+      hardWordsCatalog.entries.map(function (entry) {
+        return entry.id;
+      }),
+    );
+    Object.keys(hardWordPracticeState.entries).forEach(function (wordId) {
+      if (!validIds.has(wordId)) delete hardWordPracticeState.entries[wordId];
+    });
+    hardWordPracticeState.journal = hardWordPracticeState.journal.filter(function (item) {
+      return validIds.has(item.wordId);
+    });
+    var active = hardWordPracticeState.active;
+    if (active) {
+      active.wordIds = active.wordIds.filter(function (wordId) {
+        return validIds.has(wordId);
+      });
+      if (!active.wordIds.length || active.index >= active.wordIds.length) {
+        hardWordPracticeState.active = null;
+      }
+    }
+    saveHardWordPracticeState();
   }
 
   function validateHardWordsCatalog(payload) {
@@ -3844,11 +3884,203 @@
     );
   }
 
+  function defaultHardWordPracticeState() {
+    return {
+      version: 1,
+      entries: {},
+      journal: [],
+      cursors: { spell: 0, sentence: 0 },
+      active: null,
+    };
+  }
+
+  function normaliseHardWordCounter(value, maximum) {
+    return Math.min(maximum, Math.max(0, Math.floor(Number(value) || 0)));
+  }
+
+  function normaliseHardWordPracticeEntries(savedEntries) {
+    if (!savedEntries || typeof savedEntries !== 'object' || Array.isArray(savedEntries)) return {};
+    var entries = {};
+    Object.keys(savedEntries)
+      .slice(0, 500)
+      .forEach(function (wordId) {
+        var source = savedEntries[wordId];
+        if (!source || typeof source !== 'object' || Array.isArray(source)) return;
+        var spell = source.spell && typeof source.spell === 'object' ? source.spell : {};
+        var sentence =
+          source.sentence && typeof source.sentence === 'object' ? source.sentence : {};
+        var sentenceStatus = String(sentence.status || '');
+        entries[String(wordId)] = {
+          spell: {
+            attempts: normaliseHardWordCounter(spell.attempts, 10000),
+            blindPasses: normaliseHardWordCounter(spell.blindPasses, 10000),
+            repairPasses: normaliseHardWordCounter(spell.repairPasses, 10000),
+            skips: normaliseHardWordCounter(spell.skips, 10000),
+            lastAt: normaliseHardWordCounter(spell.lastAt, Number.MAX_SAFE_INTEGER),
+          },
+          sentence: {
+            submissions: normaliseHardWordCounter(sentence.submissions, 10000),
+            skips: normaliseHardWordCounter(sentence.skips, 10000),
+            draft: String(sentence.draft || '').slice(0, 600),
+            status:
+              ['pending_human_review', 'needs_revision', 'skipped'].indexOf(sentenceStatus) >= 0
+                ? sentenceStatus
+                : '',
+            lastAt: normaliseHardWordCounter(sentence.lastAt, Number.MAX_SAFE_INTEGER),
+          },
+        };
+      });
+    return entries;
+  }
+
+  function loadHardWordPracticeState() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(HARD_WORD_PRACTICE_STORAGE_KEY) || 'null');
+      if (!saved || typeof saved !== 'object' || Array.isArray(saved)) {
+        return defaultHardWordPracticeState();
+      }
+      var active =
+        saved.active &&
+        typeof saved.active === 'object' &&
+        ['spell', 'sentence'].indexOf(saved.active.mode) >= 0 &&
+        Array.isArray(saved.active.wordIds)
+          ? {
+              mode: saved.active.mode,
+              wordIds: saved.active.wordIds.map(String).slice(0, 10),
+              index: Math.max(0, Math.floor(Number(saved.active.index) || 0)),
+              stage:
+                saved.active.mode === 'spell' &&
+                ['memory', 'recall'].indexOf(saved.active.stage) >= 0
+                  ? saved.active.stage
+                  : saved.active.mode === 'sentence'
+                    ? 'writing'
+                    : 'memory',
+              repaired: saved.active.mode === 'spell' && Boolean(saved.active.repaired),
+              submitted:
+                saved.active.mode === 'spell' &&
+                ['correct', 'incorrect', 'skipped'].indexOf(saved.active.lastResult) >= 0,
+              lastResult:
+                saved.active.mode === 'spell' &&
+                ['correct', 'incorrect', 'skipped'].indexOf(saved.active.lastResult) >= 0
+                  ? saved.active.lastResult
+                  : '',
+            }
+          : null;
+      return {
+        version: 1,
+        entries: normaliseHardWordPracticeEntries(saved.entries),
+        journal: Array.isArray(saved.journal)
+          ? saved.journal
+              .filter(function (item) {
+                return (
+                  item &&
+                  typeof item === 'object' &&
+                  ['spell', 'sentence'].indexOf(item.mode) >= 0 &&
+                  [
+                    'blind_pass',
+                    'repair_pass',
+                    'incorrect',
+                    'skipped',
+                    'pending_human_review',
+                  ].indexOf(item.outcome) >= 0
+                );
+              })
+              .map(function (item) {
+                return {
+                  wordId: String(item.wordId || ''),
+                  mode: item.mode,
+                  outcome: item.outcome,
+                  at: normaliseHardWordCounter(item.at, Number.MAX_SAFE_INTEGER),
+                };
+              })
+              .filter(function (item) {
+                return Boolean(item.wordId);
+              })
+              .slice(-240)
+          : [],
+        cursors: {
+          spell: Math.max(0, Math.floor(Number(saved.cursors && saved.cursors.spell) || 0)),
+          sentence: Math.max(0, Math.floor(Number(saved.cursors && saved.cursors.sentence) || 0)),
+        },
+        active: active,
+      };
+    } catch (error) {
+      return defaultHardWordPracticeState();
+    }
+  }
+
+  function saveHardWordPracticeState() {
+    try {
+      localStorage.setItem(HARD_WORD_PRACTICE_STORAGE_KEY, JSON.stringify(hardWordPracticeState));
+    } catch (error) {
+      showToast('这台设备暂时无法保存难词练习进度。');
+    }
+  }
+
+  function hardWordEntryState(wordId) {
+    if (!hardWordPracticeState.entries[wordId]) {
+      hardWordPracticeState.entries[wordId] = {
+        spell: { attempts: 0, blindPasses: 0, repairPasses: 0, skips: 0, lastAt: 0 },
+        sentence: { submissions: 0, skips: 0, draft: '', status: '', lastAt: 0 },
+      };
+    }
+    var entryState = hardWordPracticeState.entries[wordId];
+    if (!entryState.spell) {
+      entryState.spell = { attempts: 0, blindPasses: 0, repairPasses: 0, skips: 0, lastAt: 0 };
+    }
+    if (!entryState.sentence) {
+      entryState.sentence = { submissions: 0, skips: 0, draft: '', status: '', lastAt: 0 };
+    }
+    return entryState;
+  }
+
+  function hardWordPracticeSummary(entry) {
+    var entryState = hardWordPracticeState.entries[entry.id] || {};
+    var spell = entryState.spell || {};
+    var sentence = entryState.sentence || {};
+    var attempts = Math.max(0, Number(spell.attempts) || 0);
+    var submissions = Math.max(0, Number(sentence.submissions) || 0);
+    if (!attempts && !submissions) return '尚未练习';
+    return '拼写 ' + attempts + ' 次 · 造句 ' + submissions + ' 次';
+  }
+
+  function hardWordCatalogProgress() {
+    if (!hardWordsCatalog) return { independent: 0, sentences: 0 };
+    return hardWordsCatalog.entries.reduce(
+      function (summary, entry) {
+        var entryState = hardWordPracticeState.entries[entry.id] || {};
+        if (Number(entryState.spell && entryState.spell.blindPasses) > 0) {
+          summary.independent += 1;
+        }
+        if (
+          entryState.sentence &&
+          entryState.sentence.status === 'pending_human_review' &&
+          Number(entryState.sentence.submissions) > 0
+        ) {
+          summary.sentences += 1;
+        }
+        return summary;
+      },
+      { independent: 0, sentences: 0 },
+    );
+  }
+
+  function appendHardWordJournal(wordId, mode, outcome) {
+    hardWordPracticeState.journal.push({
+      wordId: wordId,
+      mode: mode,
+      outcome: outcome,
+      at: Date.now(),
+    });
+    hardWordPracticeState.journal = hardWordPracticeState.journal.slice(-240);
+  }
+
   function renderHardWordsContent() {
     var mount = document.querySelector('[data-hard-words-content]');
     if (!mount || !hardWordsCatalog) return;
     var entries = hardWordsCatalog.entries;
     var counts = hardWordsCounts(entries);
+    var practiceProgress = hardWordCatalogProgress();
     mount.innerHTML =
       '<section class="hard-words-stats" aria-label="学生难词统计">' +
       hardWordsStat(entries.length, '全部难词', 'all') +
@@ -3876,16 +4108,21 @@
       ) +
       hardWordsSelect(
         'practice',
-        '练习状态',
+        '内容审校',
         [
-          ['all', '全部练习状态'],
-          ['in_rescue_training', '正在训练'],
-          ['awaiting_exercise_authoring', '练习待编写'],
+          ['all', '全部内容状态'],
+          ['in_rescue_training', '声形急救可用'],
+          ['awaiting_exercise_authoring', '基础练习可用'],
         ],
         hardWordsPracticeFilter,
       ) +
       '</div></section>' +
-      '<section class="hard-words-results" aria-live="polite"><div class="hard-words-result-head"><p>找到 <strong data-hard-words-match-count>0</strong> 个词</p><small>点击“开始练习”只会进入已审校的 12 词关卡</small></div><div data-hard-words-results></div></section>';
+      '<section class="panel hard-words-practice-launch" aria-label="学生难词基础练习"><div><p class="eyebrow">BASIC PRACTICE</p><h2>462 词都能练</h2><p>独立拼对 <strong>' +
+      practiceProgress.independent +
+      '</strong> / 462 · 已交句子 <strong>' +
+      practiceProgress.sentences +
+      '</strong> / 462</p></div><div class="hard-words-launch-actions"><button class="primary-button" type="button" data-action="hard-words-start-spell">拼写练习 · 10 词</button><button class="secondary-button" type="button" data-action="hard-words-start-sentence">造句练习 · 5 词</button></div></section>' +
+      '<section class="hard-words-results" aria-live="polite"><div class="hard-words-result-head"><p>找到 <strong data-hard-words-match-count>0</strong> 个词</p><small>以下每个词都可单独练习</small></div><small class="hard-words-practice-note">未经审校的词不提供词义或标准句答案；造句只保存为待老师评阅。</small><div data-hard-words-results></div></section>';
     renderHardWordsResults(true);
   }
 
@@ -3998,18 +4235,26 @@
       (Number(entry.reportCount || 0) > 1
         ? ' · 学生重复标记 ' + Number(entry.reportCount) + ' 次'
         : '') +
-      '</p></div><div class="hard-word-statuses"><span class="status-chip review-status">' +
+      '</p><small data-hard-word-practice-summary>' +
+      esc(hardWordPracticeSummary(entry)) +
+      '</small></div><div class="hard-word-statuses"><span class="status-chip review-status">' +
       esc(hardWordsReviewLabel(entry.reviewStatus)) +
       '</span><span class="status-chip practice-status' +
       (entry.practiceStatus === 'in_rescue_training' ? ' is-ready' : '') +
       '">' +
       esc(hardWordsPracticeLabel(entry.practiceStatus)) +
       '</span></div>' +
+      '<div class="hard-word-actions"><button class="secondary-button" type="button" data-action="hard-word-spell" data-word-id="' +
+      esc(entry.id) +
+      '">练拼写</button><button class="secondary-button" type="button" data-action="hard-word-sentence" data-word-id="' +
+      esc(entry.id) +
+      '">去造句</button>' +
       (rescueWord
-        ? '<button class="secondary-button hard-word-start" type="button" data-action="start-rescue-word" data-word-id="' +
+        ? '<button class="text-button hard-word-start" type="button" data-action="start-rescue-word" data-word-id="' +
           esc(rescueWord.id) +
-          '">开始练习</button>'
-        : '<span class="hard-word-waiting" aria-label="练习待编写">待编写</span>') +
+          '">声形急救</button>'
+        : '') +
+      '</div>' +
       '</article>'
     );
   }
@@ -4047,7 +4292,434 @@
   }
 
   function hardWordsPracticeLabel(status) {
-    return status === 'in_rescue_training' ? '正在训练' : '练习待编写';
+    return status === 'in_rescue_training' ? '声形急救可用' : '基础练习可用';
+  }
+
+  function findHardWordEntry(wordId) {
+    if (!hardWordsCatalog || !Array.isArray(hardWordsCatalog.entries)) return null;
+    return (
+      hardWordsCatalog.entries.find(function (entry) {
+        return entry.id === wordId;
+      }) || null
+    );
+  }
+
+  function startHardWordPractice(mode, wordIds) {
+    var ids = (Array.isArray(wordIds) ? wordIds : []).filter(function (wordId) {
+      return Boolean(findHardWordEntry(wordId));
+    });
+    if (!ids.length) {
+      showToast('当前没有可练的难词。');
+      return;
+    }
+    hardWordPracticeState.active = {
+      mode: mode,
+      wordIds: ids.slice(0, mode === 'sentence' ? 5 : 10),
+      index: 0,
+      stage: mode === 'sentence' ? 'writing' : 'memory',
+      repaired: false,
+      submitted: false,
+      lastResult: '',
+    };
+    saveHardWordPracticeState();
+    pushSessionHistoryState();
+    renderHardWordPractice();
+  }
+
+  function nextHardWordPracticeIds(mode) {
+    var matches = filteredHardWords();
+    if (!matches.length) {
+      return [];
+    }
+    var limit = mode === 'sentence' ? 5 : 10;
+    var cursor = hardWordPracticeState.cursors[mode] % matches.length;
+    var ordered = matches.slice(cursor).concat(matches.slice(0, cursor));
+    var newEntries = ordered.filter(function (entry) {
+      var entryState = hardWordPracticeState.entries[entry.id] || {};
+      var modeState = entryState[mode] || {};
+      return mode === 'spell'
+        ? !Number(modeState.attempts) && !Number(modeState.skips)
+        : !Number(modeState.submissions) && !Number(modeState.skips);
+    });
+    var practicedEntries = ordered.filter(function (entry) {
+      return newEntries.indexOf(entry) < 0;
+    });
+    var selected = newEntries.concat(practicedEntries).slice(0, limit);
+    hardWordPracticeState.cursors[mode] = (cursor + selected.length) % matches.length;
+    saveHardWordPracticeState();
+    return selected.map(function (entry) {
+      return entry.id;
+    });
+  }
+
+  function startHardWordsBatch(mode) {
+    var ids = nextHardWordPracticeIds(mode);
+    if (!ids.length) {
+      showToast('当前筛选没有可练的词。');
+      return;
+    }
+    startHardWordPractice(mode, ids);
+  }
+
+  function activeHardWordMode() {
+    var active = hardWordPracticeState.active;
+    if (!active) return '';
+    if (active.mode !== 'combined') return active.mode;
+    return active.index < 5 ? 'spell' : 'sentence';
+  }
+
+  function activeHardWordEntry() {
+    var active = hardWordPracticeState.active;
+    return active ? findHardWordEntry(active.wordIds[active.index]) : null;
+  }
+
+  function resumeHardWordPractice() {
+    if (hardWordsLoadState === 'ready' && hardWordsCatalog) {
+      renderHardWordPractice();
+      return;
+    }
+    currentView = 'hard-word-practice';
+    setActiveNav('hard-words');
+    main.innerHTML =
+      '<section class="hard-words-shell"><div class="panel hard-words-loading" role="status"><span class="loading-dot" aria-hidden="true"></span><p>正在恢复难词练习……</p></div></section>';
+    fetchHardWordsCatalog('no-cache')
+      .then(function (payload) {
+        validateHardWordsCatalog(payload);
+        hardWordsCatalog = payload;
+        sanitiseHardWordPracticeForCatalog();
+        hardWordsCatalog.entries.forEach(function (entry) {
+          entry._searchText = normaliseAnswer(
+            String(entry.displayWord || '') + ' ' + String(entry.normalizedHeadword || ''),
+          );
+        });
+        hardWordsLoadState = 'ready';
+        renderHardWordPractice();
+      })
+      .catch(function () {
+        hardWordPracticeState.active = null;
+        saveHardWordPracticeState();
+        renderHardWordsCatalog();
+      });
+  }
+
+  function renderHardWordPractice() {
+    clearTimeout(hardWordMemoryTimer);
+    var active = hardWordPracticeState.active;
+    var entry = activeHardWordEntry();
+    if (!active || !entry) {
+      finishHardWordPractice();
+      return;
+    }
+    currentView = 'hard-word-practice';
+    setActiveNav('hard-words');
+    var mode = activeHardWordMode();
+    var total = active.wordIds.length;
+    main.innerHTML =
+      '<section class="hard-word-practice-shell" data-hard-word-practice data-mode="' +
+      esc(mode) +
+      '"><header class="hard-word-practice-head"><button class="text-button" type="button" data-action="hard-word-exit">← 难词表</button><p>' +
+      (active.index + 1) +
+      ' / ' +
+      total +
+      '</p></header><div class="hard-word-practice-track"><i style="width:' +
+      Math.round(((active.index + 1) / total) * 100) +
+      '%"></i></div><p class="hard-word-practice-summary" data-hard-word-practice-summary>' +
+      esc(hardWordPracticeSummary(entry)) +
+      '</p>' +
+      (mode === 'spell' ? renderHardWordSpelling(entry) : renderHardWordSentence(entry)) +
+      '</section>';
+    if (mode === 'spell' && active.stage === 'memory') {
+      hardWordMemoryTimer = setTimeout(
+        hideHardWordForRecall,
+        /[ -]/.test(String(entry.normalizedHeadword || '')) ? 4000 : 2500,
+      );
+    }
+  }
+
+  function renderHardWordSpelling(entry) {
+    var active = hardWordPracticeState.active;
+    if (active.stage === 'memory') {
+      return (
+        '<article class="panel hard-word-practice-card hard-word-memory" data-hard-word-memory><p class="eyebrow">先看清词形</p><h1>' +
+        esc(entry.displayWord) +
+        '</h1><p>记住字母、空格和连字符。</p><button class="primary-button" type="button" data-action="hard-word-hide">遮住，开始拼写</button></article>'
+      );
+    }
+    var result = active.lastResult || 'blank';
+    var feedback =
+      result === 'skipped'
+        ? '本词已跳过，答案仍保持隐藏。'
+        : result === 'incorrect'
+          ? '还不对。检查字母顺序、空格和连字符后再试；答案仍保持隐藏。'
+          : result === 'correct'
+            ? active.repaired
+              ? '纠错拼写完成；这次不计独立拼对。'
+              : '首次遮词后独立拼对。'
+            : '';
+    var actions =
+      result === 'correct' || result === 'skipped'
+        ? '<button class="primary-button" type="button" data-action="hard-word-next">下一词</button>'
+        : result === 'incorrect'
+          ? '<button class="primary-button" type="button" data-action="hard-word-retry">再试一次</button><button class="quiet-button" type="button" data-action="hard-word-skip">跳过</button>'
+          : '<button class="quiet-button" type="button" data-action="hard-word-show-again">再看一次</button><button class="quiet-button" type="button" data-action="hard-word-skip">跳过</button>';
+    return (
+      '<article class="panel hard-word-practice-card"><p class="eyebrow">短时正字法回忆</p><h1>写出刚才看到的词</h1>' +
+      (result === 'correct' || result === 'skipped'
+        ? ''
+        : '<form class="hard-word-answer-form" data-hard-word-spell-form><label><span class="sr-only">输入拼写</span><input name="answer" data-hard-word-spell-input autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="输入拼写"></label><button class="primary-button" type="submit">检查拼写</button></form>') +
+      '<div class="feedback hard-word-practice-feedback' +
+      (result === 'correct' ? ' is-correct' : result === 'incorrect' ? ' is-wrong' : '') +
+      '" data-hard-word-spell-feedback data-result="' +
+      result +
+      '" role="status" aria-live="polite">' +
+      esc(feedback) +
+      '</div><div class="hard-word-practice-actions">' +
+      actions +
+      '</div></article>'
+    );
+  }
+
+  function hideHardWordForRecall() {
+    var active = hardWordPracticeState.active;
+    if (!active || activeHardWordMode() !== 'spell' || active.stage !== 'memory') return;
+    active.stage = 'recall';
+    active.submitted = false;
+    active.lastResult = '';
+    saveHardWordPracticeState();
+    renderHardWordPractice();
+    var input = main.querySelector('[data-hard-word-spell-input]');
+    if (input) input.focus();
+  }
+
+  function normaliseHardWordSpelling(value) {
+    return normaliseAnswer(value);
+  }
+
+  function checkHardWordSpelling(answer) {
+    var active = hardWordPracticeState.active;
+    var entry = activeHardWordEntry();
+    if (!active || !entry || activeHardWordMode() !== 'spell' || active.submitted) return;
+    var input = String(answer || '');
+    if (!input.trim()) {
+      setHardWordSpellFeedback('请先输入拼写。', 'incorrect');
+      return;
+    }
+    active.submitted = true;
+    var entryState = hardWordEntryState(entry.id).spell;
+    entryState.attempts = Math.max(0, Number(entryState.attempts) || 0) + 1;
+    entryState.lastAt = Date.now();
+    var correct =
+      normaliseHardWordSpelling(input) === normaliseHardWordSpelling(entry.normalizedHeadword);
+    var outcome;
+    if (correct) {
+      outcome = active.repaired ? 'repair_pass' : 'blind_pass';
+      if (active.repaired)
+        entryState.repairPasses = Math.max(0, Number(entryState.repairPasses) || 0) + 1;
+      else entryState.blindPasses = Math.max(0, Number(entryState.blindPasses) || 0) + 1;
+    } else {
+      outcome = 'incorrect';
+      active.repaired = true;
+    }
+    active.lastResult = correct ? 'correct' : 'incorrect';
+    appendHardWordJournal(entry.id, 'spell', outcome);
+    saveHardWordPracticeState();
+    if (correct) {
+      setHardWordSpellFeedback(
+        active.repaired ? '纠错拼写完成；这次不计独立拼对。' : '首次遮词后独立拼对。',
+        'correct',
+      );
+      replaceHardWordPracticeActions(
+        '<button class="primary-button" type="button" data-action="hard-word-next">下一词</button>',
+      );
+      return;
+    }
+    setHardWordSpellFeedback(
+      '还不对。检查字母顺序、空格和连字符后再试；答案仍保持隐藏。',
+      'incorrect',
+    );
+    replaceHardWordPracticeActions(
+      '<button class="primary-button" type="button" data-action="hard-word-retry">再试一次</button><button class="quiet-button" type="button" data-action="hard-word-skip">跳过</button>',
+    );
+  }
+
+  function setHardWordSpellFeedback(message, result, allowHtml) {
+    var feedback = main.querySelector('[data-hard-word-spell-feedback]');
+    if (!feedback) return;
+    feedback.dataset.result = result;
+    feedback.className =
+      'feedback hard-word-practice-feedback ' + (result === 'correct' ? 'is-correct' : 'is-wrong');
+    if (allowHtml) feedback.innerHTML = message;
+    else feedback.textContent = message;
+  }
+
+  function replaceHardWordPracticeActions(html) {
+    var actions = main.querySelector('.hard-word-practice-actions');
+    if (actions) actions.innerHTML = html;
+  }
+
+  function retryHardWordSpelling() {
+    var active = hardWordPracticeState.active;
+    if (!active) return;
+    active.submitted = false;
+    active.lastResult = '';
+    saveHardWordPracticeState();
+    var input = main.querySelector('[data-hard-word-spell-input]');
+    if (input) {
+      input.value = '';
+      input.disabled = false;
+      input.focus();
+    }
+    setHardWordSpellFeedback('', 'blank');
+    replaceHardWordPracticeActions(
+      '<button class="quiet-button" type="button" data-action="hard-word-skip">跳过</button>',
+    );
+  }
+
+  function showHardWordAgain() {
+    var active = hardWordPracticeState.active;
+    if (!active || activeHardWordMode() !== 'spell' || active.submitted) return;
+    active.stage = 'memory';
+    active.repaired = true;
+    active.lastResult = '';
+    saveHardWordPracticeState();
+    renderHardWordPractice();
+  }
+
+  function renderHardWordSentence(entry) {
+    var entryState = hardWordEntryState(entry.id).sentence;
+    var result = entryState.status || 'blank';
+    var feedback =
+      result === 'pending_human_review'
+        ? '已保存，等待老师人工评阅；这里不自动判定语法或词义。'
+        : result === 'needs_revision'
+          ? '先按提示修改，再保存给老师评阅。'
+          : result === 'skipped'
+            ? '本词已跳过；已输入的草稿仍保存在这台设备。'
+            : '';
+    return (
+      '<article class="panel hard-word-practice-card"><p class="eyebrow">造句 · 人工评阅</p><h1>' +
+      esc(entry.displayWord) +
+      '</h1><p>写一个包含完整目标词的句子。系统只检查表面结构，不判断语法或意思。</p><form data-hard-word-sentence-form><label><span class="sr-only">用目标词造句</span><textarea class="sentence-input" name="sentence" data-hard-word-sentence-input aria-label="用目标词造句" placeholder="在这里写句子……">' +
+      esc(entryState.draft || '') +
+      '</textarea></label><button class="primary-button" type="submit" data-action="hard-word-sentence-save">保存给老师评阅</button></form><div class="feedback hard-word-practice-feedback' +
+      (result === 'needs_revision'
+        ? ' is-wrong'
+        : result === 'pending_human_review'
+          ? ' is-pending'
+          : '') +
+      '" data-hard-word-sentence-feedback data-result="' +
+      esc(result) +
+      '" role="status" aria-live="polite">' +
+      esc(feedback) +
+      '</div><div class="hard-word-practice-actions"><button class="quiet-button" type="button" data-action="hard-word-skip">跳过</button><button class="secondary-button" type="button" data-action="hard-word-next">下一词</button></div></article>'
+    );
+  }
+
+  function hardWordTargetPattern(target) {
+    var escaped = normaliseAnswer(target).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp('(^|[^a-z])' + escaped.replace(/ /g, '\\s+') + '(?=$|[^a-z])', 'i');
+  }
+
+  function evaluateHardWordSentence(sentence) {
+    var active = hardWordPracticeState.active;
+    var entry = activeHardWordEntry();
+    if (!active || !entry || activeHardWordMode() !== 'sentence' || active.submitted) return;
+    var text = String(sentence || '').trim();
+    var checks = {
+      target: hardWordTargetPattern(entry.normalizedHeadword).test(normaliseAnswer(text)),
+      capital: /^[A-Z]/.test(text),
+      punctuation: /[.!?]["')\]]?$/.test(text),
+      length: (text.match(/[A-Za-z]+(?:[-'][A-Za-z]+)*/g) || []).length >= 5,
+    };
+    var ready = checks.target && checks.capital && checks.punctuation && checks.length;
+    if (!ready) {
+      var missing = [];
+      if (!checks.target) missing.push('包含完整目标词');
+      if (!checks.capital) missing.push('首字母大写');
+      if (!checks.punctuation) missing.push('补上句末标点');
+      if (!checks.length) missing.push('写成至少 5 个英文词的完整想法');
+      var revisionState = hardWordEntryState(entry.id).sentence;
+      revisionState.status = 'needs_revision';
+      revisionState.draft = text;
+      revisionState.lastAt = Date.now();
+      saveHardWordPracticeState();
+      var revisionFeedback = main.querySelector('[data-hard-word-sentence-feedback]');
+      if (revisionFeedback) {
+        revisionFeedback.dataset.result = 'needs_revision';
+        revisionFeedback.className = 'feedback hard-word-practice-feedback is-wrong';
+        revisionFeedback.textContent =
+          '请先修改：' + missing.join('；') + '。这不是语法或词义判分。';
+      }
+      return;
+    }
+    active.submitted = true;
+    var sentenceState = hardWordEntryState(entry.id).sentence;
+    sentenceState.submissions = Math.max(0, Number(sentenceState.submissions) || 0) + 1;
+    sentenceState.draft = text;
+    sentenceState.status = 'pending_human_review';
+    sentenceState.lastAt = Date.now();
+    appendHardWordJournal(entry.id, 'sentence', 'pending_human_review');
+    saveHardWordPracticeState();
+    var feedback = main.querySelector('[data-hard-word-sentence-feedback]');
+    if (feedback) {
+      feedback.dataset.result = 'pending_human_review';
+      feedback.className = 'feedback hard-word-practice-feedback is-pending';
+      feedback.textContent = '已保存，等待老师人工评阅；系统没有判定语法、词义或掌握。';
+    }
+  }
+
+  function skipHardWordPractice() {
+    var active = hardWordPracticeState.active;
+    var entry = activeHardWordEntry();
+    var mode = activeHardWordMode();
+    if (!active || !entry || active.submitted) return;
+    active.submitted = true;
+    if (mode === 'spell') {
+      var spell = hardWordEntryState(entry.id).spell;
+      spell.skips = Math.max(0, Number(spell.skips) || 0) + 1;
+      spell.lastAt = Date.now();
+      appendHardWordJournal(entry.id, 'spell', 'skipped');
+      active.lastResult = 'skipped';
+      saveHardWordPracticeState();
+      setHardWordSpellFeedback('本词已跳过，答案仍保持隐藏。', 'skipped');
+      replaceHardWordPracticeActions(
+        '<button class="primary-button" type="button" data-action="hard-word-next">下一词</button>',
+      );
+    } else {
+      var sentence = hardWordEntryState(entry.id).sentence;
+      sentence.skips = Math.max(0, Number(sentence.skips) || 0) + 1;
+      sentence.status = 'skipped';
+      sentence.lastAt = Date.now();
+      appendHardWordJournal(entry.id, 'sentence', 'skipped');
+      saveHardWordPracticeState();
+      renderHardWordPractice();
+    }
+  }
+
+  function nextHardWordPractice() {
+    var active = hardWordPracticeState.active;
+    if (!active) return;
+    active.index += 1;
+    if (active.index >= active.wordIds.length) {
+      finishHardWordPractice();
+      return;
+    }
+    active.stage = activeHardWordMode() === 'sentence' ? 'writing' : 'memory';
+    active.repaired = false;
+    active.submitted = false;
+    active.lastResult = '';
+    saveHardWordPracticeState();
+    renderHardWordPractice();
+  }
+
+  function finishHardWordPractice() {
+    clearTimeout(hardWordMemoryTimer);
+    hardWordPracticeState.active = null;
+    saveHardWordPracticeState();
+    currentView = 'hard-words';
+    setActiveNav('hard-words');
+    main.innerHTML =
+      '<section class="panel hard-word-practice-finish"><p class="eyebrow">PRACTICE SAVED</p><h1>这组练习已完成</h1><p>拼写结果和造句草稿已保存在这台设备；造句仍需老师人工评阅。</p><button class="primary-button" type="button" data-action="go-view" data-view="hard-words">返回难词表</button></section>';
   }
 
   function compactPracticeCard(icon, title, skill) {
@@ -7185,6 +7857,20 @@
     if (action === 'visual-game-audio') return playVisualGameAudio(button);
     if (action === 'corpus-retry') return loadCorpusCatalog(true);
     if (action === 'hard-words-retry') return loadHardWordsCatalog(true);
+    if (action === 'hard-word-spell') {
+      return startHardWordPractice('spell', [button.dataset.wordId]);
+    }
+    if (action === 'hard-word-sentence') {
+      return startHardWordPractice('sentence', [button.dataset.wordId]);
+    }
+    if (action === 'hard-words-start-spell') return startHardWordsBatch('spell');
+    if (action === 'hard-words-start-sentence') return startHardWordsBatch('sentence');
+    if (action === 'hard-word-hide') return hideHardWordForRecall();
+    if (action === 'hard-word-show-again') return showHardWordAgain();
+    if (action === 'hard-word-retry') return retryHardWordSpelling();
+    if (action === 'hard-word-skip') return skipHardWordPractice();
+    if (action === 'hard-word-next') return nextHardWordPractice();
+    if (action === 'hard-word-exit') return navigate('hard-words');
     if (action === 'hard-words-difficulty') {
       hardWordsDifficulty = String(button.dataset.difficulty || 'all');
       renderHardWordsContent();
@@ -7677,6 +8363,18 @@
   }
 
   function handleMainSubmit(event) {
+    var hardWordSpellForm = event.target.closest('[data-hard-word-spell-form]');
+    if (hardWordSpellForm) {
+      event.preventDefault();
+      checkHardWordSpelling(new FormData(hardWordSpellForm).get('answer'));
+      return;
+    }
+    var hardWordSentenceForm = event.target.closest('[data-hard-word-sentence-form]');
+    if (hardWordSentenceForm) {
+      event.preventDefault();
+      evaluateHardWordSentence(new FormData(hardWordSentenceForm).get('sentence'));
+      return;
+    }
     var rescueForm = event.target.closest('[data-rescue-form]');
     if (rescueForm) {
       event.preventDefault();
@@ -7721,6 +8419,18 @@
   }
 
   function handleMainInput(event) {
+    if (event.target.matches('[data-hard-word-sentence-input]')) {
+      var activeEntry = activeHardWordEntry();
+      if (activeEntry) {
+        var sentenceState = hardWordEntryState(activeEntry.id).sentence;
+        sentenceState.draft = event.target.value;
+        sentenceState.status = '';
+        sentenceState.lastAt = Date.now();
+        if (hardWordPracticeState.active) hardWordPracticeState.active.submitted = false;
+        saveHardWordPracticeState();
+      }
+      return;
+    }
     if (event.target.matches('[data-action="hard-words-search"]')) {
       hardWordsQuery = event.target.value;
       clearTimeout(hardWordsSearchTimer);
@@ -10247,6 +10957,7 @@
       exportedAt: new Date().toISOString(),
       state: state,
       visualState: visualState,
+      hardWordPracticeState: hardWordPracticeState,
     };
     var blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json',
@@ -10272,9 +10983,26 @@
       }
       state = normaliseState(payload.state);
       visualState = normaliseVisualState(payload.visualState);
+      if (payload.hardWordPracticeState) {
+        var savedHardWordPractice = localStorage.getItem(HARD_WORD_PRACTICE_STORAGE_KEY);
+        try {
+          localStorage.setItem(
+            HARD_WORD_PRACTICE_STORAGE_KEY,
+            JSON.stringify(payload.hardWordPracticeState),
+          );
+          hardWordPracticeState = loadHardWordPracticeState();
+        } finally {
+          if (savedHardWordPractice == null) {
+            localStorage.removeItem(HARD_WORD_PRACTICE_STORAGE_KEY);
+          } else {
+            localStorage.setItem(HARD_WORD_PRACTICE_STORAGE_KEY, savedHardWordPractice);
+          }
+        }
+      }
       visualRuntime = defaultVisualRuntime();
       saveState();
       saveVisualState();
+      saveHardWordPracticeState();
       showToast('词汇与图像课程进度已导入。');
       renderProgress();
     } catch (error) {
@@ -10289,8 +11017,10 @@
     state = defaultState();
     visualState = defaultVisualState();
     visualRuntime = defaultVisualRuntime();
+    hardWordPracticeState = defaultHardWordPracticeState();
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(VISUAL_STORAGE_KEY);
+    localStorage.removeItem(HARD_WORD_PRACTICE_STORAGE_KEY);
     showToast('本机练习记录已清空。');
     renderProgress();
   }

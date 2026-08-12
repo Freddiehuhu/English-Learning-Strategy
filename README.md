@@ -23,7 +23,7 @@
 这是一条独立于大词库的短时补弱路线，先处理学生“见词读不出、听词拼不回、语境反应慢”的高频卡点：
 
 - 学生两批清单共 464 个非空输入，其中第二批新增 22 份上报；经确认过的连写拆分后形成 465 份规范化报告，再把 3 个重复词的两次报告合并为 462 个唯一词头。合并后的有效分组为：194 条读音困难（编号 `1`，未编号也按此类）、111 条词义困难（`2`）、157 条读音和词义都困难（`3`）。重复报告只合并能力缺口，不覆盖原记录；例如 `pluse3` 仍保留在档案中，并以确认记录对应到 `pulse`。
-- 公开页面提供 462 词总表，可搜索并按困难类型、审校和练习状态筛选。首发只开放 12 个经 Cambridge Dictionary 与 Oxford Learner's Dictionaries 逐词核对的练习词，另外 450 词仍明确标为待编题，不能把总表规模写成已发布练习量。两轮首发词为：`controversial`、`fountain`、`pronunciation`、`instant`、`certificate`、`squeeze`、`botanical`、`ridiculous`、`alcohol`、`architecture`、`distinguish`、`sculpture`。
+- 公开页面提供 462 词总表，可搜索并按困难类型、审校和内容状态筛选；每个词都开放不依赖词义答案的短时拼写回忆和自由造句草稿。造句只检查目标词、首字母和句末标点等表面结构，一律保存为待人工评阅，不写入核心掌握模型。另有 12 个经 Cambridge Dictionary 与 Oxford Learner's Dictionaries 逐词核对的词开放完整声形急救；其余 450 词仍不自动生成词义、音标、标准句或语法答案。两轮审校词为：`controversial`、`fountain`、`pronunciation`、`instant`、`certificate`、`squeeze`、`botanical`、`ridiculous`、`alcohol`、`architecture`、`distinguish`、`sculpture`。
 - 每个词按学生标记进入“见词辨音”“盲听成形”“语境辨义”中的一门或多门；三门分别记录，不能用其中一门的成功替代另一门。`instant` 因原听力句缺失，词义任务只登记语境线索、不判正误，也不据此标记完整掌握。
 - 12 词新增 48 个 MP3：每词包含英式 Sonia、美式 Ava 的单词音频与配套句音频。错误或跳过后，至少间隔 3 个其他任务，并经过约 5 分钟或累计约 300 秒练习量才无提示回测；全部训练共用每日 720 秒预算。
 - 急救进度、失败、跳过和待回测队列只保存在当前浏览器的 `localStorage`，不上传学生答案或身份信息；换设备不会自动同步。

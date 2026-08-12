@@ -61,7 +61,7 @@ test('searches, filters and progressively reveals the real learner catalog witho
   const maturity = page.locator('[data-hard-word="maturity"]');
   await expect(maturity).toContainText('读音＋意思');
   await expect(maturity).toContainText('待补权威来源');
-  await expect(maturity).toContainText('练习待编写');
+  await expect(maturity).toContainText('基础练习可用');
   await expect(maturity).not.toContainText(/\/[^/]+\//);
   await expect(maturity).not.toContainText(/\bn\.|\bv\.|\badj\.|\badv\./i);
 
@@ -77,20 +77,22 @@ test('searches, filters and progressively reveals the real learner catalog witho
   await expect(page.locator('.hard-word-start')).toHaveCount(12);
 });
 
-test('opens an audited word directly in its rescue route while unaudited rows remain non-interactive', async ({
+test('keeps basic practice on every row and limits the sound-form rescue route to audited words', async ({
   page,
 }) => {
   await openHardWords(page);
   const search = page.getByLabel('搜索单词或短语');
   await search.fill('maturity');
-  await expect(page.locator('[data-hard-word="maturity"] .hard-word-start')).toHaveCount(0);
-  await expect(page.locator('[data-hard-word="maturity"] .hard-word-waiting')).toHaveText('待编写');
+  const unaudited = page.locator('[data-hard-word="maturity"]');
+  await expect(unaudited.locator('[data-action="hard-word-spell"]')).toBeVisible();
+  await expect(unaudited.locator('[data-action="hard-word-sentence"]')).toBeVisible();
+  await expect(unaudited.locator('[data-action="start-rescue-word"]')).toHaveCount(0);
 
   await search.fill('controversial');
   const audited = page.locator('[data-hard-word="controversial"]');
   await expect(audited).toContainText('已进入练习');
-  await expect(audited).toContainText('正在训练');
-  await audited.getByRole('button', { name: '开始练习' }).click();
+  await expect(audited).toContainText('声形急救可用');
+  await audited.getByRole('button', { name: '声形急救' }).click();
   await expect(page.locator('[data-rescue-task][data-gate="readDecode"]')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'controversial' })).toBeVisible();
 });

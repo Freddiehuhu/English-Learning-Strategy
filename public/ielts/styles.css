@@ -603,7 +603,7 @@
   min-height: 84px;
   padding: 15px 17px;
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(220px, auto) 112px;
+  grid-template-columns: minmax(180px, 1fr) minmax(190px, auto) minmax(210px, auto);
   align-items: center;
   gap: 14px;
   border-radius: 16px;
@@ -632,6 +632,14 @@
   margin: 5px 0 0;
   color: var(--ink-soft);
   font-size: 0.78rem;
+}
+
+.hard-word-main > small {
+  display: block;
+  margin-top: 4px;
+  color: var(--teal);
+  font-size: 0.72rem;
+  font-weight: 750;
 }
 
 .difficulty-badge,
@@ -678,18 +686,206 @@
   background: var(--teal-soft);
 }
 
-.hard-word-start {
-  width: 112px;
-  min-height: 44px;
-  padding-inline: 10px;
+.hard-word-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(92px, 1fr));
+  gap: 7px;
 }
 
-.hard-word-waiting {
-  justify-self: end;
-  width: 112px;
+.hard-word-actions button {
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 10px;
+}
+
+.hard-word-actions .hard-word-start {
+  grid-column: 1 / -1;
+  min-height: 44px;
+}
+
+.hard-words-practice-note {
+  display: block;
+  margin: -2px 0 10px;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+}
+
+.hard-words-combined {
+  min-height: 44px;
+}
+
+.hard-words-practice-launch {
+  margin-top: 14px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.hard-words-practice-launch h2,
+.hard-words-practice-launch p {
+  margin: 0;
+}
+
+.hard-words-practice-launch h2 {
+  margin: 3px 0 5px;
+  color: var(--navy);
+  font-size: 1.2rem;
+}
+
+.hard-words-practice-launch p:last-child {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+.hard-words-launch-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hard-word-practice-shell {
+  width: min(720px, 100%);
+  margin: 0 auto;
+}
+
+.hard-word-practice-head {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hard-word-practice-head .text-button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 7px 10px;
+}
+
+.hard-word-practice-head p,
+.hard-word-practice-summary {
+  margin: 0;
   color: var(--ink-soft);
   font-size: 0.78rem;
   font-weight: 750;
+}
+
+.hard-word-practice-track {
+  height: 5px;
+  margin: 5px 0 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.hard-word-practice-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--teal);
+}
+
+.hard-word-practice-summary {
+  text-align: right;
+}
+
+.hard-word-practice-card {
+  margin-top: 18px;
+  padding: clamp(22px, 5vw, 42px);
+  text-align: center;
+}
+
+.hard-word-practice-card h1,
+.hard-word-practice-finish h1 {
+  margin: 8px 0;
+  color: var(--navy);
+  font-family: Georgia, 'Songti SC', 'STSong', serif;
+  font-size: clamp(28px, 6vw, 44px);
+  overflow-wrap: anywhere;
+}
+
+.hard-word-practice-card > p:not(.eyebrow) {
+  color: var(--ink-soft);
+}
+
+.hard-word-memory .primary-button {
+  margin-top: 18px;
+}
+
+.hard-word-answer-form,
+.hard-word-practice-card form {
+  width: min(560px, 100%);
+  margin: 22px auto 0;
+}
+
+.hard-word-practice-card .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.hard-word-answer-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 9px;
+}
+
+.hard-word-answer-form input {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 13px;
+  border: 1px solid var(--line-dark);
+  border-radius: 11px;
+  color: var(--ink);
+  background: var(--paper);
+  font: inherit;
+  font-size: 17px;
+}
+
+.hard-word-practice-card textarea {
+  width: 100%;
+}
+
+.hard-word-practice-card form > .primary-button {
+  margin-top: 10px;
+}
+
+.hard-word-answer-form > .primary-button {
+  margin-top: 0;
+}
+
+.hard-word-practice-feedback {
+  margin-top: 16px;
+}
+
+.hard-word-practice-feedback.is-pending {
+  border-color: #a7c9c2;
+  color: #245c55;
+  background: #f1faf7;
+}
+
+.hard-word-practice-actions {
+  min-height: 48px;
+  margin-top: 14px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.hard-word-practice-finish {
+  width: min(650px, 100%);
+  margin: 10vh auto 0;
+  padding: 36px;
   text-align: center;
 }
 
@@ -5204,10 +5400,23 @@ button.visual-token:hover {
     justify-content: flex-start;
   }
 
-  .hard-word-start,
-  .hard-word-waiting {
-    grid-column: 2;
-    grid-row: 1;
+  .hard-word-actions {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    width: 100%;
+  }
+
+  .hard-words-practice-launch {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .hard-words-launch-actions {
+    width: 100%;
+  }
+
+  .hard-word-practice-card {
+    padding: 24px 18px;
   }
 
   .date-chip {
@@ -5651,9 +5860,33 @@ button.visual-token:hover {
     padding: 14px;
   }
 
-  .hard-word-start,
-  .hard-word-waiting {
-    width: 96px;
+  .hard-word-actions {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .hard-words-launch-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .hard-words-launch-actions button {
+    width: 100%;
+  }
+
+  .hard-word-answer-form {
+    grid-template-columns: 1fr;
+  }
+
+  .hard-word-answer-form .primary-button,
+  .hard-word-practice-card form > .primary-button,
+  .hard-word-practice-actions button {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  .hard-word-practice-actions {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .start-actions {

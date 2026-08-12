@@ -115,10 +115,12 @@ context-pending until a source sentence or other sufficient evidence is
 available.
 
 The public UI exposes all 462 unique headwords as a searchable list with
-difficulty, review-status and practice-status filters. The archive size must
-not be reported as published exercise coverage: only 12 separately
-source-audited words are available in the initial two-round sound-form rescue
-lesson, while the other 450 entries remain `awaiting_exercise_authoring`.
+difficulty, review-status and content-status filters. Every entry supports a
+meaning-independent orthographic recall task and a free sentence draft that is
+always queued for human review. Only 12 separately source-audited words are
+available in the initial two-round sound-form rescue lesson; the other 450
+entries remain `awaiting_exercise_authoring` for pronunciation, meaning, IPA,
+model-sentence and grammar content.
 `instant` still lacks its original listening sentence, so its meaning prompt is
 unscored and cannot supply a mastery claim.
 
