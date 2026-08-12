@@ -2,13 +2,16 @@
   'use strict';
 
   var WORDS = Array.isArray(window.IELTS_VOCABULARY) ? window.IELTS_VOCABULARY : [];
+  var RESCUE_WORDS = Array.isArray(window.IELTS_RESCUE_VOCABULARY)
+    ? window.IELTS_RESCUE_VOCABULARY
+    : [];
   var VISUAL_LAB =
     window.IELTS_VISUAL_LAB && typeof window.IELTS_VISUAL_LAB === 'object'
       ? window.IELTS_VISUAL_LAB
       : { posScene: null, familyAtlases: [], groups: [], gameModes: [] };
   var STORAGE_KEY = 'els-ielts-wordlab-v1';
   var VISUAL_STORAGE_KEY = 'els-ielts-visual-lab-v1';
-  var AUDIO_ASSET_VERSION = 'natural-20260801';
+  var AUDIO_ASSET_VERSION = 'natural-20260812-rescue';
   var STATE_VERSION = 5;
   var VISUAL_STATE_VERSION = 5;
   var ADAPTIVE_MODEL_VERSION = 2;
@@ -26,6 +29,16 @@
   var RELEARN_TARGET_PRACTICE_SECONDS = 5 * 60;
   var RELEARN_MAX_QUEUE = 40;
   var RELEARN_MAX_PER_SESSION = 2;
+  var RESCUE_GATE_SECONDS = {
+    readDecode: 40,
+    listenForm: 55,
+    meaningRecall: 40,
+  };
+  var RESCUE_GATE_LABELS = {
+    readDecode: '见词辨音',
+    listenForm: '盲听成形',
+    meaningRecall: '语境辨义',
+  };
   var STAGE_SECONDS = {
     sound: 45,
     spell: 75,
@@ -625,6 +638,7 @@
   }, {});
   var INTERVAL_DAYS = [0, 1, 3, 7, 14, 30];
   var state = loadState();
+  persistNormalisedState();
   var visualState = loadVisualState();
   var visualSection = 'pos';
   var visualRuntime = defaultVisualRuntime();
@@ -765,6 +779,7 @@
       words: {},
       history: [],
       journal: [],
+      rescue: defaultRescueState(),
       relearn: defaultRelearnState(),
       adaptive: defaultAdaptiveState(),
     };
@@ -775,6 +790,17 @@
       sequence: 0,
       practiceSeconds: 0,
       queue: [],
+    };
+  }
+
+  function defaultRescueState() {
+    return {
+      version: 1,
+      round: 1,
+      taskIndex: 0,
+      tasks: [],
+      gates: {},
+      contextNotes: {},
     };
   }
 
@@ -1415,17 +1441,24 @@
         return word.id;
       }),
     );
-    var validProgressIds = new Set(validWordIds);
+    var validCoreProgressIds = new Set(validWordIds);
     FORM_FOUNDATIONS.forEach(function (word) {
-      validProgressIds.add(word.id);
+      validCoreProgressIds.add(word.id);
+    });
+    var validHistoryIds = new Set(validCoreProgressIds);
+    RESCUE_WORDS.forEach(function (word) {
+      validHistoryIds.add(word.id);
     });
     var settings = Object.assign({}, base.settings, saved.settings || {});
     settings.dailyNew = normaliseDailyNew(settings.dailyNew);
     settings.learningGoal = normaliseLearningGoal(settings.learningGoal);
     var savedDaily = saved.daily && typeof saved.daily === 'object' ? saved.daily : base.daily;
-    var words = saved.words && typeof saved.words === 'object' ? saved.words : {};
+    var words =
+      saved.words && typeof saved.words === 'object' && !Array.isArray(saved.words)
+        ? Object.assign({}, saved.words)
+        : {};
     Object.keys(words).forEach(function (wordId) {
-      if (!validProgressIds.has(wordId)) delete words[wordId];
+      if (!validCoreProgressIds.has(wordId)) delete words[wordId];
     });
     var allNewIds = normaliseDailyIds(savedDaily.newIds, validWordIds);
     var newIds = allNewIds.slice(0, DAILY_NEW_LIMIT);
@@ -1443,7 +1476,35 @@
     var history = Array.isArray(saved.history)
       ? saved.history
           .filter(function (item) {
-            return item && validProgressIds.has(item.wordId);
+            if (!item || !validHistoryIds.has(item.wordId)) return false;
+            var rescueWord = findRescueWord(item.wordId);
+            if (rescueWord) {
+              return (
+                item.coreAttempt === false &&
+                rescueGatesForWord(rescueWord).indexOf(String(item.skill || '')) >= 0
+              );
+            }
+            if (isRescueGate(String(item.skill || ''))) return false;
+            var foundation = FORM_FOUNDATIONS.some(function (word) {
+              return word.id === item.wordId;
+            });
+            return foundation ? item.skill === 'forms' : SKILLS.indexOf(item.skill) >= 0;
+          })
+          .map(function (item) {
+            var rescueWord = findRescueWord(item.wordId);
+            var pendingContext =
+              rescueWord &&
+              item.skill === 'meaningRecall' &&
+              rescueWord.senseStatus === 'pending_context' &&
+              rescueWord.meaningTask &&
+              rescueWord.meaningTask.masteryEligible === false;
+            if (!pendingContext) return item;
+            return Object.assign({}, item, {
+              correct: null,
+              coreAttempt: false,
+              detail: '原句语境待确认；不计掌握',
+              rescue: Object.assign({}, item.rescue || {}, { pendingContext: true }),
+            });
           })
           .slice(-240)
       : [];
@@ -1478,6 +1539,7 @@
       normaliseCurrentVisualRepairFlags(words);
     }
     normaliseSkillReviewFlags(words, history);
+    var rescue = normaliseRescueState(saved.rescue);
     return {
       version: STATE_VERSION,
       settings: settings,
@@ -1501,12 +1563,116 @@
       words: words,
       history: history,
       journal: journal,
-      relearn: normaliseRelearnState(saved.relearn, words),
+      rescue: rescue,
+      relearn: normaliseRelearnState(saved.relearn, words, rescue),
       adaptive: normaliseAdaptiveState(saved.adaptive),
     };
   }
 
-  function normaliseRelearnState(saved, words) {
+  function persistNormalisedState() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (error) {
+      // The in-memory fail-closed state remains authoritative for this visit.
+    }
+  }
+
+  function normaliseRescueState(saved) {
+    var base = defaultRescueState();
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return base;
+    var validIds = new Set(
+      RESCUE_WORDS.map(function (word) {
+        return word.id;
+      }),
+    );
+    var validGates = new Set(Object.keys(RESCUE_GATE_SECONDS));
+    var gates = saved.gates && typeof saved.gates === 'object' ? saved.gates : {};
+    var contextNotes =
+      saved.contextNotes &&
+      typeof saved.contextNotes === 'object' &&
+      !Array.isArray(saved.contextNotes)
+        ? saved.contextNotes
+        : {};
+    Object.keys(gates)
+      .slice(0, 80)
+      .forEach(function (key) {
+        var parts = key.split('::');
+        var gate = parts.pop();
+        var wordId = parts.join('::');
+        var value = gates[key];
+        var rescueWord = findRescueWord(wordId);
+        if (
+          !validIds.has(wordId) ||
+          !validGates.has(gate) ||
+          !rescueWord ||
+          rescueGatesForWord(rescueWord).indexOf(gate) < 0 ||
+          !value ||
+          typeof value !== 'object'
+        ) {
+          return;
+        }
+        var attempts = Math.min(1000, Math.round(normaliseNonnegativeNumber(value.attempts)));
+        var pendingContext =
+          attempts > 0 &&
+          gate === 'meaningRecall' &&
+          rescueWord.senseStatus === 'pending_context' &&
+          rescueWord.meaningTask &&
+          rescueWord.meaningTask.masteryEligible === false;
+        base.gates[key] = {
+          attempts: attempts,
+          correct: pendingContext
+            ? 0
+            : Math.min(attempts, Math.round(normaliseNonnegativeNumber(value.correct))),
+          last: normaliseNonnegativeNumber(value.last),
+          needsReview: pendingContext ? false : Boolean(value.needsReview),
+          pendingContext: pendingContext,
+          skipCount: Math.min(1000, Math.round(normaliseNonnegativeNumber(value.skipCount))),
+        };
+      });
+    base.round = Math.max(1, Math.min(2, Math.round(normaliseNonnegativeNumber(saved.round)) || 1));
+    base.taskIndex = Math.min(200, Math.round(normaliseNonnegativeNumber(saved.taskIndex)));
+    base.tasks = Array.isArray(saved.tasks)
+      ? saved.tasks
+          .filter(function (task) {
+            var rescueWord = task && findRescueWord(String(task.wordId || ''));
+            return (
+              task &&
+              validIds.has(String(task.wordId || '')) &&
+              validGates.has(String(task.gate || '')) &&
+              rescueWord &&
+              rescueGatesForWord(rescueWord).indexOf(String(task.gate || '')) >= 0
+            );
+          })
+          .slice(0, 40)
+          .map(function (task) {
+            return {
+              wordId: String(task.wordId),
+              gate: String(task.gate),
+              variant: Math.max(
+                0,
+                Math.min(2, Math.round(normaliseNonnegativeNumber(task.variant))),
+              ),
+              attemptCycle: Math.max(
+                0,
+                Math.min(1, Math.round(normaliseNonnegativeNumber(task.attemptCycle))),
+              ),
+              relearnKey: String(task.relearnKey || ''),
+            };
+          })
+      : [];
+    if (base.taskIndex > base.tasks.length) base.taskIndex = 0;
+    Object.keys(contextNotes)
+      .slice(0, 24)
+      .forEach(function (wordId) {
+        if (!validIds.has(wordId)) return;
+        base.contextNotes[wordId] = String(contextNotes[wordId] || '')
+          .trim()
+          .slice(0, 500);
+      });
+    return base;
+  }
+
+  function normaliseRelearnState(saved, words, rescue) {
     var base = defaultRelearnState();
     if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return base;
     base.sequence = Math.min(1000000000, Math.round(normaliseNonnegativeNumber(saved.sequence)));
@@ -1522,14 +1688,32 @@
         if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
         var wordId = String(entry.wordId || '');
         var skill = String(entry.skill || '');
-        var key = wordId + '::' + skill;
+        if (String(entry.key || '').indexOf('rescue::') === 0) {
+          var rescueParts = String(entry.key).split('::');
+          if (rescueParts.length === 3) {
+            wordId = rescueParts[1];
+            skill = rescueParts[2];
+          }
+        }
+        var key = isRescueGate(skill) ? rescueKey(wordId, skill) : wordId + '::' + skill;
         var scheduledAt = entry.scheduledAt;
         var scheduledSequence = entry.scheduledSequence;
         var scheduledPracticeSeconds = entry.scheduledPracticeSeconds;
         var notBeforeAt = entry.notBeforeAt;
         var notBeforeSequence = entry.notBeforeSequence;
         var notBeforePracticeSeconds = entry.notBeforePracticeSeconds;
-        var coreWord = findCoreStudyWord(wordId);
+        var rescueGate = isRescueGate(skill);
+        var rescueWord = rescueGate ? findRescueWord(wordId) : null;
+        var coreWord = rescueGate
+          ? rescueWord
+          : findWord(wordId) ||
+            FORM_FOUNDATIONS.find(function (word) {
+              return word.id === wordId;
+            });
+        var rescueState =
+          rescueGate && rescue && rescue.gates
+            ? rescue.gates[rescueStateKey(wordId, skill)] || null
+            : null;
         var skillState =
           words[wordId] && words[wordId].skills && words[wordId].skills[skill]
             ? words[wordId].skills[skill]
@@ -1537,11 +1721,12 @@
         if (
           seen.has(key) ||
           !coreWord ||
-          SKILLS.indexOf(skill) < 0 ||
+          (SKILLS.indexOf(skill) < 0 && !rescueGate) ||
           (coreWord.isFoundation && skill !== 'forms') ||
-          !skillState ||
-          !skillState.needsReview ||
-          Number(skillState.pending || 0) > 0
+          (rescueGate && (!rescueWord || rescueGatesForWord(rescueWord).indexOf(skill) < 0)) ||
+          (!rescueGate &&
+            (!skillState || !skillState.needsReview || Number(skillState.pending || 0) > 0)) ||
+          (rescueGate && (!rescueState || !rescueState.needsReview))
         ) {
           return false;
         }
@@ -1572,17 +1757,32 @@
       })
       .slice(-RELEARN_MAX_QUEUE)
       .map(function (entry) {
+        var mappedWordId = String(entry.wordId || '');
+        var mappedSkill = String(entry.skill || '');
+        if (String(entry.key || '').indexOf('rescue::') === 0) {
+          var mappedParts = String(entry.key).split('::');
+          if (mappedParts.length === 3) {
+            mappedWordId = mappedParts[1];
+            mappedSkill = mappedParts[2];
+          }
+        }
         return {
-          key: String(entry.wordId) + '::' + String(entry.skill),
-          wordId: String(entry.wordId),
-          skill: String(entry.skill),
+          key: isRescueGate(mappedSkill)
+            ? rescueKey(mappedWordId, mappedSkill)
+            : mappedWordId + '::' + mappedSkill,
+          wordId: mappedWordId,
+          skill: mappedSkill,
           scheduledAt: entry.scheduledAt,
           scheduledSequence: entry.scheduledSequence,
           scheduledPracticeSeconds: entry.scheduledPracticeSeconds,
           notBeforeAt: entry.notBeforeAt,
           notBeforeSequence: entry.notBeforeSequence,
           notBeforePracticeSeconds: entry.notBeforePracticeSeconds,
-          variant: ['context', 'direct', 'family'].indexOf(entry.variant) >= 0 ? entry.variant : '',
+          variant: isRescueGate(mappedSkill)
+            ? Math.max(0, Math.min(2, Math.round(normaliseNonnegativeNumber(entry.variant))))
+            : ['context', 'direct', 'family'].indexOf(entry.variant) >= 0
+              ? entry.variant
+              : '',
         };
       });
     return base;
@@ -1986,6 +2186,9 @@
       }) ||
       FORM_FOUNDATIONS.some(function (word) {
         return word.id === wordId;
+      }) ||
+      RESCUE_WORDS.some(function (word) {
+        return word.id === wordId;
       })
     );
   }
@@ -2179,7 +2382,51 @@
     return state.relearn;
   }
 
+  function isRescueGate(gate) {
+    return Object.prototype.hasOwnProperty.call(RESCUE_GATE_SECONDS, gate);
+  }
+
+  function rescueKey(wordId, gate) {
+    return 'rescue::' + String(wordId || '') + '::' + String(gate || '');
+  }
+
+  function rescueStateKey(wordId, gate) {
+    return String(wordId || '') + '::' + String(gate || '');
+  }
+
+  function getRescueState() {
+    if (!state.rescue || typeof state.rescue !== 'object') state.rescue = defaultRescueState();
+    if (!state.rescue.gates || typeof state.rescue.gates !== 'object') state.rescue.gates = {};
+    if (!state.rescue.contextNotes || typeof state.rescue.contextNotes !== 'object') {
+      state.rescue.contextNotes = {};
+    }
+    if (!Array.isArray(state.rescue.tasks)) state.rescue.tasks = [];
+    return state.rescue;
+  }
+
+  function getRescueGateState(wordId, gate) {
+    var rescue = getRescueState();
+    var key = rescueStateKey(wordId, gate);
+    if (!rescue.gates[key]) {
+      rescue.gates[key] = {
+        attempts: 0,
+        correct: 0,
+        last: 0,
+        needsReview: false,
+        pendingContext: false,
+        skipCount: 0,
+      };
+    }
+    return rescue.gates[key];
+  }
+
+  function peekRescueGateState(wordId, gate) {
+    var rescue = state.rescue;
+    return rescue && rescue.gates ? rescue.gates[rescueStateKey(wordId, gate)] || null : null;
+  }
+
   function relearnKey(wordId, skill) {
+    if (isRescueGate(skill)) return rescueKey(wordId, skill);
     return String(wordId || '') + '::' + String(skill || '');
   }
 
@@ -2227,14 +2474,15 @@
     relearn.sequence = Math.min(1000000000, Number(relearn.sequence || 0) + 1);
     relearn.practiceSeconds = Math.min(
       1000000000,
-      Number(relearn.practiceSeconds || 0) + Number(STAGE_SECONDS[skill] || 60),
+      Number(relearn.practiceSeconds || 0) +
+        Number(STAGE_SECONDS[skill] || RESCUE_GATE_SECONDS[skill] || 60),
     );
   }
 
   function noteDailyPracticeCompletion(skill) {
     if (
       !session ||
-      session.type !== 'daily' ||
+      (session.type !== 'daily' && session.type !== 'rescue') ||
       !state.daily ||
       state.daily.date !== localDateKey()
     ) {
@@ -2242,7 +2490,8 @@
     }
     state.daily.practicedSeconds = Math.min(
       DAILY_MAX_SECONDS,
-      Number(state.daily.practicedSeconds || 0) + Number(STAGE_SECONDS[skill] || 60),
+      Number(state.daily.practicedSeconds || 0) +
+        Number(STAGE_SECONDS[skill] || RESCUE_GATE_SECONDS[skill] || 60),
     );
   }
 
@@ -2256,8 +2505,19 @@
   }
 
   function scheduleAutomaticRelearn(wordId, skill, now) {
-    var studyWord = findCoreStudyWord(wordId);
-    if (!studyWord || SKILLS.indexOf(skill) < 0 || (studyWord.isFoundation && skill !== 'forms')) {
+    var rescueGate = isRescueGate(skill);
+    var studyWord = rescueGate
+      ? findRescueWord(wordId)
+      : findWord(wordId) ||
+        FORM_FOUNDATIONS.find(function (word) {
+          return word.id === wordId;
+        });
+    if (
+      !studyWord ||
+      (SKILLS.indexOf(skill) < 0 && !rescueGate) ||
+      (rescueGate && rescueGatesForWord(studyWord).indexOf(skill) < 0) ||
+      (studyWord.isFoundation && skill !== 'forms')
+    ) {
       return;
     }
     var relearn = getRelearnState();
@@ -2280,7 +2540,14 @@
       notBeforeSequence: Number(relearn.sequence || 0) + RELEARN_MIN_OTHER_TASKS,
       notBeforePracticeSeconds:
         Number(relearn.practiceSeconds || 0) + RELEARN_TARGET_PRACTICE_SECONDS,
-      variant: relearnVariantForCurrentTask(wordId, skill),
+      variant: isRescueGate(skill)
+        ? (Math.max(
+            0,
+            Number(session && session.taskState && session.taskState.rescueVariant) || 0,
+          ) +
+            1) %
+          2
+        : relearnVariantForCurrentTask(wordId, skill),
     });
     relearn.queue = relearn.queue.slice(-RELEARN_MAX_QUEUE);
   }
@@ -2288,7 +2555,13 @@
   function readyRelearnEntries(now) {
     return getRelearnState()
       .queue.filter(function (entry) {
-        return isRelearnReady(entry, now || Date.now()) && Boolean(findCoreStudyWord(entry.wordId));
+        var validWord = isRescueGate(entry.skill)
+          ? findRescueWord(entry.wordId)
+          : findWord(entry.wordId) ||
+            FORM_FOUNDATIONS.find(function (word) {
+              return word.id === entry.wordId;
+            });
+        return isRelearnReady(entry, now || Date.now()) && Boolean(validWord);
       })
       .sort(function (a, b) {
         return (
@@ -2298,7 +2571,12 @@
   }
 
   function relearnWord(entry) {
-    var word = findCoreStudyWord(entry.wordId);
+    if (isRescueGate(entry.skill)) return null;
+    var word =
+      findWord(entry.wordId) ||
+      FORM_FOUNDATIONS.find(function (candidate) {
+        return candidate.id === entry.wordId;
+      });
     if (!word) return null;
     return Object.assign({}, word, {
       relearnKey: entry.key,
@@ -2381,6 +2659,7 @@
     var secondsLimit = Math.max(0, Number(availableSeconds));
     var stateChanged = false;
     readyRelearnEntries(now).some(function (entry) {
+      if (isRescueGate(entry.skill)) return false;
       if (selectedKeys.has(entry.key)) return false;
       if (selectedKeys.size >= keyLimit) return true;
       if (markCoveredDailyRelearn(result, entry, removableStartIndex, firstStageIndex)) {
@@ -2448,6 +2727,7 @@
     }
 
     readyRelearnEntries(now).some(function (entry) {
+      if (isRescueGate(entry.skill)) return false;
       if (remainingSlots <= 0) return true;
       if (session.type === 'skill' && session.stages[0] !== entry.skill) return false;
       var existingIndex = -1;
@@ -3102,6 +3382,7 @@
     var estimatedSeconds = dailyPlanSeconds(plan);
     var summary = progressSummary();
     var dueCount = countDueSkills();
+    var rescueSummary = rescueTodaySummary();
     var today = new Intl.DateTimeFormat('zh-CN', {
       month: 'long',
       day: 'numeric',
@@ -3113,6 +3394,22 @@
       esc(today) +
       '</span></section>' +
       '<section class="today-focus">' +
+      '<article class="panel rescue-entry-card" data-rescue-entry data-rescue-remaining="' +
+      rescueSummary.remaining +
+      '"><div class="rescue-entry-copy"><span class="mini-metric">' +
+      esc(rescueSummary.roundLabel) +
+      '</span><h2>声形急救</h2><p>' +
+      esc(rescueSummary.copy) +
+      '</p></div><button class="primary-button" type="button" data-action="start-rescue"' +
+      (rescueSummary.canStart ? '' : ' disabled') +
+      '>' +
+      esc(rescueSummary.buttonLabel) +
+      '</button></article>' +
+      (rescuePendingContextCount()
+        ? '<p class="rescue-context-alert" role="status">' +
+          rescuePendingContextCount() +
+          ' 条词义记录等待原听力句；可在“错题与进度”查看，不计掌握。</p>'
+        : '') +
       '<article class="panel start-panel compact-start-panel" data-daily-plan data-new-count="' +
       newCount +
       '" data-estimated-seconds="' +
@@ -3151,6 +3448,123 @@
       metric(summary.mistakes, '近期错项') +
       '</div>' +
       '</section>';
+  }
+
+  function rescueGatesForWord(word) {
+    if (!word) return [];
+    if (Number(word.difficulty) === 1) return ['readDecode'];
+    if (Number(word.difficulty) === 2) return ['listenForm', 'meaningRecall'];
+    return ['readDecode', 'listenForm', 'meaningRecall'];
+  }
+
+  function rescueTaskComplete(wordId, gate) {
+    var gateState = peekRescueGateState(wordId, gate);
+    if (!gateState || !gateState.attempts) return false;
+    // A collected pending-context note leaves the main round so Round 2 can
+    // continue, but remains explicitly unmastered in Progress.
+    if (gate === 'meaningRecall' && gateState.pendingContext) return true;
+    return gateState.correct > 0 && !gateState.needsReview;
+  }
+
+  function rescueRoundTasks(round) {
+    var tasks = [];
+    RESCUE_WORDS.filter(function (word) {
+      return Number(word.round) === Number(round);
+    }).forEach(function (word) {
+      rescueGatesForWord(word).forEach(function (gate) {
+        var gateState = peekRescueGateState(word.id, gate);
+        if (gate === 'meaningRecall' && gateState && gateState.pendingContext) return;
+        if (!rescueTaskComplete(word.id, gate)) {
+          tasks.push({ wordId: word.id, gate: gate, variant: 0, attemptCycle: 0, relearnKey: '' });
+        }
+      });
+    });
+    return tasks;
+  }
+
+  function rescueTodaySummary() {
+    var roundOne = rescueRoundTasks(1);
+    var roundTwo = rescueRoundTasks(2);
+    var round = roundOne.length ? 1 : 2;
+    var tasks = round === 1 ? roundOne : roundTwo;
+    var availableSeconds = Math.max(
+      0,
+      DAILY_MAX_SECONDS - Number(state.daily.practicedSeconds || 0),
+    );
+    var pendingKeys = new Set(
+      getRelearnState()
+        .queue.filter(function (entry) {
+          return isRescueGate(entry.skill);
+        })
+        .map(function (entry) {
+          return rescueStateKey(entry.wordId, entry.skill);
+        }),
+    );
+    var readyKeys = new Set(
+      readyRescueRelearnTasks(Date.now()).map(function (task) {
+        return rescueStateKey(task.wordId, task.gate);
+      }),
+    );
+    var availableTasks = tasks.filter(function (task) {
+      var key = rescueStateKey(task.wordId, task.gate);
+      return !pendingKeys.has(key) || readyKeys.has(key);
+    });
+    var seconds = tasks.reduce(function (total, task) {
+      return total + Number(RESCUE_GATE_SECONDS[task.gate] || 40);
+    }, 0);
+    var minimumSeconds = availableTasks.reduce(function (minimum, task) {
+      return Math.min(minimum, Number(RESCUE_GATE_SECONDS[task.gate] || 40));
+    }, Infinity);
+    var budgetAllowsTask = minimumSeconds !== Infinity && availableSeconds >= minimumSeconds;
+    var canStart = availableTasks.length > 0 && budgetAllowsTask;
+    return {
+      roundLabel: round === 1 ? '第 1 轮 · 6 词' : '第 2 轮 · 6 词',
+      remaining: tasks.length,
+      canStart: canStart,
+      minutes: Math.max(1, Math.ceil(seconds / 60)),
+      buttonLabel: canStart
+        ? '开始 ' + Math.max(1, Math.ceil(Math.min(seconds, availableSeconds) / 60)) + ' 分钟'
+        : tasks.length && !availableTasks.length
+          ? '等待间隔回测'
+          : tasks.length && !budgetAllowsTask
+            ? '今日额度已完成'
+            : '本轮完成',
+      copy: tasks.length
+        ? canStart
+          ? '只练学生卡住的声音、词形和词义；一次只出现一个动作。'
+          : !availableTasks.length
+            ? '错项正在拉开间隔；先练其他任务，稍后回来。'
+            : '今日有效训练额度已用完；待练关卡已保存。'
+        : rescuePendingContextCount()
+          ? '受控关卡已完成；仍有原听力句待教师补录，不计掌握。'
+          : '12 个难词的独立关卡均已完成。',
+    };
+  }
+
+  function rescuePendingContextCount() {
+    return Object.keys(getRescueState().gates).filter(function (key) {
+      return Boolean(getRescueState().gates[key] && getRescueState().gates[key].pendingContext);
+    }).length;
+  }
+
+  function ensureDailyClock() {
+    var dateKey = localDateKey();
+    if (!state.daily) state.daily = defaultState().daily;
+    if (state.daily.date === dateKey) return;
+    var rolledIds = (state.daily.carryoverIds || []).concat(
+      (state.daily.newIds || []).filter(function (id) {
+        return hasAnyAttempt(id) && hasUnattemptedSkill(id);
+      }),
+    );
+    state.daily = {
+      date: dateKey,
+      newIds: [],
+      carryoverIds: uniqueIds(rolledIds),
+      newSelectionDone: false,
+      completedAt: 0,
+      practicedSeconds: 0,
+    };
+    saveState();
   }
 
   function renderPracticeHub() {
@@ -4459,7 +4873,7 @@
   }
 
   function focusCurrentSessionTask() {
-    var panel = main.querySelector('.training-panel');
+    var panel = main.querySelector('.training-panel, .rescue-training-panel');
     focusElement(
       (panel &&
         (panel.querySelector(
@@ -4507,6 +4921,136 @@
     };
     skipLockedUntil = 0;
     reorderRemainingSession();
+    renderSession();
+    scrollToTop();
+  }
+
+  function findRescueWord(wordId) {
+    return (
+      RESCUE_WORDS.find(function (word) {
+        return word.id === wordId;
+      }) || null
+    );
+  }
+
+  function readyRescueRelearnTasks(now) {
+    return readyRelearnEntries(now || Date.now())
+      .filter(function (entry) {
+        return isRescueGate(entry.skill) && Boolean(findRescueWord(entry.wordId));
+      })
+      .slice(0, RELEARN_MAX_PER_SESSION)
+      .map(function (entry) {
+        return {
+          wordId: entry.wordId,
+          gate: entry.skill,
+          variant: Math.max(0, Number(entry.variant) || 0),
+          attemptCycle: 1,
+          relearnKey: entry.key,
+        };
+      });
+  }
+
+  function startRescueSession() {
+    ensureDailyClock();
+    var availableSeconds = Math.max(
+      0,
+      DAILY_MAX_SECONDS - Number(state.daily.practicedSeconds || 0),
+    );
+    if (!availableSeconds) {
+      showToast('今天已完成 12 分钟有效训练，明天再继续。');
+      return;
+    }
+    var rescue = getRescueState();
+    var roundOne = rescueRoundTasks(1);
+    var roundTwo = rescueRoundTasks(2);
+    var round = roundOne.length ? 1 : 2;
+    var ordinary = round === 1 ? roundOne : roundTwo;
+    var outstandingBeforeDelay = ordinary.length;
+    var ready = readyRescueRelearnTasks(Date.now());
+    var readyKeys = new Set(
+      ready.map(function (task) {
+        return rescueStateKey(task.wordId, task.gate);
+      }),
+    );
+    var allPendingKeys = new Set(
+      getRelearnState()
+        .queue.filter(function (entry) {
+          return isRescueGate(entry.skill);
+        })
+        .map(function (entry) {
+          return rescueStateKey(entry.wordId, entry.skill);
+        }),
+    );
+    ordinary = ordinary.filter(function (task) {
+      return (
+        !readyKeys.has(rescueStateKey(task.wordId, task.gate)) &&
+        !allPendingKeys.has(rescueStateKey(task.wordId, task.gate))
+      );
+    });
+    var tasks = [];
+    var plannedSeconds = 0;
+    ready.concat(ordinary).some(function (task) {
+      var seconds = Number(RESCUE_GATE_SECONDS[task.gate] || 40);
+      if (plannedSeconds + seconds > availableSeconds) return false;
+      tasks.push(task);
+      plannedSeconds += seconds;
+      return tasks.length >= 18;
+    });
+    if (!tasks.length) {
+      showToast(
+        outstandingBeforeDelay && !ordinary.length && !ready.length
+          ? '这些错项还在间隔中；先完成其他任务，稍后再练。'
+          : outstandingBeforeDelay || ready.length
+            ? '今天已完成 12 分钟有效训练，明天再继续。'
+            : '声形急救两轮已完成。',
+      );
+      return;
+    }
+    rescue.round = round;
+    rescue.taskIndex = 0;
+    rescue.tasks = tasks;
+    saveState();
+    pushSessionHistoryState();
+    session = {
+      type: 'rescue',
+      rescueRound: round,
+      wordIndex: 0,
+      stageIndex: 0,
+      stats: {},
+      taskState: {},
+      token: Date.now(),
+      relearnKeys: ready.map(function (task) {
+        return task.relearnKey;
+      }),
+    };
+    skipLockedUntil = 0;
+    renderSession();
+    scrollToTop();
+  }
+
+  function startRescueContextSession(wordId) {
+    var word = findRescueWord(wordId);
+    if (!word || word.senseStatus !== 'pending_context') return;
+    ensureDailyClock();
+    var rescue = getRescueState();
+    rescue.round = Number(word.round) || 1;
+    rescue.taskIndex = 0;
+    rescue.tasks = [
+      { wordId: word.id, gate: 'meaningRecall', variant: 0, attemptCycle: 0, relearnKey: '' },
+    ];
+    saveState();
+    pushSessionHistoryState();
+    session = {
+      type: 'rescue',
+      rescueRound: Number(word.round) || 1,
+      wordIndex: 0,
+      stageIndex: 0,
+      stats: {},
+      taskState: {},
+      token: Date.now(),
+      relearnKeys: [],
+    };
+    skipLockedUntil = 0;
     renderSession();
     scrollToTop();
   }
@@ -4587,6 +5131,10 @@
   }
 
   function renderSession() {
+    if (session && session.type === 'rescue') {
+      renderRescueSession();
+      return;
+    }
     if (!session || session.wordIndex >= session.words.length) {
       renderSessionComplete();
       return;
@@ -4627,6 +5175,240 @@
         focusCurrentFormInput(formExercise, session.taskState);
       }
     }
+  }
+
+  function currentRescueTask() {
+    if (!session || session.type !== 'rescue') return null;
+    return getRescueState().tasks[session.wordIndex] || null;
+  }
+
+  function rescueVariant(task) {
+    return Math.max(0, Math.min(2, Number(task && task.variant) || 0));
+  }
+
+  function renderRescueSession() {
+    var rescue = getRescueState();
+    var task = currentRescueTask();
+    if (!task || session.wordIndex >= rescue.tasks.length) {
+      renderSessionComplete();
+      return;
+    }
+    cleanupMedia();
+    var word = findRescueWord(task.wordId);
+    if (!word || !isRescueGate(task.gate)) {
+      session.wordIndex += 1;
+      rescue.taskIndex = session.wordIndex;
+      saveState();
+      renderRescueSession();
+      return;
+    }
+    var taskSeconds = Number(RESCUE_GATE_SECONDS[task.gate] || 40);
+    var remainingBudget = Math.max(
+      0,
+      DAILY_MAX_SECONDS - Number(state.daily.practicedSeconds || 0),
+    );
+    if (remainingBudget < taskSeconds) {
+      showToast('今天的 12 分钟有效训练预算已经用完。');
+      renderSessionComplete();
+      return;
+    }
+    session.taskState.rescueVariant = rescueVariant(task);
+    initialiseTaskActivity(task.gate);
+    setActiveNav('today');
+    currentView = 'rescue';
+    var total = rescue.tasks.length;
+    main.innerHTML =
+      '<nav class="panel queue-panel compact-queue-panel" aria-label="声形急救进度"><div class="queue-progress"><span>第 ' +
+      (session.wordIndex + 1) +
+      ' / ' +
+      total +
+      ' 题 · ' +
+      esc(RESCUE_GATE_LABELS[task.gate]) +
+      '</span><button class="quiet-button" type="button" data-action="leave-session">退出</button></div></nav>' +
+      '<section class="training-shell rescue-training-shell"><article class="panel rescue-training-panel">' +
+      renderRescueTask(word, task) +
+      '</article></section>';
+    syncRenderedSkipControls();
+    var field = main.querySelector('input:not(:disabled)');
+    if (field) field.focus({ preventScroll: true });
+  }
+
+  function renderRescueTask(word, task) {
+    var attemptCycle = Number(task.attemptCycle) === 1 ? 1 : 0;
+    var attrs =
+      ' data-rescue-task data-gate="' +
+      esc(task.gate) +
+      '" data-variant="' +
+      rescueVariant(task) +
+      '" data-attempt-cycle="' +
+      attemptCycle +
+      '"';
+    var kicker =
+      '<div class="training-kicker"><span class="skill-badge">' +
+      esc(RESCUE_GATE_LABELS[task.gate]) +
+      '</span>' +
+      (attemptCycle ? '<span class="topic-badge">延迟重测 · 无提示</span>' : '') +
+      '</div>';
+    if (task.gate === 'listenForm')
+      return '<div' + attrs + '>' + kicker + renderRescueListenForm(task) + '</div>';
+    if (task.gate === 'readDecode')
+      return '<div' + attrs + '>' + kicker + renderRescueReadDecode(word, task) + '</div>';
+    return '<div' + attrs + '>' + kicker + renderRescueMeaning(word, task) + '</div>';
+  }
+
+  function rescuePrimaryAction(label, disabled) {
+    return (
+      '<button class="primary-button" type="submit" data-rescue-primary-action' +
+      (disabled ? ' disabled' : '') +
+      '>' +
+      esc(label) +
+      '</button>'
+    );
+  }
+
+  function rescueSkipButton() {
+    return '<button class="quiet-button rescue-skip-button" type="button" data-action="rescue-skip" data-rescue-skip aria-label="先跳过，稍后重练">先跳过</button>';
+  }
+
+  function renderRescueListenForm(task) {
+    var preferredAccent = state.settings.accent === 'us' ? 'us' : 'uk';
+    var accent =
+      rescueVariant(task) % 2 ? (preferredAccent === 'us' ? 'uk' : 'us') : preferredAccent;
+    var unlocked = Boolean(session.taskState.rescueAudioReady);
+    var failed = Boolean(session.taskState.rescueAudioFailed);
+    return (
+      '<div class="rescue-stage rescue-listen-stage"><p class="question-lead">听到后，写出完整单词。</p>' +
+      '<button class="listen-orb rescue-listen-orb" type="button" data-action="rescue-play" data-rescue-play data-accent="' +
+      accent +
+      '" data-audio-label="盲听音频" data-status-target="rescueListenStatus" aria-label="播放盲听音频" aria-describedby="rescueListenStatus"><span class="audio-control-icon" aria-hidden="true">▶</span></button>' +
+      '<p class="listen-status" id="rescueListenStatus" aria-live="polite">播放后才能作答；可暂停或继续。</p>' +
+      '<form class="answer-form rescue-answer-form" data-rescue-form' +
+      (failed ? ' aria-disabled="true"' : '') +
+      '><label class="eyebrow" for="rescueListenInput">TYPE WHAT YOU HEAR</label><input class="answer-input" id="rescueListenInput" name="answer" type="text" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="在这里拼写"' +
+      ' data-rescue-answer-controls' +
+      (unlocked && !failed ? '' : ' disabled') +
+      '><div class="rescue-actions">' +
+      rescuePrimaryAction('检查', !unlocked || failed) +
+      rescueSkipButton() +
+      '</div></form><p class="feedback" data-rescue-feedback aria-live="polite"></p></div>'
+    );
+  }
+
+  function renderRescueReadDecode(word, task) {
+    var taskState = session.taskState;
+    var completed = Boolean(taskState.rescueAnswered);
+    var decode = word.decodeTask || {
+      prompt: '选择主重音所在的拼读块。',
+      choices: word.blocks,
+      answerIndex: word.stress,
+    };
+    var decodeChoices = rotatedRescueChoices(decode.choices, rescueVariant(task));
+    return (
+      '<div class="rescue-stage"><p class="question-lead">先自己读，再完成字音辨识。</p><h2 class="rescue-target-word">' +
+      esc(word.word) +
+      '</h2><p class="rescue-context">' +
+      esc(decode.prompt) +
+      '</p><form data-rescue-form><div class="rescue-block-options" data-rescue-answer-controls role="group" aria-label="字音辨识选项">' +
+      decodeChoices
+        .map(function (choice) {
+          return (
+            '<label><input type="radio" name="answer" value="' +
+            choice.index +
+            '"' +
+            (completed ? ' disabled' : '') +
+            '><span>' +
+            esc(String(choice.label)) +
+            '</span></label>'
+          );
+        })
+        .join('') +
+      '</div><div class="rescue-actions">' +
+      rescuePrimaryAction('检查字音', completed) +
+      (completed
+        ? '<button class="primary-button" type="button" data-action="rescue-next" data-rescue-primary-action>下一题</button>'
+        : rescueSkipButton()) +
+      '</div></form><p class="feedback" data-rescue-feedback aria-live="polite">' +
+      esc(taskState.rescueFeedback || '') +
+      '</p>' +
+      (completed ? renderRescueReveal(word) : '') +
+      '</div>'
+    );
+  }
+
+  function renderRescueMeaning(word) {
+    var taskState = session.taskState;
+    var completed = Boolean(taskState.rescueAnswered);
+    var pending =
+      word.senseStatus === 'pending_context' || word.meaningTask.masteryEligible === false;
+    var meaningChoices = rotatedRescueChoices(
+      word.meaningTask.choices,
+      rescueVariant(currentRescueTask()),
+    );
+    return (
+      '<div class="rescue-stage"><p class="question-lead">根据语境选择最贴切的意思。</p><h2 class="rescue-target-word">' +
+      esc(word.word) +
+      '</h2><p class="rescue-context">' +
+      esc(word.meaningTask.prompt) +
+      '</p><form data-rescue-form><div class="rescue-meaning-options" data-rescue-answer-controls role="group" aria-label="词义选项">' +
+      meaningChoices
+        .map(function (choice) {
+          return (
+            '<label><input type="radio" name="answer" value="' +
+            choice.index +
+            '"' +
+            (completed ? ' disabled' : '') +
+            '><span>' +
+            esc(choice.label) +
+            '</span></label>'
+          );
+        })
+        .join('') +
+      '</div>' +
+      (pending
+        ? '<p class="rescue-pending-note">本题只收集原句线索，不计掌握。</p><label class="rescue-context-note"><span>如果找得到原句，可补录在这里（可留空）</span><textarea name="contextNote" rows="3" maxlength="500" placeholder="粘贴原句或描述当时语境">' +
+          esc(getRescueState().contextNotes[word.id] || '') +
+          '</textarea></label>'
+        : '') +
+      '<div class="rescue-actions">' +
+      rescuePrimaryAction(pending ? '保存线索' : '检查词义', completed) +
+      (completed
+        ? '<button class="primary-button" type="button" data-action="rescue-next" data-rescue-primary-action>下一题</button>'
+        : rescueSkipButton()) +
+      '</div></form><p class="feedback" data-rescue-feedback aria-live="polite">' +
+      esc(taskState.rescueFeedback || '') +
+      '</p>' +
+      (completed && !pending ? renderRescueReveal(word) : '') +
+      '</div>'
+    );
+  }
+
+  function rotatedRescueChoices(choices, variant) {
+    var indexed = (choices || []).map(function (label, index) {
+      return { label: label, index: index };
+    });
+    if (indexed.length < 2) return indexed;
+    var offset = Math.max(0, Number(variant) || 0) % indexed.length;
+    return indexed.slice(offset).concat(indexed.slice(0, offset));
+  }
+
+  function renderRescueReveal(word) {
+    var accent = state.settings.accent === 'us' ? 'us' : 'uk';
+    var ipa = accent === 'us' ? word.ipaUs : word.ipaUk;
+    return (
+      '<aside class="rescue-reveal"><strong>' +
+      esc(word.word) +
+      '</strong><span>' +
+      esc(ipa) +
+      ' · ' +
+      esc(word.pos) +
+      ' · ' +
+      esc(word.zh) +
+      '</span><small>' +
+      esc(word.collocation) +
+      '</small><button class="audio-button secondary-audio" type="button" data-action="rescue-play-reveal" data-accent="' +
+      accent +
+      '" data-audio-label="核对读音"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">核对读音</span></button></aside>'
+    );
   }
 
   function monotonicNow() {
@@ -5606,25 +6388,37 @@
       return;
     }
     var stats = session.stats;
+    var isRescueSession = session.type === 'rescue';
+    if (isRescueSession) {
+      var rescue = getRescueState();
+      rescue.tasks = [];
+      rescue.taskIndex = 0;
+      saveState();
+    }
     setActiveNav('today');
     main.innerHTML =
       '<section class="page-heading"><div><p class="eyebrow">SESSION COMPLETE</p><h1>本轮训练完成</h1><p>错项会先与其他任务拉开距离，再在预算允许时无提示重测；每项能力仍独立排期。</p></div></section>' +
       '<article class="panel training-panel">' +
       '<div class="word-stage"><span class="topic-badge">训练小结</span><h2 style="font-size:42px">准确比刷量更重要</h2>' +
       '<div class="metric-grid" style="max-width:680px;margin:26px auto">' +
-      SKILLS.map(function (skill) {
-        var skillStats = stats[skill] || { attempts: 0, correct: 0, pending: 0 };
-        if (!skillStats.attempts && skillStats.pending) {
-          return metric('待评', SKILL_SHORT[skill] + '（不计正误）');
-        }
-        if (!skillStats.attempts) {
-          return metric('—', SKILL_SHORT[skill] + '（未安排）');
-        }
-        var score = skillStats.attempts
-          ? Math.round((skillStats.correct / skillStats.attempts) * 100)
-          : 0;
-        return metric(score + '%', SKILL_SHORT[skill]);
-      }).join('') +
+      (isRescueSession ? Object.keys(RESCUE_GATE_SECONDS) : SKILLS)
+        .map(function (skill) {
+          var skillStats = stats[skill] || { attempts: 0, correct: 0, pending: 0 };
+          if (!skillStats.attempts && skillStats.pending) {
+            return metric(
+              '待确认',
+              (RESCUE_GATE_LABELS[skill] || SKILL_SHORT[skill]) + '（不计正误）',
+            );
+          }
+          if (!skillStats.attempts) {
+            return metric('—', (RESCUE_GATE_LABELS[skill] || SKILL_SHORT[skill]) + '（未安排）');
+          }
+          var score = skillStats.attempts
+            ? Math.round((skillStats.correct / skillStats.attempts) * 100)
+            : 0;
+          return metric(score + '%', RESCUE_GATE_LABELS[skill] || SKILL_SHORT[skill]);
+        })
+        .join('') +
       '</div>' +
       '<div class="card-actions"><button class="secondary-button" type="button" data-action="go-progress">查看错题与进度</button><button class="primary-button" type="button" data-action="go-today">返回今日 →</button></div>' +
       '</div></article>';
@@ -5649,6 +6443,16 @@
       })
       .slice(-18)
       .reverse();
+    var rescueHistory = state.history
+      .filter(function (item) {
+        return item && isRescueGate(item.skill);
+      })
+      .slice(-18)
+      .reverse();
+    var pendingRescue = RESCUE_WORDS.filter(function (word) {
+      var gateState = peekRescueGateState(word.id, 'meaningRecall');
+      return Boolean(gateState && gateState.pendingContext);
+    });
     var journal = state.journal.slice(-12).reverse();
 
     main.innerHTML =
@@ -5688,6 +6492,47 @@
             .join('') +
           '</ul>'
         : '<div class="empty-state">完成一次练习后，错项会出现在这里。</div>') +
+      '</article>' +
+      '<article class="panel progress-panel" style="margin-top:18px"><h3>声形急救记录</h3>' +
+      (pendingRescue.length
+        ? '<p class="fine-print">待补原句：' +
+          pendingRescue
+            .map(function (word) {
+              return esc(word.word);
+            })
+            .join('、') +
+          '。这类记录不会被算作掌握。</p><div class="data-actions">' +
+          pendingRescue
+            .map(function (word) {
+              return (
+                '<button class="secondary-button" type="button" data-action="resume-rescue-context" data-word-id="' +
+                esc(word.id) +
+                '">补录 ' +
+                esc(word.word) +
+                ' 原句</button>'
+              );
+            })
+            .join('') +
+          '</div>'
+        : '') +
+      (rescueHistory.length
+        ? '<ul class="mistake-list">' +
+          rescueHistory
+            .map(function (item) {
+              var status = item.correct === null ? '待原句确认' : item.correct ? '正确' : '待重练';
+              return (
+                '<li><strong>' +
+                esc(item.word) +
+                ' · ' +
+                esc(RESCUE_GATE_LABELS[item.skill]) +
+                '</strong><span>' +
+                esc(status + ' · ' + item.detail) +
+                '</span></li>'
+              );
+            })
+            .join('') +
+          '</ul>'
+        : '<div class="empty-state">完成一题声形急救后，独立关卡记录会出现在这里。</div>') +
       '</article>' +
       '<article class="panel progress-panel" style="margin-top:18px"><h3>表达草稿</h3>' +
       (journal.length
@@ -5772,6 +6617,8 @@
     var action = button.dataset.action;
 
     if (action === 'start-daily') return startDailySession();
+    if (action === 'start-rescue') return startRescueSession();
+    if (action === 'resume-rescue-context') return startRescueContextSession(button.dataset.wordId);
     if (action === 'start-weak') return startWeakSession();
     if (action === 'start-skill') return startSkillSession(button.dataset.skill);
     if (action === 'go-view') return navigate(button.dataset.view);
@@ -5804,6 +6651,10 @@
     }
     if (action === 'reveal-word') return revealWord();
     if (action === 'play-word') return playWordFromButton(button);
+    if (action === 'rescue-play') return playRescueAudio(button, false);
+    if (action === 'rescue-play-reveal') return playRescueAudio(button, true);
+    if (action === 'rescue-skip') return skipRescueTask();
+    if (action === 'rescue-next') return advanceRescueSession();
     if (action === 'play-example') return playExample(button);
     if (action === 'record-toggle') return toggleRecording(button);
     if (action === 'play-recording') return playRecording(button);
@@ -6271,6 +7122,13 @@
   }
 
   function handleMainSubmit(event) {
+    var rescueForm = event.target.closest('[data-rescue-form]');
+    if (rescueForm) {
+      event.preventDefault();
+      var rescueFormData = new FormData(rescueForm);
+      checkRescueAnswer(rescueFormData.get('answer'), rescueFormData.get('contextNote'));
+      return;
+    }
     var familyForm = event.target.closest('[data-visual-family-form]');
     if (familyForm) {
       event.preventDefault();
@@ -6585,6 +7443,210 @@
     advanceSession();
   }
 
+  function consumeRescueRelearn(task) {
+    if (!task || Number(task.attemptCycle) !== 1 || !task.relearnKey) return false;
+    var key = rescueKey(task.wordId, task.gate);
+    if (task.relearnKey !== key) return false;
+    var relearn = getRelearnState();
+    var exists = relearn.queue.some(function (entry) {
+      return entry && entry.key === key;
+    });
+    if (!exists) return false;
+    relearn.queue = relearn.queue.filter(function (entry) {
+      return entry && entry.key !== key;
+    });
+    return true;
+  }
+
+  function recordRescueResult(word, task, correct, options) {
+    var now = Date.now();
+    var gateState = getRescueGateState(word.id, task.gate);
+    var pendingContext = Boolean(options && options.pendingContext);
+    var skipped = Boolean(options && options.skipped);
+    var relearnAttempt = consumeRescueRelearn(task);
+    gateState.attempts += 1;
+    gateState.last = now;
+    gateState.pendingContext = pendingContext;
+    if (skipped) gateState.skipCount += 1;
+    if (pendingContext) {
+      gateState.needsReview = false;
+    } else if (correct) {
+      gateState.correct += 1;
+      gateState.needsReview = false;
+    } else {
+      gateState.needsReview = true;
+    }
+    state.history.push({
+      wordId: word.id,
+      word: word.word,
+      skill: task.gate,
+      correct: pendingContext ? null : Boolean(correct),
+      detail: pendingContext
+        ? '原句语境待确认；不计掌握'
+        : skipped
+          ? '主动跳过；未显示答案'
+          : correct
+            ? '声形急救受控作答正确'
+            : '声形急救受控作答错误',
+      at: now,
+      coreAttempt: false,
+      rescue: {
+        attemptCycle: relearnAttempt ? 1 : 0,
+        variant: rescueVariant(task),
+        pendingContext: pendingContext,
+      },
+    });
+    state.history = state.history.slice(-240);
+    if (!pendingContext) noteRelearnPracticeCompletion(task.gate);
+    // Context collection is still deliberate study time and shares the daily
+    // cap, but it must never advance the delayed-retest clock as mastery work.
+    noteDailyPracticeCompletion(task.gate);
+    if (!correct && !pendingContext && !relearnAttempt)
+      scheduleAutomaticRelearn(word.id, task.gate, now);
+    if (!session.stats[task.gate])
+      session.stats[task.gate] = { attempts: 0, correct: 0, pending: 0 };
+    if (pendingContext) {
+      session.stats[task.gate].pending += 1;
+    } else {
+      session.stats[task.gate].attempts += 1;
+      if (correct) session.stats[task.gate].correct += 1;
+    }
+    saveState();
+  }
+
+  function checkRescueAnswer(rawAnswer, rawContextNote) {
+    if (!session || session.type !== 'rescue') return;
+    var task = currentRescueTask();
+    var word = task && findRescueWord(task.wordId);
+    if (!word || session.taskState.rescueAnswered) return;
+    var answer = String(rawAnswer == null ? '' : rawAnswer).trim();
+    var feedback = main.querySelector('[data-rescue-feedback]');
+    if (!answer) {
+      if (feedback) feedback.textContent = '先作答，或选择“先跳过”。';
+      return;
+    }
+    if (task.gate === 'listenForm' && !session.taskState.rescueAudioReady) {
+      if (feedback) feedback.textContent = '音频真正开始播放后才开放作答。';
+      return;
+    }
+    var pending =
+      task.gate === 'meaningRecall' &&
+      (word.senseStatus === 'pending_context' || word.meaningTask.masteryEligible === false);
+    if (pending) {
+      getRescueState().contextNotes[word.id] = String(rawContextNote || '')
+        .trim()
+        .slice(0, 500);
+    }
+    var correct = false;
+    if (task.gate === 'listenForm')
+      correct = normaliseAnswer(answer) === normaliseAnswer(word.word);
+    if (task.gate === 'readDecode') {
+      var decode = word.decodeTask || { answerIndex: word.stress };
+      correct = Number(answer) === Number(decode.answerIndex);
+    }
+    if (task.gate === 'meaningRecall') {
+      var selected = word.meaningTask.choices[Number(answer)];
+      correct = pending ? false : selected === word.meaningTask.answer;
+    }
+    recordRescueResult(word, task, correct, { pendingContext: pending });
+    session.taskState.rescueAnswered = true;
+    session.taskState.rescueCorrect = correct;
+    session.taskState.rescueFeedback = pending
+      ? '已保存这条线索；原句缺失，所以不计入掌握。'
+      : correct
+        ? '正确。现在核对声音、拼读块和核心义。'
+        : '还没掌握。答案会在核对区出现，并安排延迟重测。';
+    if (task.gate === 'listenForm') {
+      renderRescueListenReview(word, task);
+    } else {
+      renderRescueSession();
+    }
+  }
+
+  function renderRescueListenReview(word, task) {
+    stopAudio();
+    var root = main.querySelector('[data-rescue-task]');
+    if (!root) return renderRescueSession();
+    root.innerHTML =
+      '<div class="training-kicker"><span class="skill-badge">' +
+      esc(RESCUE_GATE_LABELS[task.gate]) +
+      '</span></div><div class="rescue-stage"><p class="feedback ' +
+      (session.taskState.rescueCorrect ? 'is-correct' : 'is-wrong') +
+      '" data-rescue-feedback aria-live="polite">' +
+      esc(session.taskState.rescueFeedback) +
+      '</p>' +
+      renderRescueReveal(word) +
+      '<div class="rescue-actions"><button class="primary-button" type="button" data-action="rescue-next" data-rescue-primary-action>下一题</button></div></div>';
+  }
+
+  function skipRescueTask() {
+    if (!session || session.type !== 'rescue' || session.taskState.skipping) return;
+    if (!acquireSkipLock()) return;
+    var task = currentRescueTask();
+    var word = task && findRescueWord(task.wordId);
+    if (!word) return;
+    session.taskState.skipping = true;
+    stopAudio();
+    if (task.gate === 'listenForm' && session.taskState.rescueAudioFailed) {
+      session.taskState.technicalDeferred = true;
+      showToast('因音频故障已延后本题；不记为学生错题。');
+      advanceRescueSession();
+      return;
+    }
+    var pendingContext =
+      task.gate === 'meaningRecall' &&
+      (word.senseStatus === 'pending_context' || word.meaningTask.masteryEligible === false);
+    recordRescueResult(word, task, false, {
+      skipped: !pendingContext,
+      pendingContext: pendingContext,
+    });
+    showToast(
+      pendingContext
+        ? '已暂缓词义确认；没有原句时不判错。'
+        : '已跳过，不显示答案；稍后会无提示重测。',
+    );
+    advanceRescueSession();
+  }
+
+  function appendReadyRescueRelearn() {
+    if (!session || session.type !== 'rescue') return;
+    var rescue = getRescueState();
+    var selectedKeys = new Set(Array.isArray(session.relearnKeys) ? session.relearnKeys : []);
+    var slots = Math.max(0, RELEARN_MAX_PER_SESSION - selectedKeys.size);
+    if (!slots) return;
+    var remainingBudget = Math.max(
+      0,
+      DAILY_MAX_SECONDS - Number(state.daily.practicedSeconds || 0),
+    );
+    readyRescueRelearnTasks(Date.now()).some(function (task) {
+      if (slots <= 0 || selectedKeys.has(task.relearnKey)) return slots <= 0;
+      var taskSeconds = Number(RESCUE_GATE_SECONDS[task.gate] || 40);
+      if (taskSeconds > remainingBudget) return false;
+      var alreadyQueued = rescue.tasks.slice(session.wordIndex).some(function (candidate) {
+        return candidate.wordId === task.wordId && candidate.gate === task.gate;
+      });
+      if (!alreadyQueued) rescue.tasks.push(task);
+      selectedKeys.add(task.relearnKey);
+      remainingBudget -= taskSeconds;
+      slots -= 1;
+      return false;
+    });
+    session.relearnKeys = Array.from(selectedKeys);
+  }
+
+  function advanceRescueSession() {
+    if (!session || session.type !== 'rescue') return;
+    cleanupMedia();
+    session.wordIndex += 1;
+    appendReadyRescueRelearn();
+    var rescue = getRescueState();
+    rescue.taskIndex = session.wordIndex;
+    saveState();
+    session.taskState = {};
+    renderRescueSession();
+    scrollToTop();
+  }
+
   function acquireSkipLock() {
     var now = Date.now();
     if (now < skipLockedUntil) return false;
@@ -6594,7 +7656,7 @@
 
   function syncRenderedSkipControls() {
     var controls = main.querySelectorAll(
-      '[data-action="skip-spell"], [data-action="skip-form"], [data-action="skip-sentence"]',
+      '[data-action="skip-spell"], [data-action="skip-form"], [data-action="skip-sentence"], [data-rescue-skip]',
     );
     if (!controls.length) return;
     var remaining = Math.max(0, skipLockedUntil - Date.now());
@@ -6609,7 +7671,7 @@
       }
       main
         .querySelectorAll(
-          '[data-action="skip-spell"], [data-action="skip-form"], [data-action="skip-sentence"]',
+          '[data-action="skip-spell"], [data-action="skip-form"], [data-action="skip-sentence"], [data-rescue-skip]',
         )
         .forEach(function (control) {
           control.disabled = false;
@@ -7409,6 +8471,10 @@
   }
 
   function currentWord() {
+    if (session.type === 'rescue') {
+      var rescueTask = currentRescueTask();
+      return rescueTask ? findRescueWord(rescueTask.wordId) : null;
+    }
     if (session.type === 'daily') {
       var plan = currentPlan();
       return plan && plan.word;
@@ -7423,6 +8489,10 @@
 
   function currentStages() {
     if (!session) return [];
+    if (session.type === 'rescue') {
+      var rescueTask = currentRescueTask();
+      return rescueTask ? [{ skill: rescueTask.gate, role: 'rescue' }] : [];
+    }
     if (session.type === 'daily') {
       var plan = currentPlan();
       return (plan && plan.stages) || [];
@@ -7437,6 +8507,10 @@
   }
 
   function currentSkill() {
+    if (session.type === 'rescue') {
+      var rescueTask = currentRescueTask();
+      return rescueTask && rescueTask.gate;
+    }
     if (session.type === 'repair') {
       return session.repairSkills[session.wordIndex];
     }
@@ -7660,7 +8734,8 @@
       findWord(wordId) ||
       FORM_FOUNDATIONS.find(function (word) {
         return word.id === wordId;
-      })
+      }) ||
+      findRescueWord(wordId)
     );
   }
 
@@ -8208,6 +9283,59 @@
     });
   }
 
+  function rescueAudioSource(word, accent) {
+    var pronunciation = word && word.pronunciation && word.pronunciation[accent];
+    return pronunciation && pronunciation.wordAudio ? pronunciation.wordAudio : '';
+  }
+
+  function playRescueAudio(button, reveal) {
+    if (!session || session.type !== 'rescue') return;
+    var task = currentRescueTask();
+    var word = task && findRescueWord(task.wordId);
+    if (!word) return;
+    if (toggleCurrentPlayback(button)) return;
+    var accent = button.dataset.accent === 'us' ? 'us' : 'uk';
+    var source = rescueAudioSource(word, accent);
+    if (!source) {
+      if (!reveal) lockRescueAudioFailure();
+      showToast('这条自然语音尚未就绪。');
+      return;
+    }
+    startAudioPlayback(source + '?v=' + encodeURIComponent(AUDIO_ASSET_VERSION), button, 1, {
+      sessionToken: session.token,
+      taskState: session.taskState,
+      wordId: word.id,
+      rescueBlind: !reveal,
+    });
+  }
+
+  function unlockRescueAnswerControls(button) {
+    if (!session || session.type !== 'rescue' || currentRescueTask().gate !== 'listenForm') return;
+    if (!button || !button.matches('[data-rescue-play]')) return;
+    session.taskState.rescueAudioReady = true;
+    session.taskState.rescueAudioFailed = false;
+    main
+      .querySelectorAll('[data-rescue-answer-controls], [data-rescue-primary-action]')
+      .forEach(function (control) {
+        control.disabled = false;
+      });
+    var input = document.getElementById('rescueListenInput');
+    if (input) input.focus({ preventScroll: true });
+  }
+
+  function lockRescueAudioFailure() {
+    if (!session || session.type !== 'rescue') return;
+    session.taskState.rescueAudioFailed = true;
+    session.taskState.rescueAudioReady = false;
+    main
+      .querySelectorAll('[data-rescue-answer-controls], [data-rescue-primary-action]')
+      .forEach(function (control) {
+        control.disabled = true;
+      });
+    var feedback = main.querySelector('[data-rescue-feedback]');
+    if (feedback) feedback.textContent = '音频未成功播放，本题不会开放作答。你可以重试或先跳过。';
+  }
+
   function startAudioPlayback(source, button, rate, adaptiveEvidence) {
     stopAudio();
     var audio = new Audio(source);
@@ -8248,6 +9376,7 @@
       playbackDesired = 'idle';
       updatePlaybackButton(button, 'idle');
       updatePlaybackMessage(button, 'error');
+      if (adaptiveEvidence && adaptiveEvidence.rescueBlind) lockRescueAudioFailure();
       showToast('自然语音加载失败，请检查网络后重试。');
     };
 
@@ -8271,6 +9400,7 @@
         startTaskActivity();
       }
       unlockSoundPrecheck(button);
+      if (adaptiveEvidence && adaptiveEvidence.rescueBlind) unlockRescueAnswerControls(button);
     });
     audio.addEventListener('waiting', function () {
       if (!isCurrent() || playbackDesired !== 'playing') return;
@@ -8292,7 +9422,7 @@
     });
     audio.addEventListener('ended', finish, { once: true });
     audio.addEventListener('error', fail, { once: true });
-    armPlaybackTimeout(token, audio, button);
+    armPlaybackTimeout(token, audio, button, adaptiveEvidence);
     audio.play().catch(fail);
   }
 
@@ -8319,10 +9449,13 @@
     playbackStatus = 'loading';
     updatePlaybackButton(button, 'loading');
     updatePlaybackMessage(button, 'loading');
-    armPlaybackTimeout(token, audio, button);
+    armPlaybackTimeout(token, audio, button, {
+      rescueBlind: Boolean(button && button.matches('[data-rescue-play]')),
+    });
     audio.play().catch(function (error) {
       if (playbackToken !== token || currentAudio !== audio || playingButton !== button) return;
       if (error && error.name === 'AbortError') return;
+      if (button && button.matches('[data-rescue-play]')) lockRescueAudioFailure();
       stopAudio();
       updatePlaybackMessage(button, 'error');
       showToast('自然语音无法继续播放，请重新点击播放。');
@@ -8330,7 +9463,7 @@
     return true;
   }
 
-  function armPlaybackTimeout(token, audio, button) {
+  function armPlaybackTimeout(token, audio, button, adaptiveEvidence) {
     clearTimeout(playbackTimer);
     playbackTimer = setTimeout(function () {
       if (
@@ -8342,6 +9475,7 @@
       ) {
         return;
       }
+      if (adaptiveEvidence && adaptiveEvidence.rescueBlind) lockRescueAudioFailure();
       stopAudio();
       updatePlaybackMessage(button, 'error');
       showToast('自然语音加载超时，请检查网络后重试。');

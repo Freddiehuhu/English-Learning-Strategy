@@ -32,6 +32,7 @@ VOCABULARY_FILE = ROOT / "public" / "ielts" / "vocabulary.js"
 LISTENING_VOCABULARY_FILE = (
     ROOT / "public" / "ielts" / "listening-vocabulary.js"
 )
+RESCUE_VOCABULARY_FILE = ROOT / "public" / "ielts" / "rescue-vocabulary.js"
 AUDIO_ROOT = ROOT / "public" / "ielts" / "audio"
 MANIFEST_FILE = AUDIO_ROOT / "manifest.json"
 
@@ -121,6 +122,7 @@ def generation_profiles() -> dict[str, dict[str, Any]]:
 def read_vocabulary(
     vocabulary_file: Path = VOCABULARY_FILE,
     supplementary_file: Path = LISTENING_VOCABULARY_FILE,
+    rescue_file: Path = RESCUE_VOCABULARY_FILE,
 ) -> list[dict[str, str]]:
     """Read the executable vocabulary data without duplicating its contents."""
 
@@ -134,7 +136,16 @@ vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), context);
 if (process.argv[2] && fs.existsSync(process.argv[2])) {
   vm.runInNewContext(fs.readFileSync(process.argv[2], 'utf8'), context);
 }
-const entries = context.window.IELTS_VOCABULARY.map((entry) => ({
+if (process.argv[3] && fs.existsSync(process.argv[3])) {
+  vm.runInNewContext(fs.readFileSync(process.argv[3], 'utf8'), context);
+}
+const activeVocabulary = Array.isArray(context.window.IELTS_VOCABULARY)
+  ? context.window.IELTS_VOCABULARY
+  : [];
+const rescueVocabulary = Array.isArray(context.window.IELTS_RESCUE_VOCABULARY)
+  ? context.window.IELTS_RESCUE_VOCABULARY
+  : [];
+const entries = [...activeVocabulary, ...rescueVocabulary].map((entry) => ({
   id: entry.id,
   word: entry.word,
   sentence: entry.chunks.join(' ').replace(/\s+([,.;!?])/g, '$1'),
@@ -142,7 +153,14 @@ const entries = context.window.IELTS_VOCABULARY.map((entry) => ({
 process.stdout.write(JSON.stringify(entries));
 """
     result = subprocess.run(
-        ["node", "-e", extractor, str(vocabulary_file), str(supplementary_file)],
+        [
+            "node",
+            "-e",
+            extractor,
+            str(vocabulary_file),
+            str(supplementary_file),
+            str(rescue_file),
+        ],
         check=True,
         capture_output=True,
         text=True,

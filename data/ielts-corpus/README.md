@@ -89,6 +89,27 @@ skill.
 The website consumes the smaller, minified
 `public/ielts/corpus/catalog.json` only when the learner opens the corpus map.
 
+## Learner difficulty archive
+
+`learner-difficulty/student-hard-words-2026-08-12.json` is a separate,
+learner-specific evidence archive. It contains 442 non-empty reported inputs
+and 443 unique normalized headwords after one confirmed joined-token split.
+The learner's code means pronunciation unknown for `1` or no suffix (192
+entries), meaning unknown for `2` (110), and both unknown for `3` (141). These
+labels are routing evidence only; they are not lexical or mastery evidence.
+
+The archive preserves every raw token alongside confirmed corrections. For
+example, the reported `pluse3` remains available as raw evidence while its
+normalized headword is recorded as `pulse` with a student-confirmed correction
+note. It withholds definitions, POS, CEFR and IPA, and every sense remains
+context-pending until a source sentence or other sufficient evidence is
+available.
+
+The archive size must not be reported as published exercise coverage. The
+initial sound-form rescue lesson publishes only 12 separately source-audited
+words in two rounds. `instant` still lacks its original listening sentence, so
+its meaning prompt is unscored and cannot supply a mastery claim.
+
 ## Editorial safeguards
 
 - `raw_term` preserves the extracted source form in local intermediate data
@@ -104,6 +125,8 @@ The website consumes the smaller, minified
 - Relation and teaching-method resources cannot nominate target words.
 - Confirmed source typos or layout breaks are recorded as corrections rather
   than silently changed.
+- Learner-reported corrections also preserve the raw token and an explicit
+  confirmation note; difficulty codes never fill lexical fields.
 - Deduplication keeps all source and part-of-speech attestations.
 - Audited days, months, continents, countries and languages are removed as
   proper-noun source senses; lowercase common senses such as `march`, `may` and
