@@ -666,6 +666,7 @@
   var hardWordsVisible = 60;
   var hardWordPracticeState = loadHardWordPracticeState();
   var hardWordMemoryTimer = null;
+  var dualPrototypeState = null;
   var currentView = 'today';
   var session = null;
   var currentAudio = null;
@@ -680,6 +681,7 @@
   var recordChunks = [];
   var recordUrl = '';
   var recordTimer = null;
+  var recordStartedAt = 0;
   var toastTimer = null;
   var advanceTimer = null;
 
@@ -748,11 +750,15 @@
     document.addEventListener('visibilitychange', syncTaskActivityVisibility);
 
     if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+    var recoverDualPrototype = Boolean(history.state && history.state.dualPrototype);
     if (history.replaceState) {
       var initialHistoryState = Object.assign({}, history.state || {});
       delete initialHistoryState.wordlabSession;
+      delete initialHistoryState.dualPrototype;
       history.replaceState(
-        Object.assign({}, initialHistoryState, { wordlabView: 'today' }),
+        Object.assign({}, initialHistoryState, {
+          wordlabView: recoverDualPrototype ? 'hard-words' : 'today',
+        }),
         '',
         location.href,
       );
@@ -762,6 +768,8 @@
     }
     if (hardWordPracticeState.active) {
       resumeHardWordPractice();
+    } else if (recoverDualPrototype) {
+      renderHardWordsCatalog();
     } else {
       renderToday();
     }
@@ -3322,6 +3330,7 @@
     clearTimeout(advanceTimer);
     clearTimeout(hardWordMemoryTimer);
     cleanupMedia();
+    dualPrototypeState = null;
     if (currentView === 'hard-word-practice' && view !== 'hard-word-practice') {
       hardWordPracticeState.active = null;
       saveHardWordPracticeState();
@@ -3330,11 +3339,14 @@
     var isSessionHistoryEntry = Boolean(previousHistoryState.wordlabSession);
     var isLeavingSession = Boolean(session) || isSessionHistoryEntry;
     delete previousHistoryState.wordlabSession;
+    delete previousHistoryState.dualPrototype;
     session = null;
     currentView = view;
     if (!(options && options.fromPopState) && history.pushState) {
       var nextHistoryState = Object.assign({}, previousHistoryState, { wordlabView: view });
       if (isLeavingSession && history.replaceState) {
+        history.replaceState(nextHistoryState, '', location.href);
+      } else if (history.state && history.state.dualPrototype && history.replaceState) {
         history.replaceState(nextHistoryState, '', location.href);
       } else if (!history.state || history.state.wordlabView !== view) {
         history.pushState(nextHistoryState, '', location.href);
@@ -3839,18 +3851,18 @@
         return publishedRescueHeadwords.has(headword);
       });
     if (
-      payload.entries.length !== 462 ||
-      Number(payload.statistics.unique_headwords) !== 462 ||
-      normalizedReportCount !== 465 ||
-      Number(reportedCounts[1]) !== 194 ||
-      Number(reportedCounts[2]) !== 111 ||
-      Number(reportedCounts[3]) !== 157 ||
+      payload.entries.length !== 751 ||
+      Number(payload.statistics.unique_headwords) !== 751 ||
+      normalizedReportCount !== 756 ||
+      Number(reportedCounts[1]) !== 215 ||
+      Number(reportedCounts[2]) !== 223 ||
+      Number(reportedCounts[3]) !== 313 ||
       Number(payload.statistics.normalized_reports) !== normalizedReportCount ||
       Number(payload.statistics.duplicate_report_count) !==
         normalizedReportCount - payload.entries.length ||
-      counts[1] !== 194 ||
-      counts[2] !== 111 ||
-      counts[3] !== 157 ||
+      counts[1] !== 215 ||
+      counts[2] !== 223 ||
+      counts[3] !== 313 ||
       !trainingMatchesPublished
     ) {
       throw new Error('学生难词统计或练习清单与条目不一致');
@@ -3902,7 +3914,7 @@
     if (!savedEntries || typeof savedEntries !== 'object' || Array.isArray(savedEntries)) return {};
     var entries = {};
     Object.keys(savedEntries)
-      .slice(0, 500)
+      .slice(0, 1000)
       .forEach(function (wordId) {
         var source = savedEntries[wordId];
         if (!source || typeof source !== 'object' || Array.isArray(source)) return;
@@ -4117,11 +4129,17 @@
         hardWordsPracticeFilter,
       ) +
       '</div></section>' +
-      '<section class="panel hard-words-practice-launch" aria-label="学生难词基础练习"><div><p class="eyebrow">BASIC PRACTICE</p><h2>462 词都能练</h2><p>独立拼对 <strong>' +
+      '<section class="panel hard-words-practice-launch" aria-label="学生难词基础练习"><div><p class="eyebrow">BASIC PRACTICE</p><h2>' +
+      entries.length +
+      ' 词都能练</h2><p>独立拼对 <strong>' +
       practiceProgress.independent +
-      '</strong> / 462 · 已交句子 <strong>' +
+      '</strong> / ' +
+      entries.length +
+      ' · 已交句子 <strong>' +
       practiceProgress.sentences +
-      '</strong> / 462</p></div><div class="hard-words-launch-actions"><button class="primary-button" type="button" data-action="hard-words-start-spell">拼写练习 · 10 词</button><button class="secondary-button" type="button" data-action="hard-words-start-sentence">造句练习 · 5 词</button></div></section>' +
+      '</strong> / ' +
+      entries.length +
+      '</p></div><div class="hard-words-launch-actions"><button class="primary-button" type="button" data-action="hard-words-start-spell">拼写练习 · 10 词</button><button class="secondary-button" type="button" data-action="hard-words-start-sentence">造句练习 · 5 词</button><button class="text-button hard-words-dual-launch" type="button" data-action="start-dual-prototype">双向声形样板 · pronunciation</button></div></section>' +
       '<section class="hard-words-results" aria-live="polite"><div class="hard-words-result-head"><p>找到 <strong data-hard-words-match-count>0</strong> 个词</p><small>以下每个词都可单独练习</small></div><small class="hard-words-practice-note">未经审校的词不提供词义或标准句答案；造句只保存为待老师评阅。</small><div data-hard-words-results></div></section>';
     renderHardWordsResults(true);
   }
@@ -4254,6 +4272,9 @@
           esc(rescueWord.id) +
           '">声形急救</button>'
         : '') +
+      (normaliseAnswer(entry.normalizedHeadword) === 'pronunciation'
+        ? '<button class="text-button hard-word-start" type="button" data-action="start-dual-prototype">双向声形样板</button>'
+        : '') +
       '</div>' +
       '</article>'
     );
@@ -4302,6 +4323,279 @@
         return entry.id === wordId;
       }) || null
     );
+  }
+
+  function defaultDualPrototypeState() {
+    return {
+      step: 'choice',
+      previewRetest: false,
+      read: { completed: false, status: '', error: '' },
+      spell: { completed: false, status: '', attempts: 0, audioReady: false, audioFailed: false },
+    };
+  }
+
+  function startDualPrototype() {
+    cleanupMedia();
+    session = null;
+    dualPrototypeState = defaultDualPrototypeState();
+    currentView = 'dual-prototype';
+    if (history.pushState) {
+      history.pushState(
+        Object.assign({}, history.state || {}, {
+          wordlabView: 'hard-words',
+          dualPrototype: true,
+        }),
+        '',
+        location.href,
+      );
+    }
+    renderDualPrototype();
+    scrollToTop();
+  }
+
+  function renderDualPrototype() {
+    if (!dualPrototypeState) return renderHardWordsCatalog();
+    currentView = 'dual-prototype';
+    setActiveNav('hard-words');
+    var state = dualPrototypeState;
+    var completed = Number(state.read.completed) + Number(state.spell.completed);
+    main.innerHTML =
+      '<section class="dual-prototype-shell" data-dual-prototype data-dual-word-demo data-dual-step="' +
+      esc(state.step) +
+      '" data-dual-stage="' +
+      esc(state.step) +
+      '"><header class="dual-prototype-head"><button class="text-button" type="button" data-action="dual-exit" data-dual-exit>← 难词表</button><p>' +
+      completed +
+      ' / 2</p></header><div class="hard-word-practice-track" aria-hidden="true"><i style="width:' +
+      completed * 50 +
+      '%"></i></div>' +
+      renderDualPrototypeStep(state) +
+      '</section>';
+    var field = main.querySelector('input:not(:disabled)');
+    if (field) field.focus({ preventScroll: true });
+  }
+
+  function renderDualPrototypeStep(state) {
+    if (state.step === 'read-cold') return renderDualReadCold(state);
+    if (state.step === 'read-compare') return renderDualReadCompare();
+    if (state.step === 'spell-cold') return renderDualSpellCold(state);
+    if (state.step === 'spell-repair') return renderDualSpellRepair(state);
+    if (state.step === 'summary') return renderDualSummary(state);
+    return renderDualChoice(state);
+  }
+
+  function renderDualChoice(state) {
+    var readDone = state.read.completed;
+    var spellDone = state.spell.completed;
+    return (
+      '<article class="panel dual-prototype-card dual-choice" data-dual-choice><p class="eyebrow">' +
+      (state.previewRetest ? 'NO-HINT RETEST PREVIEW' : 'ONE-WORD PROTOTYPE') +
+      '</p><h1>' +
+      (state.previewRetest ? '无提示复测：先练哪一边？' : '先练哪一边？') +
+      '</h1><div class="dual-direction-grid">' +
+      '<button class="dual-direction" type="button" data-action="dual-start-read" data-dual-start-read' +
+      (readDone ? ' disabled' : '') +
+      '><span>看词</span><strong>读出来</strong><small>' +
+      (readDone ? dualReadShortStatus(state.read.status) : '先录音，再对照') +
+      '</small></button>' +
+      '<button class="dual-direction" type="button" data-action="dual-start-spell" data-dual-start-spell' +
+      (spellDone ? ' disabled' : '') +
+      '><span>听音</span><strong>写出来</strong><small>' +
+      (spellDone ? dualSpellShortStatus(state.spell.status) : '盲听，不先看词') +
+      '</small></button></div></article>'
+    );
+  }
+
+  function renderDualReadCold(state) {
+    return (
+      '<article class="panel dual-prototype-card dual-read-cold" data-dual-read-cold><p class="eyebrow">看词 → 朗读</p><h1 data-dual-target-word>pronunciation</h1><p>不听范音，先读一遍。</p><div class="dual-record-actions"><button class="primary-button" type="button" data-action="dual-record" data-dual-record>● 开始录音</button><button class="quiet-button" type="button" data-action="dual-skip-read" data-dual-skip-read data-dual-skip>跳过朗读</button></div><p id="recordStatus" class="dual-status" data-dual-record-status role="status" aria-live="polite">' +
+      esc(state.read.error || '录音只保留在当前页面。') +
+      '</p></article>'
+    );
+  }
+
+  function renderDualReadCompare() {
+    var word = findRescueWord('pronunciation');
+    var accent = state.settings.accent === 'us' ? 'us' : 'uk';
+    var ipa = accent === 'us' ? word.ipaUs : word.ipaUk;
+    return (
+      '<article class="panel dual-prototype-card" data-dual-read-compare><p class="eyebrow">对照，不自动判分</p><h1>pronunciation</h1><p class="dual-pronunciation-line">' +
+      esc(ipa) +
+      ' · pro · NUN · ci · A · tion</p><div class="dual-compare-actions"><button class="secondary-button" type="button" data-action="play-recording" data-dual-own-audio data-audio-label="自己的朗读"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">听自己</span></button><button class="audio-button" type="button" data-action="dual-model-audio" data-dual-model-audio data-accent="' +
+      accent +
+      '" data-audio-label="自然范音" data-status-target="dualModelStatus"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">听范音</span></button></div><p id="dualModelStatus" class="dual-status" aria-live="polite">先后回放，检查重音和尾音。</p><div class="dual-footer-actions"><button class="quiet-button" type="button" data-action="dual-rerecord" data-dual-rerecord>重新录音</button><button class="primary-button" type="button" data-action="dual-finish-read" data-dual-finish-read>提交待老师核对</button></div></article>'
+    );
+  }
+
+  function renderDualSpellCold(dual) {
+    var feedback = '';
+    if (dual.spell.audioFailed) feedback = '音频未播放，本次不记错。请重试或跳过。';
+    else if (dual.spell.attempts === 1) feedback = '还不对。再听一次；答案仍隐藏。';
+    return (
+      '<article class="panel dual-prototype-card dual-spell-cold" data-dual-spell-cold><p class="eyebrow">听音 → 拼写</p><h1>听到什么，写什么</h1><button class="listen-orb dual-listen-orb" type="button" data-action="dual-spell-audio" data-dual-spell-audio data-accent="' +
+      (state.settings.accent === 'us' ? 'us' : 'uk') +
+      '" data-audio-label="盲听音频" data-status-target="dualSpellAudioStatus" aria-label="播放盲听音频"><span class="audio-control-icon" aria-hidden="true">▶</span></button><p id="dualSpellAudioStatus" class="dual-status" aria-live="polite">播放后才能输入。</p><form class="hard-word-answer-form" data-dual-spell-form><label><span class="sr-only">输入听到的拼写</span><input name="answer" data-dual-spell-input autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="输入听到的拼写"' +
+      (dual.spell.audioReady && !dual.spell.audioFailed ? '' : ' disabled') +
+      '></label><button class="primary-button" type="submit" data-dual-spell-check' +
+      (dual.spell.audioReady && !dual.spell.audioFailed ? '' : ' disabled') +
+      '>检查</button></form><p class="feedback' +
+      (feedback ? ' is-wrong' : '') +
+      '" data-dual-spell-feedback role="status" aria-live="polite">' +
+      esc(feedback) +
+      '</p><button class="quiet-button" type="button" data-action="dual-skip-spell" data-dual-skip-spell data-dual-skip>跳过拼写</button></article>'
+    );
+  }
+
+  function renderDualSpellRepair(state) {
+    return (
+      '<article class="panel dual-prototype-card" data-dual-spell-repair><p class="eyebrow">修复词形</p><div class="dual-spelling-pattern" aria-label="拼写分块">pro · nun · ci · a · tion</div><form class="hard-word-answer-form" data-dual-repair-form><label><span class="sr-only">重新拼写完整单词</span><input name="answer" data-dual-repair-input autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="重新拼写完整单词"></label><button class="primary-button" type="submit" data-dual-repair-check>重新拼写</button></form><p class="feedback' +
+      (state.spell.status === 'repair_wrong' ? ' is-wrong' : '') +
+      '" data-dual-repair-feedback role="status" aria-live="polite">' +
+      (state.spell.status === 'repair_wrong' ? '再对照分块，写出完整单词。' : '') +
+      '</p><button class="quiet-button" type="button" data-action="dual-skip-spell" data-dual-skip-spell data-dual-skip>先跳过</button></article>'
+    );
+  }
+
+  function renderDualSummary(state) {
+    return (
+      '<article class="panel dual-prototype-card dual-summary" data-dual-summary><p class="eyebrow">PROTOTYPE COMPLETE</p><h1>本词样板完成</h1><div class="dual-evidence"><p><span>看词朗读</span><strong>' +
+      esc(dualReadShortStatus(state.read.status)) +
+      '</strong></p><p><span>听音拼写</span><strong>' +
+      esc(dualSpellShortStatus(state.spell.status)) +
+      '</strong></p></div><p class="dual-summary-note">这是即时样板，不等于长期掌握；朗读录音仍需老师人工核对。</p><div class="dual-footer-actions"><button class="secondary-button" type="button" data-action="dual-preview-retest" data-dual-preview-retest>预览无提示复测</button><button class="primary-button" type="button" data-action="dual-exit" data-dual-exit>返回难词表</button></div></article>'
+    );
+  }
+
+  function dualReadShortStatus(status) {
+    if (status === 'recorded_pending_review') return '已录音 · 待人工核对';
+    if (status === 'skipped') return '已跳过 · 未判定';
+    return '未完成';
+  }
+
+  function dualSpellShortStatus(status) {
+    if (status === 'independent') return '首次独立拼对';
+    if (status === 'retry_correct') return '重听后拼对 · 非首答';
+    if (status === 'assisted') return '修复后完成 · 有提示';
+    if (status === 'skipped') return '已跳过 · 未掌握';
+    return '未完成';
+  }
+
+  function beginDualDirection(direction) {
+    if (!dualPrototypeState) return;
+    cleanupMedia();
+    if (direction === 'read' && !dualPrototypeState.read.completed) {
+      dualPrototypeState.step = 'read-cold';
+      dualPrototypeState.read.error = '';
+    } else if (direction === 'spell' && !dualPrototypeState.spell.completed) {
+      dualPrototypeState.step = 'spell-cold';
+      dualPrototypeState.spell.audioReady = false;
+      dualPrototypeState.spell.audioFailed = false;
+    } else {
+      return;
+    }
+    renderDualPrototype();
+  }
+
+  function finishDualDirection() {
+    if (!dualPrototypeState) return;
+    cleanupMedia();
+    dualPrototypeState.step =
+      dualPrototypeState.read.completed && dualPrototypeState.spell.completed
+        ? 'summary'
+        : 'choice';
+    renderDualPrototype();
+  }
+
+  function playDualModelAudio(button, blind) {
+    if (!dualPrototypeState) return;
+    if (toggleCurrentPlayback(button)) return;
+    var word = findRescueWord('pronunciation');
+    var accent = button.dataset.accent === 'us' ? 'us' : 'uk';
+    var source = rescueAudioSource(word, accent);
+    if (!source) {
+      if (blind) lockDualSpellAudioFailure();
+      showToast('这条自然语音尚未就绪。');
+      return;
+    }
+    startAudioPlayback(source + '?v=' + encodeURIComponent(AUDIO_ASSET_VERSION), button, 1, {
+      dualBlind: Boolean(blind),
+    });
+  }
+
+  function unlockDualSpellControls() {
+    if (!dualPrototypeState || dualPrototypeState.step !== 'spell-cold') return;
+    dualPrototypeState.spell.audioReady = true;
+    dualPrototypeState.spell.audioFailed = false;
+    main
+      .querySelectorAll('[data-dual-spell-input], [data-dual-spell-check]')
+      .forEach(function (control) {
+        control.disabled = false;
+      });
+    var input = main.querySelector('[data-dual-spell-input]');
+    if (input) input.focus({ preventScroll: true });
+  }
+
+  function lockDualSpellAudioFailure() {
+    if (!dualPrototypeState || dualPrototypeState.step !== 'spell-cold') return;
+    dualPrototypeState.spell.audioReady = false;
+    dualPrototypeState.spell.audioFailed = true;
+    main
+      .querySelectorAll('[data-dual-spell-input], [data-dual-spell-check]')
+      .forEach(function (control) {
+        control.disabled = true;
+      });
+    var feedback = main.querySelector('[data-dual-spell-feedback]');
+    if (feedback) {
+      feedback.className = 'feedback is-wrong';
+      feedback.textContent = '音频未播放，本次不记错。请重试或跳过。';
+    }
+  }
+
+  function checkDualColdSpelling(rawAnswer) {
+    if (!dualPrototypeState || dualPrototypeState.step !== 'spell-cold') return;
+    var spell = dualPrototypeState.spell;
+    var answer = String(rawAnswer || '').trim();
+    var feedback = main.querySelector('[data-dual-spell-feedback]');
+    if (!spell.audioReady) {
+      if (feedback) feedback.textContent = '音频真正播放后才能作答。';
+      return;
+    }
+    if (!answer) {
+      if (feedback) feedback.textContent = '先输入拼写，或选择跳过。';
+      return;
+    }
+    spell.attempts += 1;
+    if (normaliseAnswer(answer) === 'pronunciation') {
+      spell.status = spell.attempts === 1 ? 'independent' : 'retry_correct';
+      spell.completed = true;
+      finishDualDirection();
+      return;
+    }
+    stopAudio();
+    spell.audioReady = false;
+    if (spell.attempts >= 2) {
+      spell.status = '';
+      dualPrototypeState.step = 'spell-repair';
+    }
+    renderDualPrototype();
+  }
+
+  function checkDualRepairSpelling(rawAnswer) {
+    if (!dualPrototypeState || dualPrototypeState.step !== 'spell-repair') return;
+    var answer = String(rawAnswer || '').trim();
+    if (!answer) {
+      var blankFeedback = main.querySelector('[data-dual-repair-feedback]');
+      if (blankFeedback) blankFeedback.textContent = '请写出完整单词，或选择跳过。';
+      return;
+    }
+    if (normaliseAnswer(answer) !== 'pronunciation') {
+      dualPrototypeState.spell.status = 'repair_wrong';
+      renderDualPrototype();
+      return;
+    }
+    dualPrototypeState.spell.status = 'assisted';
+    dualPrototypeState.spell.completed = true;
+    finishDualDirection();
   }
 
   function startHardWordPractice(mode, wordIds) {
@@ -7871,6 +8165,42 @@
     if (action === 'hard-word-skip') return skipHardWordPractice();
     if (action === 'hard-word-next') return nextHardWordPractice();
     if (action === 'hard-word-exit') return navigate('hard-words');
+    if (action === 'start-dual-prototype') return startDualPrototype();
+    if (action === 'dual-exit') return navigate('hard-words');
+    if (action === 'dual-start-read') return beginDualDirection('read');
+    if (action === 'dual-start-spell') return beginDualDirection('spell');
+    if (action === 'dual-record') return toggleRecording(button);
+    if (action === 'dual-rerecord') {
+      cleanupMedia();
+      dualPrototypeState.step = 'read-cold';
+      return renderDualPrototype();
+    }
+    if (action === 'dual-finish-read') {
+      if (!dualPrototypeState || !recordUrl) return;
+      dualPrototypeState.read.completed = true;
+      dualPrototypeState.read.status = 'recorded_pending_review';
+      return finishDualDirection();
+    }
+    if (action === 'dual-skip-read') {
+      if (!dualPrototypeState) return;
+      dualPrototypeState.read.completed = true;
+      dualPrototypeState.read.status = 'skipped';
+      return finishDualDirection();
+    }
+    if (action === 'dual-model-audio') return playDualModelAudio(button, false);
+    if (action === 'dual-spell-audio') return playDualModelAudio(button, true);
+    if (action === 'dual-skip-spell') {
+      if (!dualPrototypeState) return;
+      dualPrototypeState.spell.completed = true;
+      dualPrototypeState.spell.status = 'skipped';
+      return finishDualDirection();
+    }
+    if (action === 'dual-preview-retest') {
+      cleanupMedia();
+      dualPrototypeState = defaultDualPrototypeState();
+      dualPrototypeState.previewRetest = true;
+      return renderDualPrototype();
+    }
     if (action === 'hard-words-difficulty') {
       hardWordsDifficulty = String(button.dataset.difficulty || 'all');
       renderHardWordsContent();
@@ -8363,6 +8693,18 @@
   }
 
   function handleMainSubmit(event) {
+    var dualSpellForm = event.target.closest('[data-dual-spell-form]');
+    if (dualSpellForm) {
+      event.preventDefault();
+      checkDualColdSpelling(new FormData(dualSpellForm).get('answer'));
+      return;
+    }
+    var dualRepairForm = event.target.closest('[data-dual-repair-form]');
+    if (dualRepairForm) {
+      event.preventDefault();
+      checkDualRepairSpelling(new FormData(dualRepairForm).get('answer'));
+      return;
+    }
     var hardWordSpellForm = event.target.closest('[data-hard-word-spell-form]');
     if (hardWordSpellForm) {
       event.preventDefault();
@@ -10656,6 +10998,7 @@
       updatePlaybackButton(button, 'idle');
       updatePlaybackMessage(button, 'error');
       if (adaptiveEvidence && adaptiveEvidence.rescueBlind) lockRescueAudioFailure();
+      if (adaptiveEvidence && adaptiveEvidence.dualBlind) lockDualSpellAudioFailure();
       showToast('自然语音加载失败，请检查网络后重试。');
     };
 
@@ -10680,6 +11023,7 @@
       }
       unlockSoundPrecheck(button);
       if (adaptiveEvidence && adaptiveEvidence.rescueBlind) unlockRescueAnswerControls(button);
+      if (adaptiveEvidence && adaptiveEvidence.dualBlind) unlockDualSpellControls();
     });
     audio.addEventListener('waiting', function () {
       if (!isCurrent() || playbackDesired !== 'playing') return;
@@ -10730,11 +11074,13 @@
     updatePlaybackMessage(button, 'loading');
     armPlaybackTimeout(token, audio, button, {
       rescueBlind: Boolean(button && button.matches('[data-rescue-play]')),
+      dualBlind: Boolean(button && button.matches('[data-dual-spell-audio]')),
     });
     audio.play().catch(function (error) {
       if (playbackToken !== token || currentAudio !== audio || playingButton !== button) return;
       if (error && error.name === 'AbortError') return;
       if (button && button.matches('[data-rescue-play]')) lockRescueAudioFailure();
+      if (button && button.matches('[data-dual-spell-audio]')) lockDualSpellAudioFailure();
       stopAudio();
       updatePlaybackMessage(button, 'error');
       showToast('自然语音无法继续播放，请重新点击播放。');
@@ -10755,6 +11101,7 @@
         return;
       }
       if (adaptiveEvidence && adaptiveEvidence.rescueBlind) lockRescueAudioFailure();
+      if (adaptiveEvidence && adaptiveEvidence.dualBlind) lockDualSpellAudioFailure();
       stopAudio();
       updatePlaybackMessage(button, 'error');
       showToast('自然语音加载超时，请检查网络后重试。');
@@ -10830,7 +11177,12 @@
       !navigator.mediaDevices.getUserMedia ||
       typeof MediaRecorder === 'undefined'
     ) {
-      showToast('当前浏览器不支持本地录音；听音和其余训练仍可使用。');
+      if (dualPrototypeState && dualPrototypeState.step === 'read-cold') {
+        dualPrototypeState.read.error = '当前浏览器未检测到录音能力。本项不判错，可跳过。';
+        renderDualPrototype();
+      } else {
+        showToast('当前浏览器不支持本地录音；听音和其余训练仍可使用。');
+      }
       return;
     }
     try {
@@ -10843,6 +11195,7 @@
       });
       recorder.addEventListener('stop', finishRecording, { once: true });
       recorder.start();
+      recordStartedAt = Date.now();
       button.textContent = '■ 停止录音';
       button.classList.add('recording-state');
       var status = document.getElementById('recordStatus');
@@ -10852,13 +11205,23 @@
         if (recorder && recorder.state === 'recording') recorder.stop();
       }, 8000);
     } catch (error) {
-      showToast('未获得麦克风权限。你仍可继续听音、拼写和词形训练。');
+      if (dualPrototypeState && dualPrototypeState.step === 'read-cold') {
+        dualPrototypeState.read.error = '麦克风未授权。本项不会判错，可重试或跳过。';
+        renderDualPrototype();
+      } else {
+        showToast('未获得麦克风权限。你仍可继续听音、拼写和词形训练。');
+      }
     }
   }
 
   function finishRecording() {
     clearTimeout(recordTimer);
-    if (!session || currentSkill() !== 'sound') {
+    var isDualRead = Boolean(
+      dualPrototypeState &&
+      currentView === 'dual-prototype' &&
+      dualPrototypeState.step === 'read-cold',
+    );
+    if ((!session || currentSkill() !== 'sound') && !isDualRead) {
       if (recordStream) {
         recordStream.getTracks().forEach(function (track) {
           track.stop();
@@ -10869,14 +11232,30 @@
       recorder = null;
       return;
     }
+    var elapsed = Math.max(0, Date.now() - recordStartedAt);
     var type = recorder && recorder.mimeType ? recorder.mimeType : 'audio/webm';
     var blob = new Blob(recordChunks, { type: type });
-    recordUrl = URL.createObjectURL(blob);
     if (recordStream) {
       recordStream.getTracks().forEach(function (track) {
         track.stop();
       });
       recordStream = null;
+    }
+    if (isDualRead && (elapsed < 450 || blob.size < 100)) {
+      recordChunks = [];
+      recorder = null;
+      recordStartedAt = 0;
+      dualPrototypeState.read.error = '录音太短，没有形成可核对的朗读。请完整读一遍。';
+      renderDualPrototype();
+      return;
+    }
+    recordUrl = URL.createObjectURL(blob);
+    if (isDualRead) {
+      recorder = null;
+      recordStartedAt = 0;
+      dualPrototypeState.step = 'read-compare';
+      renderDualPrototype();
+      return;
     }
     var recordButton = document.querySelector('[data-action="record-toggle"]');
     var playButton = document.querySelector('[data-action="play-recording"]');
@@ -10888,6 +11267,7 @@
     var status = document.getElementById('recordStatus');
     if (status) status.textContent = '录音完成。请先播范音，再回放自己，检查重音和尾音。';
     recorder = null;
+    recordStartedAt = 0;
   }
 
   function playRecording(button) {
@@ -10912,6 +11292,7 @@
       recordStream = null;
     }
     recorder = null;
+    recordStartedAt = 0;
     revokeRecording();
   }
 

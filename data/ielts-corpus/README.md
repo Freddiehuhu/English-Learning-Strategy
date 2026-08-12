@@ -97,28 +97,32 @@ not fetched or rendered by the learner page.
 ## Learner difficulty archive
 
 `learner-difficulty/student-hard-words-2026-08-12.json` is a separate,
-learner-specific evidence archive. Across the initial and follow-up reports it
-contains 464 non-empty input lines, 465 normalized reports after one confirmed
-joined-token split, and 462 unique normalized headwords. The three repeated
-headwords retain both reports; their effective gaps are the union of all
-reports, so `mature`, `satisfaction` and `previous` now require both
-pronunciation and meaning work. The resulting routing groups contain 194
-pronunciation-only, 111 meaning-only and 157 both-gap entries. These labels are
-routing evidence only; they are not lexical or mastery evidence. The follow-up
-batch contributes 22 of the 464 non-empty input lines.
+learner-specific evidence archive. Across the initial report and two follow-up
+reports it contains 755 non-empty input lines, 756 normalized reports after one
+confirmed joined-token split, and 751 unique normalized headwords. The five
+repeated headwords retain every report; their effective gaps are the union of
+all reports. `mature`, `satisfaction` and `previous` require both pronunciation
+and meaning work, while the repeated `scare` and `hesitate` reports reinforce
+their existing routes. The resulting routing groups contain 215
+pronunciation-only, 223 meaning-only and 313 both-gap entries. These labels are
+routing evidence only; they are not lexical or mastery evidence. The first and
+second follow-up batches contribute 22 and 291 non-empty input lines,
+respectively.
 
 The archive preserves every raw token alongside confirmed corrections. For
 example, the reported `pluse3` remains available as raw evidence while its
-normalized headword is recorded as `pulse` with a student-confirmed correction
-note. It withholds definitions, POS, CEFR and IPA, and every sense remains
-context-pending until a source sentence or other sufficient evidence is
-available.
+normalized headword is recorded as `pulse` with a user-confirmation source.
+The latest report likewise retains `consritution3` and `bridgeroom3` as raw
+evidence while publishing the user-confirmed normalized forms `constitution`
+and `bridegroom`. It withholds definitions, POS, CEFR and IPA, and every sense
+remains context-pending until a source sentence or other sufficient evidence
+is available.
 
-The public UI exposes all 462 unique headwords as a searchable list with
+The public UI exposes all 751 unique headwords as a searchable list with
 difficulty, review-status and content-status filters. Every entry supports a
 meaning-independent orthographic recall task and a free sentence draft that is
 always queued for human review. Only 12 separately source-audited words are
-available in the initial two-round sound-form rescue lesson; the other 450
+available in the initial two-round sound-form rescue lesson; the other 739
 entries remain `awaiting_exercise_authoring` for pronunciation, meaning, IPA,
 model-sentence and grammar content.
 `instant` still lacks its original listening sentence, so its meaning prompt is

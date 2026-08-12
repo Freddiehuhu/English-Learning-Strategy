@@ -47,19 +47,19 @@ class LearnerDifficultyArchiveTests(unittest.TestCase):
         items = archive["items"]
 
         self.assertEqual(archive["statistics"], archive_builder.EXPECTED_STATISTICS)
-        self.assertEqual(len(items), 462)
+        self.assertEqual(len(items), 751)
         self.assertEqual(
             Counter(item["difficulty_code"] for item in items),
-            Counter({1: 194, 2: 111, 3: 157}),
+            Counter({1: 215, 2: 223, 3: 313}),
         )
         self.assertEqual(
             Counter(item["corpus_match_status"] for item in items),
-            Counter({"active": 388, "candidate_only": 34, "unmatched": 40}),
+            Counter({"active": 621, "candidate_only": 54, "unmatched": 76}),
         )
-        self.assertEqual(len({item["normalized_headword"] for item in items}), 462)
+        self.assertEqual(len({item["normalized_headword"] for item in items}), 751)
         self.assertEqual(
             [item["item_index"] for item in items],
-            list(range(1, 463)),
+            list(range(1, 752)),
         )
         for item in items:
             self.assertEqual(
@@ -93,8 +93,14 @@ class LearnerDifficultyArchiveTests(unittest.TestCase):
                 "dustinguish3": [("distinguish", 3)],
                 "botabical": [("botanical", 1)],
                 "instant2alcohol": [("instant", 2), ("alcohol", 1)],
+                "consritution3": [("constitution", 3)],
+                "bridgeroom3": [("bridegroom", 3)],
             },
         )
+        for item, report in corrected:
+            self.assertEqual(
+                report["correction_source"], "user_confirmation_2026-08-12"
+            )
         pulse = next(
             item for item, _report in corrected if item["normalized_headword"] == "pulse"
         )
@@ -157,19 +163,35 @@ class LearnerDifficultyArchiveTests(unittest.TestCase):
         }
         self.assertTrue(followup_words.issubset(by_word))
 
+        second_followup_words = {
+            "blanket",
+            "constitution",
+            "bridegroom",
+            "cheque",
+            "sceptical",
+            "ambassadress",
+            "chain store",
+            "panic",
+        }
+        self.assertTrue(second_followup_words.issubset(by_word))
+        self.assertNotIn("consritution", by_word)
+        self.assertNotIn("bridgeroom", by_word)
+        self.assertEqual(by_word["scare"]["report_count"], 2)
+        self.assertEqual(by_word["hesitate"]["report_count"], 2)
+
     def test_public_catalog_is_anonymous_minimal_and_complete(self):
         catalog = self.load_public_catalog()
         entries = catalog["entries"]
         self.assertEqual(catalog["schemaVersion"], 1)
         self.assertFalse(catalog["privacy"]["containsLearnerIdentity"])
-        self.assertEqual(len(entries), 462)
+        self.assertEqual(len(entries), 751)
         self.assertEqual(
             Counter(entry["difficultyCode"] for entry in entries),
-            Counter({1: 194, 2: 111, 3: 157}),
+            Counter({1: 215, 2: 223, 3: 313}),
         )
         self.assertEqual(
             Counter(entry["practiceStatus"] for entry in entries),
-            Counter({"awaiting_exercise_authoring": 450, "in_rescue_training": 12}),
+            Counter({"awaiting_exercise_authoring": 739, "in_rescue_training": 12}),
         )
         exact_public_fields = {
             "id",
@@ -210,12 +232,15 @@ class LearnerDifficultyArchiveTests(unittest.TestCase):
             )
             self.assertGreaterEqual(entry["reportCount"], 1)
             ids.add(entry["id"])
-        self.assertEqual(len(ids), 462)
-        self.assertEqual(sum(entry["reportCount"] for entry in entries), 465)
+        self.assertEqual(len(ids), 751)
+        self.assertEqual(sum(entry["reportCount"] for entry in entries), 756)
 
         serialized = json.dumps(catalog, ensure_ascii=False)
         self.assertNotIn("pluse3", serialized)
         self.assertNotIn("student-hard-words-2026-08-12-followup-1", serialized)
+        self.assertNotIn("consritution3", serialized)
+        self.assertNotIn("bridgeroom3", serialized)
+        self.assertNotIn("student-hard-words-2026-08-12-followup-2", serialized)
 
     def test_archive_contains_no_unapproved_lexical_answers(self):
         archive = self.load_archive()
