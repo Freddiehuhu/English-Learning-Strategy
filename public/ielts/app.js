@@ -654,6 +654,15 @@
     image: 'all',
   };
   var corpusVisible = 60;
+  var hardWordsCatalog = null;
+  var hardWordsLoadState = 'idle';
+  var hardWordsLoadError = '';
+  var hardWordsQuery = '';
+  var hardWordsSearchTimer = null;
+  var hardWordsDifficulty = 'all';
+  var hardWordsReviewFilter = 'all';
+  var hardWordsPracticeFilter = 'all';
+  var hardWordsVisible = 60;
   var currentView = 'today';
   var session = null;
   var currentAudio = null;
@@ -3334,6 +3343,8 @@
       renderProgress();
     } else if (view === 'practice') {
       renderPracticeHub();
+    } else if (view === 'hard-words') {
+      renderHardWordsCatalog();
     } else if (view === 'visual') {
       renderVisualLab();
     } else if (SKILLS.indexOf(view) >= 0) {
@@ -3400,11 +3411,11 @@
       esc(rescueSummary.roundLabel) +
       '</span><h2>声形急救</h2><p>' +
       esc(rescueSummary.copy) +
-      '</p></div><button class="primary-button" type="button" data-action="start-rescue"' +
+      '</p></div><div class="rescue-entry-actions"><button class="primary-button" type="button" data-action="start-rescue"' +
       (rescueSummary.canStart ? '' : ' disabled') +
       '>' +
       esc(rescueSummary.buttonLabel) +
-      '</button></article>' +
+      '</button><button class="text-button" type="button" data-action="go-view" data-view="hard-words">查看全部学生难词</button></div></article>' +
       (rescuePendingContextCount()
         ? '<p class="rescue-context-alert" role="status">' +
           rescuePendingContextCount() +
@@ -3585,8 +3596,458 @@
       compactPracticeCard('⇄', '词形', 'forms') +
       compactPracticeCard('¶', '句用', 'sentence') +
       '</section>' +
+      '<button class="panel semantic-library-link hard-words-library-link" type="button" data-action="go-view" data-view="hard-words"><span aria-hidden="true">≡</span><span><strong>学生难词总表</strong><small>按不会读、不会意思、两项都不会筛选</small></span><i aria-hidden="true">→</i></button>' +
       '<button class="panel semantic-library-link" type="button" data-action="go-view" data-view="visual"><span aria-hidden="true">◫</span><span><strong>语义与图像题库</strong><small>近反义 · 同音同形 · 分类</small></span><i aria-hidden="true">→</i></button>' +
       '</section>';
+  }
+
+  function renderHardWordsCatalog() {
+    currentView = 'hard-words';
+    setActiveNav('hard-words');
+    main.innerHTML =
+      '<section class="page-heading compact-page-heading hard-words-heading"><div><p class="eyebrow">LEARNER WORD LIST</p><h1>学生难词总表</h1><p>这里收录学生亲自标记的难词。未经审校的词只显示词形和困难类型，不提前给答案。</p></div></section>' +
+      '<section class="hard-words-shell" data-hard-words-view>' +
+      '<div data-hard-words-content>' +
+      renderHardWordsLoading() +
+      '</div></section>';
+    if (hardWordsLoadState === 'ready' && hardWordsCatalog) {
+      renderHardWordsContent();
+    } else if (hardWordsLoadState === 'error') {
+      renderHardWordsError();
+    } else {
+      loadHardWordsCatalog(false);
+    }
+  }
+
+  function renderHardWordsLoading() {
+    return (
+      '<div class="panel hard-words-loading" role="status" aria-live="polite">' +
+      '<span class="loading-dot" aria-hidden="true"></span><p>正在载入学生难词……</p></div>'
+    );
+  }
+
+  function loadHardWordsCatalog(force) {
+    if (hardWordsLoadState === 'loading' && !force) return;
+    hardWordsLoadState = 'loading';
+    hardWordsLoadError = '';
+    var mount = document.querySelector('[data-hard-words-content]');
+    if (mount) mount.innerHTML = renderHardWordsLoading();
+    fetchHardWordsCatalog(force ? 'reload' : 'no-cache')
+      .then(acceptHardWordsCatalog)
+      .catch(failHardWordsCatalog);
+  }
+
+  function fetchHardWordsCatalog(cacheMode) {
+    var catalogUrl = './corpus/student-hard-words.json';
+    var networkError = null;
+    return fetch(catalogUrl, { cache: cacheMode })
+      .then(function (response) {
+        if (!response.ok) throw new Error('服务器返回 ' + response.status);
+        return response;
+      })
+      .catch(function (error) {
+        networkError = error;
+        if (!('caches' in window)) throw error;
+        return caches.match(catalogUrl).then(function (cached) {
+          if (cached) return cached;
+          throw networkError;
+        });
+      })
+      .then(function (response) {
+        return response.json();
+      });
+  }
+
+  function acceptHardWordsCatalog(payload) {
+    validateHardWordsCatalog(payload);
+    hardWordsCatalog = payload;
+    hardWordsCatalog.entries.forEach(function (entry) {
+      entry._searchText = normaliseAnswer(
+        String(entry.displayWord || '') + ' ' + String(entry.normalizedHeadword || ''),
+      );
+    });
+    hardWordsLoadState = 'ready';
+    hardWordsLoadError = '';
+    if (currentView === 'hard-words') renderHardWordsContent();
+  }
+
+  function validateHardWordsCatalog(payload) {
+    var allowedReviewStatuses = [
+      'source_audited_for_rescue',
+      'needs_sense_confirmation',
+      'needs_lexical_approval',
+      'needs_lexical_source',
+      'needs_proper_noun_and_sense_review',
+    ];
+    var allowedPracticeStatuses = ['in_rescue_training', 'awaiting_exercise_authoring'];
+    var allowedEntryFields = [
+      'id',
+      'displayWord',
+      'normalizedHeadword',
+      'difficultyCode',
+      'needsPronunciation',
+      'needsMeaning',
+      'abilityTags',
+      'reportCount',
+      'corpusMatchStatus',
+      'reviewStatus',
+      'practiceStatus',
+    ];
+    var requiredOmissions = [
+      'learner_name',
+      'raw_token',
+      'received_at',
+      'batch_id',
+      'lexical_definition',
+      'part_of_speech',
+      'cefr',
+      'ipa',
+    ];
+    if (
+      !payload ||
+      typeof payload !== 'object' ||
+      Array.isArray(payload) ||
+      Number(payload.schemaVersion) !== 1 ||
+      payload.catalogId !== 'student-hard-words-2026-08-12' ||
+      !payload.statistics ||
+      typeof payload.statistics !== 'object' ||
+      !payload.difficultyLegend ||
+      typeof payload.difficultyLegend !== 'object' ||
+      !Array.isArray(payload.entries) ||
+      !payload.privacy ||
+      typeof payload.privacy !== 'object' ||
+      payload.privacy.containsLearnerIdentity !== false ||
+      !Array.isArray(payload.privacy.omittedFields) ||
+      !requiredOmissions.every(function (field) {
+        return payload.privacy.omittedFields.indexOf(field) >= 0;
+      })
+    ) {
+      throw new Error('学生难词文件结构或隐私声明不完整');
+    }
+
+    var ids = new Set();
+    var headwords = new Set();
+    var counts = { 1: 0, 2: 0, 3: 0 };
+    var trainingHeadwords = new Set();
+    var normalizedReportCount = 0;
+    payload.entries.forEach(function (entry) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        throw new Error('学生难词条目结构不完整');
+      }
+      var id = String(entry.id || '');
+      var displayWord = String(entry.displayWord || '').trim();
+      var headword = normaliseAnswer(entry.normalizedHeadword);
+      var code = String(entry.difficultyCode || '');
+      var routeValid =
+        (code === '1' && entry.needsPronunciation === true && entry.needsMeaning === false) ||
+        (code === '2' && entry.needsPronunciation === false && entry.needsMeaning === true) ||
+        (code === '3' && entry.needsPronunciation === true && entry.needsMeaning === true);
+      var reportCount = Number(entry.reportCount);
+      var reportCountValid = Number.isInteger(reportCount) && reportCount >= 1;
+      var unexpectedEntryField = Object.keys(entry).some(function (field) {
+        return allowedEntryFields.indexOf(field) < 0;
+      });
+      var expectedAbilityTags =
+        code === '1'
+          ? ['pronunciation']
+          : code === '2'
+            ? ['meaning']
+            : ['pronunciation', 'meaning'];
+      var abilityTagsValid =
+        Array.isArray(entry.abilityTags) &&
+        entry.abilityTags.length === expectedAbilityTags.length &&
+        expectedAbilityTags.every(function (tag) {
+          return entry.abilityTags.indexOf(tag) >= 0;
+        });
+      var sourcePracticePairValid =
+        (entry.reviewStatus === 'source_audited_for_rescue') ===
+        (entry.practiceStatus === 'in_rescue_training');
+      if (
+        !id ||
+        !displayWord ||
+        !headword ||
+        normaliseAnswer(displayWord) !== headword ||
+        ids.has(id) ||
+        headwords.has(headword) ||
+        !routeValid ||
+        !abilityTagsValid ||
+        !reportCountValid ||
+        unexpectedEntryField ||
+        ['active', 'candidate_only', 'unmatched'].indexOf(entry.corpusMatchStatus) < 0 ||
+        allowedReviewStatuses.indexOf(entry.reviewStatus) < 0 ||
+        allowedPracticeStatuses.indexOf(entry.practiceStatus) < 0 ||
+        !sourcePracticePairValid
+      ) {
+        throw new Error('学生难词条目未通过一致性或隐私校验');
+      }
+      ids.add(id);
+      headwords.add(headword);
+      counts[code] += 1;
+      normalizedReportCount += reportCount;
+      if (entry.practiceStatus === 'in_rescue_training') trainingHeadwords.add(headword);
+    });
+
+    var reportedCounts = payload.statistics.difficulty_counts || {};
+    var publishedRescueHeadwords = new Set(
+      RESCUE_WORDS.map(function (word) {
+        return normaliseAnswer(word.word);
+      }),
+    );
+    var trainingMatchesPublished =
+      trainingHeadwords.size === publishedRescueHeadwords.size &&
+      Array.from(trainingHeadwords).every(function (headword) {
+        return publishedRescueHeadwords.has(headword);
+      });
+    if (
+      payload.entries.length !== 462 ||
+      Number(payload.statistics.unique_headwords) !== 462 ||
+      normalizedReportCount !== 465 ||
+      Number(reportedCounts[1]) !== 194 ||
+      Number(reportedCounts[2]) !== 111 ||
+      Number(reportedCounts[3]) !== 157 ||
+      Number(payload.statistics.normalized_reports) !== normalizedReportCount ||
+      Number(payload.statistics.duplicate_report_count) !==
+        normalizedReportCount - payload.entries.length ||
+      counts[1] !== 194 ||
+      counts[2] !== 111 ||
+      counts[3] !== 157 ||
+      !trainingMatchesPublished
+    ) {
+      throw new Error('学生难词统计或练习清单与条目不一致');
+    }
+  }
+
+  function failHardWordsCatalog(error) {
+    hardWordsCatalog = null;
+    hardWordsLoadState = 'error';
+    hardWordsLoadError = error && error.message ? error.message : '网络请求失败';
+    if (currentView === 'hard-words') renderHardWordsError();
+  }
+
+  function renderHardWordsError() {
+    var mount = document.querySelector('[data-hard-words-content]');
+    if (!mount) return;
+    mount.innerHTML =
+      '<div class="panel hard-words-error" role="alert"><strong>难词表暂时没有载入</strong><p>' +
+      esc(hardWordsLoadError) +
+      '。可以检查网络后重试，其他训练不受影响。</p><button class="primary-button" type="button" data-action="hard-words-retry">重新载入</button></div>';
+  }
+
+  function hardWordsCounts(entries) {
+    return entries.reduce(
+      function (counts, entry) {
+        var code = String(entry.difficultyCode || '');
+        if (Object.prototype.hasOwnProperty.call(counts, code)) counts[code] += 1;
+        return counts;
+      },
+      { 1: 0, 2: 0, 3: 0 },
+    );
+  }
+
+  function renderHardWordsContent() {
+    var mount = document.querySelector('[data-hard-words-content]');
+    if (!mount || !hardWordsCatalog) return;
+    var entries = hardWordsCatalog.entries;
+    var counts = hardWordsCounts(entries);
+    mount.innerHTML =
+      '<section class="hard-words-stats" aria-label="学生难词统计">' +
+      hardWordsStat(entries.length, '全部难词', 'all') +
+      hardWordsStat(counts[1], '不会读', '1') +
+      hardWordsStat(counts[2], '不会意思', '2') +
+      hardWordsStat(counts[3], '两项都不会', '3') +
+      '</section>' +
+      '<section class="panel hard-words-controls" aria-label="筛选学生难词">' +
+      '<label class="hard-words-search"><span>搜索单词或短语</span><input type="search" value="' +
+      esc(hardWordsQuery) +
+      '" placeholder="例如 maturity" autocomplete="off" data-action="hard-words-search"></label>' +
+      '<div class="hard-words-selects">' +
+      hardWordsSelect(
+        'review',
+        '审校状态',
+        [
+          ['all', '全部审校状态'],
+          ['source_audited_for_rescue', '已进入练习'],
+          ['needs_sense_confirmation', '待确认原句义项'],
+          ['needs_lexical_approval', '待词库审核'],
+          ['needs_lexical_source', '待补权威来源'],
+          ['needs_proper_noun_and_sense_review', '待专名与义项核对'],
+        ],
+        hardWordsReviewFilter,
+      ) +
+      hardWordsSelect(
+        'practice',
+        '练习状态',
+        [
+          ['all', '全部练习状态'],
+          ['in_rescue_training', '正在训练'],
+          ['awaiting_exercise_authoring', '练习待编写'],
+        ],
+        hardWordsPracticeFilter,
+      ) +
+      '</div></section>' +
+      '<section class="hard-words-results" aria-live="polite"><div class="hard-words-result-head"><p>找到 <strong data-hard-words-match-count>0</strong> 个词</p><small>点击“开始练习”只会进入已审校的 12 词关卡</small></div><div data-hard-words-results></div></section>';
+    renderHardWordsResults(true);
+  }
+
+  function hardWordsStat(value, label, difficulty) {
+    var active = hardWordsDifficulty === difficulty;
+    return (
+      '<button class="panel hard-words-stat' +
+      (active ? ' is-active' : '') +
+      '" type="button" data-action="hard-words-difficulty" data-difficulty="' +
+      esc(difficulty) +
+      '" aria-pressed="' +
+      String(active) +
+      '"><strong>' +
+      Number(value || 0).toLocaleString('en-US') +
+      '</strong><span>' +
+      esc(label) +
+      '</span></button>'
+    );
+  }
+
+  function hardWordsSelect(filter, label, options, value) {
+    return (
+      '<label><span>' +
+      esc(label) +
+      '</span><select data-action="hard-words-filter" data-filter="' +
+      esc(filter) +
+      '">' +
+      options
+        .map(function (option) {
+          return (
+            '<option value="' +
+            esc(option[0]) +
+            '"' +
+            (option[0] === value ? ' selected' : '') +
+            '>' +
+            esc(option[1]) +
+            '</option>'
+          );
+        })
+        .join('') +
+      '</select></label>'
+    );
+  }
+
+  function filteredHardWords() {
+    if (!hardWordsCatalog) return [];
+    var query = normaliseAnswer(hardWordsQuery);
+    return hardWordsCatalog.entries.filter(function (entry) {
+      if (query && String(entry._searchText || '').indexOf(query) < 0) return false;
+      if (
+        hardWordsDifficulty !== 'all' &&
+        String(entry.difficultyCode || '') !== hardWordsDifficulty
+      ) {
+        return false;
+      }
+      if (hardWordsReviewFilter !== 'all' && entry.reviewStatus !== hardWordsReviewFilter) {
+        return false;
+      }
+      return hardWordsPracticeFilter === 'all' || entry.practiceStatus === hardWordsPracticeFilter;
+    });
+  }
+
+  function renderHardWordsResults(resetVisible) {
+    var mount = document.querySelector('[data-hard-words-results]');
+    if (!mount) return;
+    if (resetVisible) hardWordsVisible = 60;
+    var matches = filteredHardWords();
+    var shown = matches.slice(0, hardWordsVisible);
+    var count = document.querySelector('[data-hard-words-match-count]');
+    if (count) count.textContent = matches.length.toLocaleString('en-US');
+    if (!matches.length) {
+      mount.innerHTML =
+        '<div class="panel empty-state hard-words-empty">没有符合条件的词。换一个搜索词或筛选条件试试。</div>';
+      return;
+    }
+    mount.innerHTML =
+      '<div class="hard-words-list">' +
+      shown.map(renderHardWordRow).join('') +
+      '</div>' +
+      (shown.length < matches.length
+        ? '<button class="secondary-button hard-words-more" type="button" data-action="hard-words-more">再显示 ' +
+          Math.min(60, matches.length - shown.length) +
+          ' 个</button>'
+        : '<p class="hard-words-end">已显示全部 ' + matches.length + ' 个词</p>');
+  }
+
+  function renderHardWordRow(entry) {
+    var rescueWord = findRescueWordForCatalogEntry(entry);
+    var difficulty = String(entry.difficultyCode || '');
+    var needLabels = [];
+    if (entry.needsPronunciation) needLabels.push('读音');
+    if (entry.needsMeaning) needLabels.push('意思');
+    return (
+      '<article class="panel hard-word-row" data-hard-word="' +
+      esc(entry.normalizedHeadword || entry.displayWord) +
+      '" data-difficulty="' +
+      esc(difficulty) +
+      '" data-review-status="' +
+      esc(entry.reviewStatus) +
+      '" data-practice-status="' +
+      esc(entry.practiceStatus) +
+      '"><div class="hard-word-main"><div class="hard-word-title"><strong>' +
+      esc(entry.displayWord || entry.normalizedHeadword) +
+      '</strong><span class="difficulty-badge difficulty-' +
+      esc(difficulty) +
+      '">' +
+      esc(hardWordsDifficultyLabel(difficulty)) +
+      '</span></div><p>需加强：' +
+      esc(needLabels.join('＋') || '待教师确认') +
+      (Number(entry.reportCount || 0) > 1
+        ? ' · 学生重复标记 ' + Number(entry.reportCount) + ' 次'
+        : '') +
+      '</p></div><div class="hard-word-statuses"><span class="status-chip review-status">' +
+      esc(hardWordsReviewLabel(entry.reviewStatus)) +
+      '</span><span class="status-chip practice-status' +
+      (entry.practiceStatus === 'in_rescue_training' ? ' is-ready' : '') +
+      '">' +
+      esc(hardWordsPracticeLabel(entry.practiceStatus)) +
+      '</span></div>' +
+      (rescueWord
+        ? '<button class="secondary-button hard-word-start" type="button" data-action="start-rescue-word" data-word-id="' +
+          esc(rescueWord.id) +
+          '">开始练习</button>'
+        : '<span class="hard-word-waiting" aria-label="练习待编写">待编写</span>') +
+      '</article>'
+    );
+  }
+
+  function findRescueWordForCatalogEntry(entry) {
+    if (
+      !entry ||
+      entry.practiceStatus !== 'in_rescue_training' ||
+      entry.reviewStatus !== 'source_audited_for_rescue'
+    ) {
+      return null;
+    }
+    var headword = normaliseAnswer(entry && (entry.normalizedHeadword || entry.displayWord));
+    return (
+      RESCUE_WORDS.find(function (word) {
+        return normaliseAnswer(word.word) === headword || normaliseAnswer(word.id) === headword;
+      }) || null
+    );
+  }
+
+  function hardWordsDifficultyLabel(code) {
+    if (code === '1') return '不会读';
+    if (code === '2') return '不会意思';
+    if (code === '3') return '读音＋意思';
+    return '待确认';
+  }
+
+  function hardWordsReviewLabel(status) {
+    if (status === 'source_audited_for_rescue') return '已进入练习';
+    if (status === 'needs_sense_confirmation') return '待确认原句义项';
+    if (status === 'needs_lexical_approval') return '待词库审核';
+    if (status === 'needs_lexical_source') return '待补权威来源';
+    if (status === 'needs_proper_noun_and_sense_review') return '待专名与义项核对';
+    return '待审校';
+  }
+
+  function hardWordsPracticeLabel(status) {
+    return status === 'in_rescue_training' ? '正在训练' : '练习待编写';
   }
 
   function compactPracticeCard(icon, title, skill) {
@@ -5049,6 +5510,88 @@
       taskState: {},
       token: Date.now(),
       relearnKeys: [],
+    };
+    skipLockedUntil = 0;
+    renderSession();
+    scrollToTop();
+  }
+
+  function startRescueWordSession(wordId) {
+    var word = findRescueWord(wordId);
+    if (!word) return;
+    ensureDailyClock();
+    var availableSeconds = Math.max(
+      0,
+      DAILY_MAX_SECONDS - Number(state.daily.practicedSeconds || 0),
+    );
+    var pendingEntries = getRelearnState().queue.filter(function (entry) {
+      return entry.wordId === word.id && isRescueGate(entry.skill);
+    });
+    var pendingGates = new Set(
+      pendingEntries.map(function (entry) {
+        return entry.skill;
+      }),
+    );
+    var readyByGate = {};
+    pendingEntries.forEach(function (entry) {
+      if (isRelearnReady(entry, Date.now())) readyByGate[entry.skill] = entry;
+    });
+    var tasks = rescueGatesForWord(word)
+      .filter(function (gate) {
+        var gateState = peekRescueGateState(word.id, gate);
+        if (gate === 'meaningRecall' && gateState && gateState.pendingContext) return true;
+        if (readyByGate[gate]) return true;
+        if (pendingGates.has(gate)) return false;
+        return !rescueTaskComplete(word.id, gate);
+      })
+      .map(function (gate) {
+        var readyEntry = readyByGate[gate];
+        return {
+          wordId: word.id,
+          gate: gate,
+          variant: readyEntry ? Math.max(0, Number(readyEntry.variant) || 0) : 0,
+          attemptCycle: readyEntry ? 1 : 0,
+          relearnKey: readyEntry ? readyEntry.key : '',
+        };
+      })
+      .filter(function (task) {
+        var seconds = Number(RESCUE_GATE_SECONDS[task.gate] || 40);
+        if (seconds > availableSeconds) return false;
+        availableSeconds -= seconds;
+        return true;
+      });
+    if (!tasks.length) {
+      var waiting = pendingEntries.some(function (entry) {
+        return !isRelearnReady(entry, Date.now());
+      });
+      showToast(
+        waiting
+          ? '这个词的错项正在拉开间隔，稍后再练。'
+          : availableSeconds <= 0
+            ? '今天已完成 12 分钟有效训练，明天再继续。'
+            : '这个词的现有受控关卡已完成，可在进度页查看记录。',
+      );
+      return;
+    }
+    var rescue = getRescueState();
+    rescue.round = Number(word.round) || 1;
+    rescue.taskIndex = 0;
+    rescue.tasks = tasks;
+    saveState();
+    pushSessionHistoryState();
+    session = {
+      type: 'rescue',
+      rescueRound: Number(word.round) || 1,
+      wordIndex: 0,
+      stageIndex: 0,
+      stats: {},
+      taskState: {},
+      token: Date.now(),
+      relearnKeys: tasks
+        .map(function (task) {
+          return task.relearnKey;
+        })
+        .filter(Boolean),
     };
     skipLockedUntil = 0;
     renderSession();
@@ -6618,6 +7161,7 @@
 
     if (action === 'start-daily') return startDailySession();
     if (action === 'start-rescue') return startRescueSession();
+    if (action === 'start-rescue-word') return startRescueWordSession(button.dataset.wordId);
     if (action === 'resume-rescue-context') return startRescueContextSession(button.dataset.wordId);
     if (action === 'start-weak') return startWeakSession();
     if (action === 'start-skill') return startSkillSession(button.dataset.skill);
@@ -6640,6 +7184,17 @@
     if (action === 'visual-game-replay') return replayVisualGame(button.dataset.modeId);
     if (action === 'visual-game-audio') return playVisualGameAudio(button);
     if (action === 'corpus-retry') return loadCorpusCatalog(true);
+    if (action === 'hard-words-retry') return loadHardWordsCatalog(true);
+    if (action === 'hard-words-difficulty') {
+      hardWordsDifficulty = String(button.dataset.difficulty || 'all');
+      renderHardWordsContent();
+      return;
+    }
+    if (action === 'hard-words-more') {
+      hardWordsVisible += 60;
+      renderHardWordsResults(false);
+      return;
+    }
     if (action === 'corpus-quick-skill') {
       corpusFilters.skill =
         corpusFilters.skill === button.dataset.skill ? 'all' : button.dataset.skill;
@@ -7146,6 +7701,12 @@
 
   function handleMainChange(event) {
     var input = event.target;
+    if (input.matches('[data-action="hard-words-filter"]')) {
+      if (input.dataset.filter === 'review') hardWordsReviewFilter = input.value;
+      if (input.dataset.filter === 'practice') hardWordsPracticeFilter = input.value;
+      renderHardWordsResults(true);
+      return;
+    }
     if (input.matches('[data-action="corpus-filter"]')) {
       var filter = String(input.dataset.filter || '');
       if (Object.prototype.hasOwnProperty.call(corpusFilters, filter)) {
@@ -7160,6 +7721,14 @@
   }
 
   function handleMainInput(event) {
+    if (event.target.matches('[data-action="hard-words-search"]')) {
+      hardWordsQuery = event.target.value;
+      clearTimeout(hardWordsSearchTimer);
+      hardWordsSearchTimer = setTimeout(function () {
+        renderHardWordsResults(true);
+      }, 90);
+      return;
+    }
     if (event.target.matches('[data-action="corpus-search"]')) {
       corpusQuery = event.target.value;
       clearTimeout(corpusSearchTimer);

@@ -64,9 +64,7 @@ async function clickAndWaitForTaskAdvance(
   const currentPanel = await page.locator('.training-panel').elementHandle();
   expect(currentPanel).toBeTruthy();
   await button.click();
-  await expect
-    .poll(() => currentPanel!.evaluate((element) => !element.isConnected))
-    .toBe(true);
+  await expect.poll(() => currentPanel!.evaluate((element) => !element.isConnected)).toBe(true);
 }
 
 async function resolveIntegratedMeaningIfPresent(page: import('@playwright/test').Page) {
@@ -387,15 +385,13 @@ test('lets learners skip word-form questions before using hints', async ({ page 
   await expect(page.locator('.training-count')).toHaveText('3 / 12');
 });
 
-test('presents one compact daily loop behind three primary navigation choices', async ({
-  page,
-}) => {
+test('presents one compact daily loop behind four primary navigation choices', async ({ page }) => {
   await installControllableAudio(page);
   await page.goto('/ielts/index.html');
 
   await expectToday(page);
-  await expect(page.locator('.side-nav .nav-item')).toHaveCount(3);
-  await expect(page.locator('.bottom-nav .bottom-nav-item')).toHaveCount(3);
+  await expect(page.locator('.side-nav .nav-item')).toHaveCount(4);
+  await expect(page.locator('.bottom-nav .bottom-nav-item')).toHaveCount(4);
   await expect(page.locator('.compact-loop span')).toHaveText([
     '听音',
     '拼写＋辨义',

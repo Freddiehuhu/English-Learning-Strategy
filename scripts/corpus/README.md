@@ -57,9 +57,18 @@ the minimum lexical metadata needed by the learning app.
   target-promotion gate, four-skill labels, supplementary review queues, image
   queue and public catalog.
 - `build_learner_difficulty_archive.py`: rebuilds the 2026-08-12
-  learner-difficulty archive from the preserved report, applies only the
-  explicitly confirmed corrections (including `pluse3` to `pulse`), retains
-  the raw token, and leaves lexical and sense-specific fields fail-closed.
+  learner-difficulty archive and anonymous public catalog from the preserved
+  two report batches (442 initial and 22 follow-up non-empty inputs), applies
+  only the explicitly confirmed corrections (including `pluse3` to `pulse`),
+  retains the three repeated reports, unions pronunciation and meaning gaps
+  without weakening either signal, and leaves lexical and sense-specific
+  fields fail-closed. The website loads the generated 462-entry
+  `public/ielts/corpus/student-hard-words.json` only when the learner opens the
+  dedicated searchable and filterable list. The generated practice status
+  distinguishes the 12 source-audited rescue words from the 450 entries still
+  awaiting exercise authoring. Raw report tokens, dates and batch IDs remain
+  in the repository audit source and archive and are omitted from the learner
+  catalog; only the aggregate report count is published.
 
 The original extractors write these required/legacy columns:
 

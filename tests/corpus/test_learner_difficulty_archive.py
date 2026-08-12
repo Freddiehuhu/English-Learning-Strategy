@@ -17,6 +17,9 @@ ARCHIVE_PATH = (
     / "learner-difficulty"
     / "student-hard-words-2026-08-12.json"
 )
+PUBLIC_CATALOG_PATH = (
+    REPO_ROOT / "public" / "ielts" / "corpus" / "student-hard-words.json"
+)
 SPEC = importlib.util.spec_from_file_location("build_learner_difficulty_archive", MODULE_PATH)
 assert SPEC and SPEC.loader
 archive_builder = importlib.util.module_from_spec(SPEC)
@@ -28,28 +31,35 @@ class LearnerDifficultyArchiveTests(unittest.TestCase):
     def load_archive(self) -> dict:
         return json.loads(ARCHIVE_PATH.read_text(encoding="utf-8"))
 
+    def load_public_catalog(self) -> dict:
+        return json.loads(PUBLIC_CATALOG_PATH.read_text(encoding="utf-8"))
+
     def test_archive_is_exactly_reproducible(self):
         committed = ARCHIVE_PATH.read_text(encoding="utf-8")
         self.assertEqual(committed, archive_builder.serialized_archive())
+        public_committed = PUBLIC_CATALOG_PATH.read_text(encoding="utf-8")
+        self.assertEqual(
+            public_committed, archive_builder.serialized_public_catalog()
+        )
 
     def test_batch_counts_and_difficulty_mapping_are_locked(self):
         archive = self.load_archive()
         items = archive["items"]
 
         self.assertEqual(archive["statistics"], archive_builder.EXPECTED_STATISTICS)
-        self.assertEqual(len(items), 443)
+        self.assertEqual(len(items), 462)
         self.assertEqual(
             Counter(item["difficulty_code"] for item in items),
-            Counter({1: 192, 2: 110, 3: 141}),
+            Counter({1: 194, 2: 111, 3: 157}),
         )
         self.assertEqual(
             Counter(item["corpus_match_status"] for item in items),
-            Counter({"active": 378, "candidate_only": 31, "unmatched": 34}),
+            Counter({"active": 388, "candidate_only": 34, "unmatched": 40}),
         )
-        self.assertEqual(len({item["normalized_headword"] for item in items}), 443)
+        self.assertEqual(len({item["normalized_headword"] for item in items}), 462)
         self.assertEqual(
             [item["item_index"] for item in items],
-            list(range(1, 444)),
+            list(range(1, 463)),
         )
         for item in items:
             self.assertEqual(
@@ -59,13 +69,17 @@ class LearnerDifficultyArchiveTests(unittest.TestCase):
 
     def test_confirmed_corrections_keep_raw_evidence(self):
         archive = self.load_archive()
-        corrected = [
-            item for item in archive["items"] if item["correction_status"] == "confirmed"
-        ]
+        corrected = []
+        for item in archive["items"]:
+            corrected.extend(
+                (item, report)
+                for report in item["reports"]
+                if report["correction_status"] == "confirmed"
+            )
         by_raw: dict[str, list[tuple[str, int]]] = {}
-        for item in corrected:
-            by_raw.setdefault(item["raw_token"], []).append(
-                (item["normalized_headword"], item["difficulty_code"])
+        for item, report in corrected:
+            by_raw.setdefault(report["raw_token"], []).append(
+                (item["normalized_headword"], report["reported_difficulty_code"])
             )
 
         self.assertEqual(
@@ -81,10 +95,127 @@ class LearnerDifficultyArchiveTests(unittest.TestCase):
                 "instant2alcohol": [("instant", 2), ("alcohol", 1)],
             },
         )
-        pulse = next(item for item in corrected if item["normalized_headword"] == "pulse")
+        pulse = next(
+            item for item, _report in corrected if item["normalized_headword"] == "pulse"
+        )
         self.assertEqual(pulse["corpus_match_status"], "active")
         self.assertIsNotNone(pulse["lexical_entry_id"])
-        self.assertIn("student-confirmed typo", pulse["correction_note"])
+        self.assertIn(
+            "student-confirmed typo",
+            next(
+                report["correction_note"]
+                for report in pulse["reports"]
+                if report["correction_status"] == "confirmed"
+            ),
+        )
+
+    def test_duplicate_reports_are_preserved_and_capability_gaps_are_unioned(self):
+        archive = self.load_archive()
+        by_word = {item["normalized_headword"]: item for item in archive["items"]}
+        expected = {
+            "mature": [("mature2", 2), ("mature3", 3)],
+            "satisfaction": [("satisfaction", 1), ("satisfaction2", 2)],
+            "previous": [("previous", 1), ("previous3", 3)],
+        }
+        for word, raw_reports in expected.items():
+            item = by_word[word]
+            self.assertEqual(item["difficulty_code"], 3)
+            self.assertTrue(item["needs_pronunciation"])
+            self.assertTrue(item["needs_meaning"])
+            self.assertEqual(item["report_count"], 2)
+            self.assertEqual(
+                [
+                    (report["raw_token"], report["reported_difficulty_code"])
+                    for report in item["reports"]
+                ],
+                raw_reports,
+            )
+
+        followup_words = {
+            "spite",
+            "purpose",
+            "mature",
+            "maturity",
+            "bullying",
+            "stress-free",
+            "bills",
+            "satisfaction",
+            "compare",
+            "model",
+            "candidates",
+            "experts",
+            "present",
+            "reference",
+            "previous",
+            "eliminate",
+            "familiarity",
+            "hindrance",
+            "distracted",
+            "hesitate",
+            "critically",
+            "get carried away",
+        }
+        self.assertTrue(followup_words.issubset(by_word))
+
+    def test_public_catalog_is_anonymous_minimal_and_complete(self):
+        catalog = self.load_public_catalog()
+        entries = catalog["entries"]
+        self.assertEqual(catalog["schemaVersion"], 1)
+        self.assertFalse(catalog["privacy"]["containsLearnerIdentity"])
+        self.assertEqual(len(entries), 462)
+        self.assertEqual(
+            Counter(entry["difficultyCode"] for entry in entries),
+            Counter({1: 194, 2: 111, 3: 157}),
+        )
+        self.assertEqual(
+            Counter(entry["practiceStatus"] for entry in entries),
+            Counter({"awaiting_exercise_authoring": 450, "in_rescue_training": 12}),
+        )
+        exact_public_fields = {
+            "id",
+            "displayWord",
+            "normalizedHeadword",
+            "difficultyCode",
+            "needsPronunciation",
+            "needsMeaning",
+            "abilityTags",
+            "reportCount",
+            "corpusMatchStatus",
+            "reviewStatus",
+            "practiceStatus",
+        }
+        forbidden = {
+            "learnerName",
+            "learnerId",
+            "rawReports",
+            "rawToken",
+            "receivedAt",
+            "batchId",
+            "rawLineIndex",
+            "definition",
+            "partOfSpeech",
+            "cefr",
+            "ipa",
+            "lexicalEntryId",
+        }
+        ids = set()
+        for entry in entries:
+            self.assertEqual(set(entry), exact_public_fields)
+            self.assertTrue(forbidden.isdisjoint(entry))
+            self.assertEqual(
+                entry["difficultyCode"],
+                archive_builder.difficulty_code_for(
+                    entry["needsPronunciation"], entry["needsMeaning"]
+                ),
+            )
+            self.assertGreaterEqual(entry["reportCount"], 1)
+            ids.add(entry["id"])
+        self.assertEqual(len(ids), 462)
+        self.assertEqual(sum(entry["reportCount"] for entry in entries), 465)
+
+        serialized = json.dumps(catalog, ensure_ascii=False)
+        self.assertNotIn("pluse3", serialized)
+        self.assertNotIn("student-hard-words-2026-08-12-followup-1", serialized)
 
     def test_archive_contains_no_unapproved_lexical_answers(self):
         archive = self.load_archive()

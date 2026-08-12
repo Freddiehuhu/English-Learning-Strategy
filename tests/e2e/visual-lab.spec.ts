@@ -605,7 +605,7 @@ test('keeps image failures recoverable and mobile navigation usable', async ({ p
   });
   expect(layout.overflow).toBeLessThanOrEqual(1);
   if (layout.mobile) {
-    expect(layout.items).toHaveLength(3);
+    expect(layout.items).toHaveLength(4);
     layout.items.forEach((box) => {
       expect(box.width).toBeGreaterThanOrEqual(44);
       expect(box.height).toBeGreaterThanOrEqual(44);
