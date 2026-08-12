@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
@@ -23,6 +24,9 @@ DEFAULT_OUTPUT = (
     / "ielts-corpus"
     / "learner-difficulty"
     / "student-hard-words-2026-08-12.json"
+)
+DEFAULT_PUBLIC_OUTPUT = (
+    REPO_ROOT / "public" / "ielts" / "corpus" / "student-hard-words.json"
 )
 MASTER_PATH = REPO_ROOT / "data" / "ielts-corpus" / "master-vocabulary.tsv"
 CANDIDATE_PATH = (
@@ -472,6 +476,57 @@ concept
 fragrant
 attitude"""
 
+FOLLOWUP_BATCH = """spite3
+purpose1
+mature3
+maturity3
+bullying3
+stress-free3
+bills1
+satisfaction2
+compare2
+model1
+candidates3
+experts3
+present1
+reference3
+previous3
+eliminate3
+familiarity3
+hindrance3
+distracted2
+hesitate3
+critically3
+get carried away3"""
+
+SOURCE_BATCHES = (
+    {
+        "batch_id": "student-hard-words-2026-08-12-initial",
+        "received_at": "2026-08-12",
+        "raw_batch": RAW_BATCH,
+    },
+    {
+        "batch_id": "student-hard-words-2026-08-12-followup-1",
+        "received_at": "2026-08-12",
+        "raw_batch": FOLLOWUP_BATCH,
+    },
+)
+
+RESCUE_TRAINING_HEADWORDS = {
+    "alcohol",
+    "architecture",
+    "botanical",
+    "certificate",
+    "controversial",
+    "distinguish",
+    "fountain",
+    "instant",
+    "pronunciation",
+    "ridiculous",
+    "sculpture",
+    "squeeze",
+}
+
 # These corrections were confirmed by the user. Each tuple is
 # (normalized headword, difficulty code, correction note).
 CONFIRMED_CORRECTIONS = {
@@ -491,17 +546,17 @@ CONFIRMED_CORRECTIONS = {
 }
 
 EXPECTED_STATISTICS = {
-    "raw_nonempty_lines": 442,
-    "normalized_entries": 443,
-    "unique_headwords": 443,
-    "duplicate_count": 0,
-    "difficulty_counts": {"1": 192, "2": 110, "3": 141},
+    "raw_nonempty_lines": 464,
+    "normalized_reports": 465,
+    "unique_headwords": 462,
+    "duplicate_report_count": 3,
+    "difficulty_counts": {"1": 194, "2": 111, "3": 157},
     "correction_event_count": 8,
     "corrected_output_count": 9,
     "corpus_match_counts": {
-        "active": 378,
-        "candidate_only": 31,
-        "unmatched": 34,
+        "active": 388,
+        "candidate_only": 34,
+        "unmatched": 40,
     },
 }
 
@@ -509,6 +564,20 @@ EXPECTED_STATISTICS = {
 def read_index(path: Path, key: str) -> list[dict[str, str]]:
     with path.open(encoding="utf-8", newline="") as handle:
         return list(csv.DictReader(handle, delimiter="\t"))
+
+
+def difficulty_code_for(needs_pronunciation: bool, needs_meaning: bool) -> int:
+    if needs_pronunciation and needs_meaning:
+        return 3
+    if needs_meaning:
+        return 2
+    return 1
+
+
+def public_id(headword: str) -> str:
+    suffix = hashlib.sha256(headword.encode("utf-8")).hexdigest()[:8]
+    slug = "-".join(headword.casefold().split())
+    return f"hard-word-{slug}-{suffix}"
 
 
 def build_archive() -> dict:
@@ -522,79 +591,119 @@ def build_archive() -> dict:
         for row in read_index(CANDIDATE_PATH, "normalized_key")
         if row["candidate_status"] == "target_candidate"
     }
-    raw_lines = [line.strip() for line in RAW_BATCH.splitlines() if line.strip()]
-    items: list[dict] = []
+    raw_line_count = 0
+    report_count = 0
+    corrected_output_count = 0
+    reports_by_headword: dict[str, list[dict]] = {}
 
-    for raw_line_index, raw_token in enumerate(raw_lines, start=1):
-        compact = "".join(raw_token.split())
-        if compact in CONFIRMED_CORRECTIONS:
-            outputs = CONFIRMED_CORRECTIONS[compact]
-        else:
-            difficulty_code = int(raw_token[-1]) if raw_token[-1] in "123" else 1
-            source_headword = raw_token[:-1].strip() if raw_token[-1] in "123" else raw_token
-            outputs = [(source_headword.casefold(), difficulty_code, None)]
-
-        split_group_id = f"split-{raw_line_index:03d}" if len(outputs) > 1 else None
-        for headword, difficulty_code, correction_note in outputs:
-            normalized = headword.casefold()
-            if normalized in master:
-                corpus_status = "active"
-                lexical_entry_id = master[normalized]["id"]
-                teacher_status = "needs_sense_confirmation"
-            elif normalized in candidates:
-                corpus_status = "candidate_only"
-                lexical_entry_id = None
-                teacher_status = "needs_lexical_approval"
+    for source_batch in SOURCE_BATCHES:
+        raw_lines = [
+            line.strip()
+            for line in source_batch["raw_batch"].splitlines()
+            if line.strip()
+        ]
+        for batch_line_index, raw_token in enumerate(raw_lines, start=1):
+            raw_line_count += 1
+            compact = "".join(raw_token.split())
+            if compact in CONFIRMED_CORRECTIONS:
+                outputs = CONFIRMED_CORRECTIONS[compact]
             else:
-                corpus_status = "unmatched"
-                lexical_entry_id = None
-                teacher_status = "needs_lexical_source"
+                raw_code = int(raw_token[-1]) if raw_token[-1] in "123" else 1
+                source_headword = (
+                    raw_token[:-1].strip() if raw_token[-1] in "123" else raw_token
+                )
+                outputs = [(source_headword.casefold(), raw_code, None)]
 
-            proper_status = "not_flagged"
-            if normalized in {"arctic", "antarctic"}:
-                proper_status = "mixed_or_context_dependent"
-                teacher_status = "needs_proper_noun_and_sense_review"
-
-            items.append(
-                {
-                    "item_index": len(items) + 1,
-                    "raw_line_index": raw_line_index,
-                    "raw_token": raw_token,
-                    "normalized_headword": normalized,
-                    "difficulty_code": difficulty_code,
-                    "needs_pronunciation": difficulty_code in (1, 3),
-                    "needs_meaning": difficulty_code in (2, 3),
-                    "correction_status": (
-                        "confirmed" if correction_note is not None else "not_needed"
-                    ),
-                    "correction_note": correction_note,
-                    "split_group_id": split_group_id,
-                    "corpus_match_status": corpus_status,
-                    "lexical_entry_id": lexical_entry_id,
-                    "source_sentence": None,
-                    "sense_id": None,
-                    "sense_status": "needs_context_confirmation",
-                    "proper_noun_status": proper_status,
-                    "teacher_review_status": teacher_status,
-                    "introduced_at": "2026-08-12",
-                }
+            split_group_id = (
+                f"{source_batch['batch_id']}-split-{batch_line_index:03d}"
+                if len(outputs) > 1
+                else None
             )
+            for headword, reported_code, correction_note in outputs:
+                report_count += 1
+                normalized = headword.casefold()
+                corrected_output_count += correction_note is not None
+                reports_by_headword.setdefault(normalized, []).append(
+                    {
+                        "raw_line_index": raw_line_count,
+                        "batch_line_index": batch_line_index,
+                        "raw_token": raw_token,
+                        "reported_difficulty_code": reported_code,
+                        "needs_pronunciation": reported_code in (1, 3),
+                        "needs_meaning": reported_code in (2, 3),
+                        "correction_status": (
+                            "confirmed" if correction_note is not None else "not_needed"
+                        ),
+                        "correction_note": correction_note,
+                        "split_group_id": split_group_id,
+                        "batch_id": source_batch["batch_id"],
+                        "received_at": source_batch["received_at"],
+                    }
+                )
+
+    items: list[dict] = []
+    for normalized, reports in reports_by_headword.items():
+        needs_pronunciation = any(report["needs_pronunciation"] for report in reports)
+        needs_meaning = any(report["needs_meaning"] for report in reports)
+        effective_code = difficulty_code_for(needs_pronunciation, needs_meaning)
+
+        if normalized in master:
+            corpus_status = "active"
+            lexical_entry_id = master[normalized]["id"]
+            teacher_status = "needs_sense_confirmation"
+        elif normalized in candidates:
+            corpus_status = "candidate_only"
+            lexical_entry_id = None
+            teacher_status = "needs_lexical_approval"
+        else:
+            corpus_status = "unmatched"
+            lexical_entry_id = None
+            teacher_status = "needs_lexical_source"
+
+        proper_status = "not_flagged"
+        if normalized in {"arctic", "antarctic"}:
+            proper_status = "mixed_or_context_dependent"
+            teacher_status = "needs_proper_noun_and_sense_review"
+
+        items.append(
+            {
+                "item_index": len(items) + 1,
+                "normalized_headword": normalized,
+                "display_word": normalized,
+                "difficulty_code": effective_code,
+                "needs_pronunciation": needs_pronunciation,
+                "needs_meaning": needs_meaning,
+                "report_count": len(reports),
+                "reports": reports,
+                "corpus_match_status": corpus_status,
+                "lexical_entry_id": lexical_entry_id,
+                "source_sentence": None,
+                "sense_id": None,
+                "sense_status": "needs_context_confirmation",
+                "proper_noun_status": proper_status,
+                "teacher_review_status": teacher_status,
+                "practice_status": (
+                    "in_rescue_training"
+                    if normalized in RESCUE_TRAINING_HEADWORDS
+                    else "awaiting_exercise_authoring"
+                ),
+                "introduced_at": reports[0]["received_at"],
+                "last_reported_at": reports[-1]["received_at"],
+            }
+        )
 
     difficulty_counts = Counter(item["difficulty_code"] for item in items)
     match_counts = Counter(item["corpus_match_status"] for item in items)
     statistics = {
-        "raw_nonempty_lines": len(raw_lines),
-        "normalized_entries": len(items),
-        "unique_headwords": len({item["normalized_headword"] for item in items}),
-        "duplicate_count": len(items)
-        - len({item["normalized_headword"] for item in items}),
+        "raw_nonempty_lines": raw_line_count,
+        "normalized_reports": report_count,
+        "unique_headwords": len(items),
+        "duplicate_report_count": report_count - len(items),
         "difficulty_counts": {
             str(code): difficulty_counts[code] for code in (1, 2, 3)
         },
         "correction_event_count": len(CONFIRMED_CORRECTIONS),
-        "corrected_output_count": sum(
-            item["correction_status"] == "confirmed" for item in items
-        ),
+        "corrected_output_count": corrected_output_count,
         "corpus_match_counts": {
             status: match_counts[status]
             for status in ("active", "candidate_only", "unmatched")
@@ -607,7 +716,7 @@ def build_archive() -> dict:
         )
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "batch_id": "student-hard-words-2026-08-12",
         "received_at": "2026-08-12",
         "source_type": "learner-reported-vocabulary-review-difficulties",
@@ -641,22 +750,93 @@ def build_archive() -> dict:
     }
 
 
+def build_public_catalog(archive: dict | None = None) -> dict:
+    archive = archive or build_archive()
+    entries = []
+    for item in archive["items"]:
+        review_status = item["teacher_review_status"]
+        if item["practice_status"] == "in_rescue_training":
+            review_status = "source_audited_for_rescue"
+        entries.append(
+            {
+                "id": public_id(item["normalized_headword"]),
+                "displayWord": item["display_word"],
+                "normalizedHeadword": item["normalized_headword"],
+                "difficultyCode": item["difficulty_code"],
+                "needsPronunciation": item["needs_pronunciation"],
+                "needsMeaning": item["needs_meaning"],
+                "abilityTags": [
+                    tag
+                    for tag, needed in (
+                        ("pronunciation", item["needs_pronunciation"]),
+                        ("meaning", item["needs_meaning"]),
+                    )
+                    if needed
+                ],
+                "reportCount": item["report_count"],
+                "corpusMatchStatus": item["corpus_match_status"],
+                "reviewStatus": review_status,
+                "practiceStatus": item["practice_status"],
+            }
+        )
+
+    return {
+        "schemaVersion": 1,
+        "catalogId": "student-hard-words-2026-08-12",
+        "generatedAt": "2026-08-12",
+        "privacy": {
+            "containsLearnerIdentity": False,
+            "omittedFields": [
+                "learner_name",
+                "raw_token",
+                "raw_line_index",
+                "received_at",
+                "batch_id",
+                "lexical_definition",
+                "part_of_speech",
+                "cefr",
+                "ipa",
+            ],
+        },
+        "difficultyLegend": archive["difficulty_code_legend"],
+        "statistics": archive["statistics"],
+        "entries": entries,
+    }
+
+
 def serialized_archive() -> str:
     return json.dumps(build_archive(), ensure_ascii=False, indent=2) + "\n"
+
+
+def serialized_public_catalog() -> str:
+    return json.dumps(
+        build_public_catalog(), ensure_ascii=False, separators=(",", ":")
+    ) + "\n"
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument("--public-output", type=Path, default=DEFAULT_PUBLIC_OUTPUT)
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     expected = serialized_archive()
+    public_expected = serialized_public_catalog()
     if args.check:
         if not args.output.exists() or args.output.read_text(encoding="utf-8") != expected:
             raise SystemExit(f"learner difficulty archive is stale: {args.output}")
+        if (
+            not args.public_output.exists()
+            or args.public_output.read_text(encoding="utf-8") != public_expected
+        ):
+            raise SystemExit(
+                f"public learner difficulty catalog is stale: {args.public_output}"
+            )
         return
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(expected, encoding="utf-8")
+    args.public_output.parent.mkdir(parents=True, exist_ok=True)
+    args.public_output.write_text(public_expected, encoding="utf-8")
 
 
 if __name__ == "__main__":

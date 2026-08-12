@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wordlab-v22-sound-form-rescue';
+const CACHE_NAME = 'wordlab-v23-student-hard-words';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -33,7 +33,10 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (request.method !== 'GET' || url.origin !== self.location.origin) return;
 
-  if (url.pathname.endsWith('/ielts/corpus/catalog.json')) {
+  if (
+    url.pathname.endsWith('/ielts/corpus/catalog.json') ||
+    url.pathname.endsWith('/ielts/corpus/student-hard-words.json')
+  ) {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
         const cached = await cache.match(request);

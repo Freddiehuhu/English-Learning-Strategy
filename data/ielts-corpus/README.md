@@ -88,15 +88,24 @@ skill.
 
 The website consumes the smaller, minified
 `public/ielts/corpus/catalog.json` only when the learner opens the corpus map.
+It separately loads `public/ielts/corpus/student-hard-words.json` only when the
+learner opens the student difficulty list. That catalog contains no learner
+identity, raw report tokens, report dates or batch IDs, definitions, POS, CEFR
+or IPA. Raw evidence remains in the repository audit source and archive; it is
+not fetched or rendered by the learner page.
 
 ## Learner difficulty archive
 
 `learner-difficulty/student-hard-words-2026-08-12.json` is a separate,
-learner-specific evidence archive. It contains 442 non-empty reported inputs
-and 443 unique normalized headwords after one confirmed joined-token split.
-The learner's code means pronunciation unknown for `1` or no suffix (192
-entries), meaning unknown for `2` (110), and both unknown for `3` (141). These
-labels are routing evidence only; they are not lexical or mastery evidence.
+learner-specific evidence archive. Across the initial and follow-up reports it
+contains 464 non-empty input lines, 465 normalized reports after one confirmed
+joined-token split, and 462 unique normalized headwords. The three repeated
+headwords retain both reports; their effective gaps are the union of all
+reports, so `mature`, `satisfaction` and `previous` now require both
+pronunciation and meaning work. The resulting routing groups contain 194
+pronunciation-only, 111 meaning-only and 157 both-gap entries. These labels are
+routing evidence only; they are not lexical or mastery evidence. The follow-up
+batch contributes 22 of the 464 non-empty input lines.
 
 The archive preserves every raw token alongside confirmed corrections. For
 example, the reported `pluse3` remains available as raw evidence while its
@@ -105,10 +114,13 @@ note. It withholds definitions, POS, CEFR and IPA, and every sense remains
 context-pending until a source sentence or other sufficient evidence is
 available.
 
-The archive size must not be reported as published exercise coverage. The
-initial sound-form rescue lesson publishes only 12 separately source-audited
-words in two rounds. `instant` still lacks its original listening sentence, so
-its meaning prompt is unscored and cannot supply a mastery claim.
+The public UI exposes all 462 unique headwords as a searchable list with
+difficulty, review-status and practice-status filters. The archive size must
+not be reported as published exercise coverage: only 12 separately
+source-audited words are available in the initial two-round sound-form rescue
+lesson, while the other 450 entries remain `awaiting_exercise_authoring`.
+`instant` still lacks its original listening sentence, so its meaning prompt is
+unscored and cannot supply a mastery claim.
 
 ## Editorial safeguards
 
