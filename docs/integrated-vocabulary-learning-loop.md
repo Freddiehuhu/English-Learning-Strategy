@@ -51,7 +51,7 @@
 
 2026-08-12 的两批学生困难词清单用于建立个体补弱档案。第一批 442 个非空输入，第二批新增 22 份上报，共 464 个原始行；经确认过的错拼校正和一次连写拆分后形成 465 份规范化报告。`mature`、`satisfaction`、`previous` 各有两次报告，系统保留两次来源记录并合并能力缺口，因此总表最终包含 462 个唯一词头。合并后的有效分组为：编号 `1` 或未编号表示读音困难（194 条），`2` 表示词义困难（111 条），`3` 表示两者都困难（157 条）。档案保留原始写法和修订记录，例如 `pluse3` 不会被静默改写，而是留下 `pluse → pulse` 的教师确认记录。编号只描述学生困难，不提供词性、词义、IPA、CEFR 或掌握证据。
 
-公开页面提供完整 462 词总表，可搜索并按困难类型、审校状态和练习状态筛选；但“能在总表中查看”不等于“已经有题可练”。只有 12 词在核对 Cambridge Dictionary 与 Oxford Learner's Dictionaries 的读音、核心义和搭配后进入两轮 MVP：第一轮为 `controversial`、`fountain`、`pronunciation`、`instant`、`certificate`、`squeeze`，第二轮为 `botanical`、`ridiculous`、`alcohol`、`architecture`、`distinguish`、`sculpture`。其余 450 词明确保持待编题状态，不能从困难编号自动生成答案。
+公开页面提供完整 462 词总表，可搜索并按困难类型、审校状态和内容状态筛选；全部词均可进入短时拼写回忆和自由造句草稿。拼写严格保留短语空格与连字符；造句只作目标词、首字母、句末标点等表面检查，结果一律等待教师人工评阅，不能据此声称语法、词义或掌握正确。只有 12 词在核对 Cambridge Dictionary 与 Oxford Learner's Dictionaries 的读音、核心义和搭配后进入完整声形急救：第一轮为 `controversial`、`fountain`、`pronunciation`、`instant`、`certificate`、`squeeze`，第二轮为 `botanical`、`ridiculous`、`alcohol`、`architecture`、`distinguish`、`sculpture`。其余 450 词仍不能从困难编号自动生成词义、音标、标准句或语法答案。
 
 急救路线把证据拆成三门独立能力：
 
