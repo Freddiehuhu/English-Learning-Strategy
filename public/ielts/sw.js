@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wordlab-v25-dual-sound-form-prototype';
+const CACHE_NAME = 'wordlab-v26-mixed-sound-form-prototype';
 const CORE_ASSETS = [
   './',
   './index.html',

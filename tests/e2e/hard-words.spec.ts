@@ -75,9 +75,10 @@ test('searches, filters and progressively reveals the real learner catalog witho
   await page.getByRole('button', { name: /751 全部难词/ }).click();
   await expect(page.locator('[data-hard-words-match-count]')).toHaveText('12');
   await expect(page.locator('[data-action="start-rescue-word"]')).toHaveCount(12);
-  await expect(
-    page.locator('[data-hard-word="pronunciation"] [data-action="start-dual-prototype"]'),
-  ).toHaveCount(1);
+  await expect(page.locator('[data-hard-word] [data-action="start-dual-prototype"]')).toHaveCount(
+    0,
+  );
+  await expect(page.getByRole('button', { name: '混合声形样板 · 3 词 6 题' })).toBeVisible();
 });
 
 test('keeps basic practice on every row and limits the sound-form rescue route to audited words', async ({

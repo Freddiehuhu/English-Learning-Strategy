@@ -40,6 +40,19 @@
     listenForm: '盲听成形',
     meaningRecall: '语境辨义',
   };
+  var DUAL_PROTOTYPE_SYLLABLES = {
+    pronunciation: ['pro', 'nun', 'ci', 'a', 'tion'],
+    certificate: ['cer', 'tif', 'i', 'cate'],
+    controversial: ['con', 'tro', 'ver', 'sial'],
+  };
+  var DUAL_PROTOTYPE_QUEUE = [
+    { wordId: 'pronunciation', type: 'read' },
+    { wordId: 'certificate', type: 'spell' },
+    { wordId: 'controversial', type: 'read' },
+    { wordId: 'pronunciation', type: 'spell' },
+    { wordId: 'certificate', type: 'read' },
+    { wordId: 'controversial', type: 'spell' },
+  ];
   var STAGE_SECONDS = {
     sound: 45,
     spell: 75,
@@ -667,6 +680,7 @@
   var hardWordPracticeState = loadHardWordPracticeState();
   var hardWordMemoryTimer = null;
   var dualPrototypeState = null;
+  var dualActionLocked = false;
   var currentView = 'today';
   var session = null;
   var currentAudio = null;
@@ -4139,7 +4153,7 @@
       practiceProgress.sentences +
       '</strong> / ' +
       entries.length +
-      '</p></div><div class="hard-words-launch-actions"><button class="primary-button" type="button" data-action="hard-words-start-spell">拼写练习 · 10 词</button><button class="secondary-button" type="button" data-action="hard-words-start-sentence">造句练习 · 5 词</button><button class="text-button hard-words-dual-launch" type="button" data-action="start-dual-prototype">双向声形样板 · pronunciation</button></div></section>' +
+      '</p></div><div class="hard-words-launch-actions"><button class="primary-button" type="button" data-action="hard-words-start-spell">拼写练习 · 10 词</button><button class="secondary-button" type="button" data-action="hard-words-start-sentence">造句练习 · 5 词</button><button class="text-button hard-words-dual-launch" type="button" data-action="start-dual-prototype">混合声形样板 · 3 词 6 题</button></div></section>' +
       '<section class="hard-words-results" aria-live="polite"><div class="hard-words-result-head"><p>找到 <strong data-hard-words-match-count>0</strong> 个词</p><small>以下每个词都可单独练习</small></div><small class="hard-words-practice-note">未经审校的词不提供词义或标准句答案；造句只保存为待老师评阅。</small><div data-hard-words-results></div></section>';
     renderHardWordsResults(true);
   }
@@ -4272,9 +4286,6 @@
           esc(rescueWord.id) +
           '">声形急救</button>'
         : '') +
-      (normaliseAnswer(entry.normalizedHeadword) === 'pronunciation'
-        ? '<button class="text-button hard-word-start" type="button" data-action="start-dual-prototype">双向声形样板</button>'
-        : '') +
       '</div>' +
       '</article>'
     );
@@ -4326,12 +4337,39 @@
   }
 
   function defaultDualPrototypeState() {
-    return {
-      step: 'choice',
-      previewRetest: false,
-      read: { completed: false, status: '', error: '' },
-      spell: { completed: false, status: '', attempts: 0, audioReady: false, audioFailed: false },
+    var prototype = { index: 0, step: '', task: null, results: [] };
+    resetDualPrototypeTask(prototype);
+    return prototype;
+  }
+
+  function resetDualPrototypeTask(prototype) {
+    dualActionLocked = false;
+    var item = DUAL_PROTOTYPE_QUEUE[prototype.index];
+    if (!item) {
+      prototype.step = 'summary';
+      prototype.task = null;
+      return;
+    }
+    prototype.task = {
+      meaning: '',
+      pos: '',
+      syllableCount: '',
+      syllables: '',
+      spelling: '',
+      audioReady: false,
+      audioFailed: false,
+      error: '',
     };
+    prototype.step = item.type === 'read' ? 'read-info' : 'spell-count';
+  }
+
+  function currentDualPrototypeItem() {
+    return dualPrototypeState && DUAL_PROTOTYPE_QUEUE[dualPrototypeState.index];
+  }
+
+  function currentDualPrototypeWord() {
+    var item = currentDualPrototypeItem();
+    return item ? findRescueWord(item.wordId) : null;
   }
 
   function startDualPrototype() {
@@ -4357,159 +4395,278 @@
     if (!dualPrototypeState) return renderHardWordsCatalog();
     currentView = 'dual-prototype';
     setActiveNav('hard-words');
-    var state = dualPrototypeState;
-    var completed = Number(state.read.completed) + Number(state.spell.completed);
+    var prototype = dualPrototypeState;
+    var item = currentDualPrototypeItem();
+    var isBlind = Boolean(item && item.type === 'spell' && prototype.step !== 'spell-result');
+    var taskAttributes = item
+      ? ' data-dual-task-type="' +
+        esc(item.type) +
+        '"' +
+        (isBlind ? ' data-dual-blind="true"' : ' data-dual-word-id="' + esc(item.wordId) + '"')
+      : '';
     main.innerHTML =
-      '<section class="dual-prototype-shell" data-dual-prototype data-dual-word-demo data-dual-step="' +
-      esc(state.step) +
-      '" data-dual-stage="' +
-      esc(state.step) +
+      '<section class="dual-prototype-shell" data-dual-prototype data-dual-mixed-prototype data-dual-step="' +
+      esc(prototype.step) +
+      '" data-dual-queue-position="' +
+      Math.min(prototype.index + 1, DUAL_PROTOTYPE_QUEUE.length) +
+      '"' +
+      taskAttributes +
       '"><header class="dual-prototype-head"><button class="text-button" type="button" data-action="dual-exit" data-dual-exit>← 难词表</button><p>' +
-      completed +
-      ' / 2</p></header><div class="hard-word-practice-track" aria-hidden="true"><i style="width:' +
-      completed * 50 +
+      Math.min(prototype.index + 1, DUAL_PROTOTYPE_QUEUE.length) +
+      ' / ' +
+      DUAL_PROTOTYPE_QUEUE.length +
+      '</p></header><div class="hard-word-practice-track" aria-hidden="true"><i style="width:' +
+      (prototype.index / DUAL_PROTOTYPE_QUEUE.length) * 100 +
       '%"></i></div>' +
-      renderDualPrototypeStep(state) +
+      renderDualPrototypeStep(prototype) +
       '</section>';
     var field = main.querySelector('input:not(:disabled)');
     if (field) field.focus({ preventScroll: true });
   }
 
   function renderDualPrototypeStep(state) {
-    if (state.step === 'read-cold') return renderDualReadCold(state);
-    if (state.step === 'read-compare') return renderDualReadCompare();
-    if (state.step === 'spell-cold') return renderDualSpellCold(state);
-    if (state.step === 'spell-repair') return renderDualSpellRepair(state);
+    if (state.step === 'read-info') return renderDualReadInfo(state);
+    if (state.step === 'read-syllables') return renderDualReadSyllables(state);
+    if (state.step === 'read-record') return renderDualReadRecord(state);
+    if (state.step === 'read-compare') return renderDualReadCompare(state);
+    if (state.step === 'spell-count') return renderDualSpellCount(state);
+    if (state.step === 'spell-syllables') return renderDualSpellSyllables(state);
+    if (state.step === 'spell-final') return renderDualSpellFinal(state);
+    if (state.step === 'spell-result') return renderDualSpellResult(state);
     if (state.step === 'summary') return renderDualSummary(state);
-    return renderDualChoice(state);
+    return '';
   }
 
-  function renderDualChoice(state) {
-    var readDone = state.read.completed;
-    var spellDone = state.spell.completed;
+  function dualTaskHeading(label) {
     return (
-      '<article class="panel dual-prototype-card dual-choice" data-dual-choice><p class="eyebrow">' +
-      (state.previewRetest ? 'NO-HINT RETEST PREVIEW' : 'ONE-WORD PROTOTYPE') +
-      '</p><h1>' +
-      (state.previewRetest ? '无提示复测：先练哪一边？' : '先练哪一边？') +
-      '</h1><div class="dual-direction-grid">' +
-      '<button class="dual-direction" type="button" data-action="dual-start-read" data-dual-start-read' +
-      (readDone ? ' disabled' : '') +
-      '><span>看词</span><strong>读出来</strong><small>' +
-      (readDone ? dualReadShortStatus(state.read.status) : '先录音，再对照') +
-      '</small></button>' +
-      '<button class="dual-direction" type="button" data-action="dual-start-spell" data-dual-start-spell' +
-      (spellDone ? ' disabled' : '') +
-      '><span>听音</span><strong>写出来</strong><small>' +
-      (spellDone ? dualSpellShortStatus(state.spell.status) : '盲听，不先看词') +
-      '</small></button></div></article>'
+      '<p class="eyebrow">' + esc(label) + '</p><p class="dual-task-kicker">这题只做当前一步</p>'
     );
   }
 
-  function renderDualReadCold(state) {
+  function renderDualReadInfo(prototype) {
+    var word = currentDualPrototypeWord();
     return (
-      '<article class="panel dual-prototype-card dual-read-cold" data-dual-read-cold><p class="eyebrow">看词 → 朗读</p><h1 data-dual-target-word>pronunciation</h1><p>不听范音，先读一遍。</p><div class="dual-record-actions"><button class="primary-button" type="button" data-action="dual-record" data-dual-record>● 开始录音</button><button class="quiet-button" type="button" data-action="dual-skip-read" data-dual-skip-read data-dual-skip>跳过朗读</button></div><p id="recordStatus" class="dual-status" data-dual-record-status role="status" aria-live="polite">' +
-      esc(state.read.error || '录音只保留在当前页面。') +
+      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-read-info>' +
+      dualTaskHeading('看词读音 · 1/3') +
+      '<h1 data-dual-visible-word>' +
+      esc(word.word) +
+      '</h1><form class="dual-stacked-form" data-dual-read-info-form><label>写出中文意思<input name="meaning" data-dual-read-meaning autocomplete="off"></label><label>写出词性<input name="pos" data-dual-read-pos autocomplete="off" autocapitalize="none" placeholder="例如 n."></label><button class="primary-button" type="submit">下一步</button></form>' +
+      dualSkipButton() +
+      '<p class="feedback" data-dual-feedback role="status" aria-live="polite">' +
+      esc(prototype.task.error) +
       '</p></article>'
     );
   }
 
-  function renderDualReadCompare() {
-    var word = findRescueWord('pronunciation');
+  function renderDualReadSyllables(prototype) {
+    var word = currentDualPrototypeWord();
+    return (
+      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-read-syllables>' +
+      dualTaskHeading('看词读音 · 2/3') +
+      '<h1 data-dual-visible-word>' +
+      esc(word.word) +
+      '</h1><form class="dual-stacked-form" data-dual-read-syllables-form><label>划分音节<input name="syllables" data-dual-read-syllables-input autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="用 / 分开"></label><button class="primary-button" type="submit">下一步</button></form>' +
+      dualSkipButton() +
+      '<p class="feedback" data-dual-feedback role="status" aria-live="polite">' +
+      esc(prototype.task.error) +
+      '</p></article>'
+    );
+  }
+
+  function renderDualReadRecord(prototype) {
+    var word = currentDualPrototypeWord();
+    return (
+      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-read-record>' +
+      dualTaskHeading('看词读音 · 3/3') +
+      '<h1 data-dual-visible-word>' +
+      esc(word.word) +
+      '</h1><p>现在读一遍，完成后才显示范音。</p><div class="dual-record-actions"><button class="primary-button" type="button" data-action="dual-record" data-dual-record>● 开始录音</button>' +
+      dualSkipButton() +
+      '</div><p id="recordStatus" class="dual-status" data-dual-record-status role="status" aria-live="polite">' +
+      esc(prototype.task.error || '录音只保留在当前页面。') +
+      '</p></article>'
+    );
+  }
+
+  function renderDualReadCompare(prototype) {
+    var word = currentDualPrototypeWord();
     var accent = state.settings.accent === 'us' ? 'us' : 'uk';
     var ipa = accent === 'us' ? word.ipaUs : word.ipaUk;
+    var syllables = DUAL_PROTOTYPE_SYLLABLES[word.id];
     return (
-      '<article class="panel dual-prototype-card" data-dual-read-compare><p class="eyebrow">对照，不自动判分</p><h1>pronunciation</h1><p class="dual-pronunciation-line">' +
+      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-read-compare><p class="eyebrow">录音对照 · 待人工核对</p><h1>' +
+      esc(word.word) +
+      '</h1><p class="dual-pronunciation-line">' +
       esc(ipa) +
-      ' · pro · NUN · ci · A · tion</p><div class="dual-compare-actions"><button class="secondary-button" type="button" data-action="play-recording" data-dual-own-audio data-audio-label="自己的朗读"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">听自己</span></button><button class="audio-button" type="button" data-action="dual-model-audio" data-dual-model-audio data-accent="' +
+      ' · ' +
+      esc(syllables.join(' · ')) +
+      '</p><div class="dual-answer-compare" data-dual-read-answer-compare><p><span>你写的意思 / 词性</span><strong>' +
+      esc(prototype.task.meaning + ' · ' + prototype.task.pos) +
+      '</strong></p><p><span>参考</span><strong>' +
+      esc(word.zh + ' · ' + word.pos) +
+      '</strong></p><p><span>你划分的音节</span><strong>' +
+      esc(prototype.task.syllables) +
+      '</strong></p></div><div class="dual-compare-actions"><button class="secondary-button" type="button" data-action="play-recording" data-dual-own-audio data-audio-label="自己的朗读"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">听自己</span></button><button class="audio-button" type="button" data-action="dual-model-audio" data-dual-model-audio data-accent="' +
       accent +
-      '" data-audio-label="自然范音" data-status-target="dualModelStatus"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">听范音</span></button></div><p id="dualModelStatus" class="dual-status" aria-live="polite">先后回放，检查重音和尾音。</p><div class="dual-footer-actions"><button class="quiet-button" type="button" data-action="dual-rerecord" data-dual-rerecord>重新录音</button><button class="primary-button" type="button" data-action="dual-finish-read" data-dual-finish-read>提交待老师核对</button></div></article>'
+      '" data-audio-label="自然范音" data-status-target="dualModelStatus"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">听范音</span></button></div><p id="dualModelStatus" class="dual-status" aria-live="polite">交替听自己与范音。</p><div class="dual-footer-actions"><button class="quiet-button" type="button" data-action="dual-rerecord" data-dual-rerecord>重新录音</button><button class="primary-button" type="button" data-action="dual-finish-read" data-dual-finish-read>下一题</button></div></article>'
     );
   }
 
-  function renderDualSpellCold(dual) {
-    var feedback = '';
-    if (dual.spell.audioFailed) feedback = '音频未播放，本次不记错。请重试或跳过。';
-    else if (dual.spell.attempts === 1) feedback = '还不对。再听一次；答案仍隐藏。';
+  function renderDualBlindAudio(prototype) {
+    var disabled = prototype.task.audioReady && !prototype.task.audioFailed ? '' : ' disabled';
     return (
-      '<article class="panel dual-prototype-card dual-spell-cold" data-dual-spell-cold><p class="eyebrow">听音 → 拼写</p><h1>听到什么，写什么</h1><button class="listen-orb dual-listen-orb" type="button" data-action="dual-spell-audio" data-dual-spell-audio data-accent="' +
+      '<button class="listen-orb dual-listen-orb" type="button" data-action="dual-spell-audio" data-dual-spell-audio data-accent="' +
       (state.settings.accent === 'us' ? 'us' : 'uk') +
-      '" data-audio-label="盲听音频" data-status-target="dualSpellAudioStatus" aria-label="播放盲听音频"><span class="audio-control-icon" aria-hidden="true">▶</span></button><p id="dualSpellAudioStatus" class="dual-status" aria-live="polite">播放后才能输入。</p><form class="hard-word-answer-form" data-dual-spell-form><label><span class="sr-only">输入听到的拼写</span><input name="answer" data-dual-spell-input autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="输入听到的拼写"' +
-      (dual.spell.audioReady && !dual.spell.audioFailed ? '' : ' disabled') +
-      '></label><button class="primary-button" type="submit" data-dual-spell-check' +
-      (dual.spell.audioReady && !dual.spell.audioFailed ? '' : ' disabled') +
-      '>检查</button></form><p class="feedback' +
+      '" data-audio-label="盲听音频" data-status-target="dualSpellAudioStatus" aria-label="播放盲听音频"><span class="audio-control-icon" aria-hidden="true">▶</span></button><p id="dualSpellAudioStatus" class="dual-status" aria-live="polite">' +
+      (prototype.task.audioReady ? '可以作答，也可再听。' : '先播放，再作答。') +
+      '</p><input type="hidden" data-dual-input-lock' +
+      disabled +
+      '>'
+    );
+  }
+
+  function dualBlindDisabled(prototype) {
+    return prototype.task.audioReady && !prototype.task.audioFailed ? '' : ' disabled';
+  }
+
+  function renderDualSpellCount(prototype) {
+    return (
+      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-spell-count>' +
+      dualTaskHeading('听写 · 1/3') +
+      '<h1>听音，写音节数</h1>' +
+      renderDualBlindAudio(prototype) +
+      '<form class="dual-stacked-form" data-dual-spell-count-form><label>几个音节？<input type="number" min="1" max="12" inputmode="numeric" name="count" data-dual-spell-count-input aria-label="输入音节数"' +
+      dualBlindDisabled(prototype) +
+      '></label><button class="primary-button" type="submit"' +
+      dualBlindDisabled(prototype) +
+      '>下一步</button></form>' +
+      dualSkipButton() +
+      dualFeedback(prototype) +
+      '</article>'
+    );
+  }
+
+  function renderDualSpellSyllables(prototype) {
+    return (
+      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-spell-syllables>' +
+      dualTaskHeading('听写 · 2/3') +
+      '<h1>把听到的音节写出来</h1>' +
+      renderDualBlindAudio(prototype) +
+      '<form class="dual-stacked-form" data-dual-spell-syllables-form><label>音节<input name="syllables" data-dual-spell-syllables-input autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="用 / 分开"' +
+      dualBlindDisabled(prototype) +
+      '></label><button class="primary-button" type="submit"' +
+      dualBlindDisabled(prototype) +
+      '>下一步</button></form>' +
+      dualSkipButton() +
+      dualFeedback(prototype) +
+      '</article>'
+    );
+  }
+
+  function renderDualSpellFinal(prototype) {
+    return (
+      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-spell-final>' +
+      dualTaskHeading('听写 · 3/3') +
+      '<h1>最后写完整信息</h1>' +
+      renderDualBlindAudio(prototype) +
+      '<p class="dual-own-work" data-dual-own-syllables>你刚写的音节：' +
+      esc(prototype.task.syllables) +
+      '</p>' +
+      '<form class="dual-stacked-form" data-dual-spell-final-form><label>完整单词<input name="spelling" data-dual-spell-word-input autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"' +
+      dualBlindDisabled(prototype) +
+      '></label><label>中文意思<input name="meaning" data-dual-spell-meaning-input autocomplete="off"' +
+      dualBlindDisabled(prototype) +
+      '></label><label>词性<input name="pos" data-dual-spell-pos-input autocomplete="off" autocapitalize="none" placeholder="例如 n."' +
+      dualBlindDisabled(prototype) +
+      '></label><button class="primary-button" type="submit"' +
+      dualBlindDisabled(prototype) +
+      '>提交后对照</button></form>' +
+      dualSkipButton() +
+      dualFeedback(prototype) +
+      '</article>'
+    );
+  }
+
+  function renderDualSpellResult(prototype) {
+    var word = currentDualPrototypeWord();
+    var syllables = DUAL_PROTOTYPE_SYLLABLES[word.id];
+    var spellingCorrect = normaliseAnswer(prototype.task.spelling) === normaliseAnswer(word.word);
+    return (
+      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-spell-result data-dual-word-id="' +
+      esc(word.id) +
+      '"><p class="eyebrow">完整提交后对照</p><h1>' +
+      esc(word.word) +
+      '</h1><p class="dual-spell-verdict ' +
+      (spellingCorrect ? 'is-correct' : 'is-wrong') +
+      '">' +
+      (spellingCorrect ? '完整拼写正确' : '完整拼写需修订') +
+      '</p><div class="dual-answer-compare" data-dual-spell-answer-compare><p><span>音节数</span><strong>' +
+      esc(prototype.task.syllableCount + ' → ' + syllables.length) +
+      '</strong></p><p><span>音节</span><strong>' +
+      esc(prototype.task.syllables + ' → ' + syllables.join(' · ')) +
+      '</strong></p><p><span>意思 / 词性</span><strong>' +
+      esc(prototype.task.meaning + ' · ' + prototype.task.pos) +
+      '</strong></p><p><span>参考</span><strong>' +
+      esc(word.zh + ' · ' + word.pos) +
+      '</strong></p></div><p class="dual-summary-note">中文意思仅供对照，不做机械判分。</p><div class="dual-footer-actions"><button class="primary-button" type="button" data-action="dual-finish-spell" data-dual-finish-spell>下一题</button></div></article>'
+    );
+  }
+
+  function dualSkipButton() {
+    return '<button class="quiet-button dual-skip-button" type="button" data-action="dual-skip-task" data-dual-skip>跳过这题</button>';
+  }
+
+  function dualFeedback(prototype) {
+    var feedback = prototype.task.audioFailed
+      ? '音频未播放，本次不记错。请重试或跳过。'
+      : prototype.task.error;
+    return (
+      '<p class="feedback' +
       (feedback ? ' is-wrong' : '') +
-      '" data-dual-spell-feedback role="status" aria-live="polite">' +
+      '" data-dual-feedback role="status" aria-live="polite">' +
       esc(feedback) +
-      '</p><button class="quiet-button" type="button" data-action="dual-skip-spell" data-dual-skip-spell data-dual-skip>跳过拼写</button></article>'
+      '</p>'
     );
   }
 
-  function renderDualSpellRepair(state) {
+  function renderDualSummary(prototype) {
     return (
-      '<article class="panel dual-prototype-card" data-dual-spell-repair><p class="eyebrow">修复词形</p><div class="dual-spelling-pattern" aria-label="拼写分块">pro · nun · ci · a · tion</div><form class="hard-word-answer-form" data-dual-repair-form><label><span class="sr-only">重新拼写完整单词</span><input name="answer" data-dual-repair-input autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="重新拼写完整单词"></label><button class="primary-button" type="submit" data-dual-repair-check>重新拼写</button></form><p class="feedback' +
-      (state.spell.status === 'repair_wrong' ? ' is-wrong' : '') +
-      '" data-dual-repair-feedback role="status" aria-live="polite">' +
-      (state.spell.status === 'repair_wrong' ? '再对照分块，写出完整单词。' : '') +
-      '</p><button class="quiet-button" type="button" data-action="dual-skip-spell" data-dual-skip-spell data-dual-skip>先跳过</button></article>'
+      '<article class="panel dual-prototype-card dual-summary" data-dual-summary><p class="eyebrow">MIXED SAMPLE COMPLETE</p><h1>6 题混排样板完成</h1><div class="dual-evidence">' +
+      prototype.results
+        .map(function (result, index) {
+          return (
+            '<p><span>' +
+            (index + 1) +
+            ' · ' +
+            esc(result.wordId) +
+            ' · ' +
+            esc(result.type === 'read' ? '看词读音' : '听音拼写') +
+            '</span><strong>' +
+            esc(result.status) +
+            '</strong></p>'
+          );
+        })
+        .join('') +
+      '</div><details class="dual-answer-key"><summary>集中查看三个词的参考答案</summary><p><strong>pronunciation</strong> · pro / nun / ci / a / tion · n. · 发音；读音</p><p><strong>certificate</strong> · cer / tif / i / cate · n. · 证书；证明文件</p><p><strong>controversial</strong> · con / tro / ver / sial · adj. · 有争议的；引发分歧的</p></details><p class="dual-summary-note">读音录音仍需人工核对；中文意思仅保存对照，不自动判分。同一个词第二次出现属于间隔后练习，不是第二次冷测。</p><div class="dual-footer-actions"><button class="secondary-button" type="button" data-action="dual-restart" data-dual-restart>再做一遍</button><button class="primary-button" type="button" data-action="dual-exit" data-dual-exit>返回难词表</button></div></article>'
     );
   }
 
-  function renderDualSummary(state) {
-    return (
-      '<article class="panel dual-prototype-card dual-summary" data-dual-summary><p class="eyebrow">PROTOTYPE COMPLETE</p><h1>本词样板完成</h1><div class="dual-evidence"><p><span>看词朗读</span><strong>' +
-      esc(dualReadShortStatus(state.read.status)) +
-      '</strong></p><p><span>听音拼写</span><strong>' +
-      esc(dualSpellShortStatus(state.spell.status)) +
-      '</strong></p></div><p class="dual-summary-note">这是即时样板，不等于长期掌握；朗读录音仍需老师人工核对。</p><div class="dual-footer-actions"><button class="secondary-button" type="button" data-action="dual-preview-retest" data-dual-preview-retest>预览无提示复测</button><button class="primary-button" type="button" data-action="dual-exit" data-dual-exit>返回难词表</button></div></article>'
-    );
-  }
-
-  function dualReadShortStatus(status) {
-    if (status === 'recorded_pending_review') return '已录音 · 待人工核对';
-    if (status === 'skipped') return '已跳过 · 未判定';
-    return '未完成';
-  }
-
-  function dualSpellShortStatus(status) {
-    if (status === 'independent') return '首次独立拼对';
-    if (status === 'retry_correct') return '重听后拼对 · 非首答';
-    if (status === 'assisted') return '修复后完成 · 有提示';
-    if (status === 'skipped') return '已跳过 · 未掌握';
-    return '未完成';
-  }
-
-  function beginDualDirection(direction) {
-    if (!dualPrototypeState) return;
+  function advanceDualPrototype(status) {
+    if (!dualPrototypeState || dualActionLocked) return;
+    dualActionLocked = true;
+    var item = currentDualPrototypeItem();
+    dualPrototypeState.results.push({ wordId: item.wordId, type: item.type, status: status });
     cleanupMedia();
-    if (direction === 'read' && !dualPrototypeState.read.completed) {
-      dualPrototypeState.step = 'read-cold';
-      dualPrototypeState.read.error = '';
-    } else if (direction === 'spell' && !dualPrototypeState.spell.completed) {
-      dualPrototypeState.step = 'spell-cold';
-      dualPrototypeState.spell.audioReady = false;
-      dualPrototypeState.spell.audioFailed = false;
-    } else {
-      return;
-    }
+    dualPrototypeState.index += 1;
+    resetDualPrototypeTask(dualPrototypeState);
     renderDualPrototype();
-  }
-
-  function finishDualDirection() {
-    if (!dualPrototypeState) return;
-    cleanupMedia();
-    dualPrototypeState.step =
-      dualPrototypeState.read.completed && dualPrototypeState.spell.completed
-        ? 'summary'
-        : 'choice';
-    renderDualPrototype();
+    scrollToTop();
   }
 
   function playDualModelAudio(button, blind) {
     if (!dualPrototypeState) return;
     if (toggleCurrentPlayback(button)) return;
-    var word = findRescueWord('pronunciation');
+    var word = currentDualPrototypeWord();
     var accent = button.dataset.accent === 'us' ? 'us' : 'uk';
     var source = rescueAudioSource(word, accent);
     if (!source) {
@@ -4523,79 +4680,32 @@
   }
 
   function unlockDualSpellControls() {
-    if (!dualPrototypeState || dualPrototypeState.step !== 'spell-cold') return;
-    dualPrototypeState.spell.audioReady = true;
-    dualPrototypeState.spell.audioFailed = false;
+    if (!dualPrototypeState || dualPrototypeState.step.indexOf('spell-') !== 0) return;
+    dualPrototypeState.task.audioReady = true;
+    dualPrototypeState.task.audioFailed = false;
     main
-      .querySelectorAll('[data-dual-spell-input], [data-dual-spell-check]')
+      .querySelectorAll('[data-dual-task-card] input, [data-dual-task-card] form button')
       .forEach(function (control) {
         control.disabled = false;
       });
-    var input = main.querySelector('[data-dual-spell-input]');
+    var input = main.querySelector('[data-dual-task-card] input:not([type="hidden"])');
     if (input) input.focus({ preventScroll: true });
   }
 
   function lockDualSpellAudioFailure() {
-    if (!dualPrototypeState || dualPrototypeState.step !== 'spell-cold') return;
-    dualPrototypeState.spell.audioReady = false;
-    dualPrototypeState.spell.audioFailed = true;
+    if (!dualPrototypeState || dualPrototypeState.step.indexOf('spell-') !== 0) return;
+    dualPrototypeState.task.audioReady = false;
+    dualPrototypeState.task.audioFailed = true;
     main
-      .querySelectorAll('[data-dual-spell-input], [data-dual-spell-check]')
+      .querySelectorAll('[data-dual-task-card] input, [data-dual-task-card] form button')
       .forEach(function (control) {
         control.disabled = true;
       });
-    var feedback = main.querySelector('[data-dual-spell-feedback]');
+    var feedback = main.querySelector('[data-dual-feedback]');
     if (feedback) {
       feedback.className = 'feedback is-wrong';
       feedback.textContent = '音频未播放，本次不记错。请重试或跳过。';
     }
-  }
-
-  function checkDualColdSpelling(rawAnswer) {
-    if (!dualPrototypeState || dualPrototypeState.step !== 'spell-cold') return;
-    var spell = dualPrototypeState.spell;
-    var answer = String(rawAnswer || '').trim();
-    var feedback = main.querySelector('[data-dual-spell-feedback]');
-    if (!spell.audioReady) {
-      if (feedback) feedback.textContent = '音频真正播放后才能作答。';
-      return;
-    }
-    if (!answer) {
-      if (feedback) feedback.textContent = '先输入拼写，或选择跳过。';
-      return;
-    }
-    spell.attempts += 1;
-    if (normaliseAnswer(answer) === 'pronunciation') {
-      spell.status = spell.attempts === 1 ? 'independent' : 'retry_correct';
-      spell.completed = true;
-      finishDualDirection();
-      return;
-    }
-    stopAudio();
-    spell.audioReady = false;
-    if (spell.attempts >= 2) {
-      spell.status = '';
-      dualPrototypeState.step = 'spell-repair';
-    }
-    renderDualPrototype();
-  }
-
-  function checkDualRepairSpelling(rawAnswer) {
-    if (!dualPrototypeState || dualPrototypeState.step !== 'spell-repair') return;
-    var answer = String(rawAnswer || '').trim();
-    if (!answer) {
-      var blankFeedback = main.querySelector('[data-dual-repair-feedback]');
-      if (blankFeedback) blankFeedback.textContent = '请写出完整单词，或选择跳过。';
-      return;
-    }
-    if (normaliseAnswer(answer) !== 'pronunciation') {
-      dualPrototypeState.spell.status = 'repair_wrong';
-      renderDualPrototype();
-      return;
-    }
-    dualPrototypeState.spell.status = 'assisted';
-    dualPrototypeState.spell.completed = true;
-    finishDualDirection();
   }
 
   function startHardWordPractice(mode, wordIds) {
@@ -8167,38 +8277,24 @@
     if (action === 'hard-word-exit') return navigate('hard-words');
     if (action === 'start-dual-prototype') return startDualPrototype();
     if (action === 'dual-exit') return navigate('hard-words');
-    if (action === 'dual-start-read') return beginDualDirection('read');
-    if (action === 'dual-start-spell') return beginDualDirection('spell');
     if (action === 'dual-record') return toggleRecording(button);
     if (action === 'dual-rerecord') {
       cleanupMedia();
-      dualPrototypeState.step = 'read-cold';
+      dualPrototypeState.step = 'read-record';
+      dualPrototypeState.task.error = '';
       return renderDualPrototype();
     }
     if (action === 'dual-finish-read') {
       if (!dualPrototypeState || !recordUrl) return;
-      dualPrototypeState.read.completed = true;
-      dualPrototypeState.read.status = 'recorded_pending_review';
-      return finishDualDirection();
-    }
-    if (action === 'dual-skip-read') {
-      if (!dualPrototypeState) return;
-      dualPrototypeState.read.completed = true;
-      dualPrototypeState.read.status = 'skipped';
-      return finishDualDirection();
+      return advanceDualPrototype('已录音 · 待人工核对');
     }
     if (action === 'dual-model-audio') return playDualModelAudio(button, false);
     if (action === 'dual-spell-audio') return playDualModelAudio(button, true);
-    if (action === 'dual-skip-spell') {
-      if (!dualPrototypeState) return;
-      dualPrototypeState.spell.completed = true;
-      dualPrototypeState.spell.status = 'skipped';
-      return finishDualDirection();
-    }
-    if (action === 'dual-preview-retest') {
+    if (action === 'dual-finish-spell') return advanceDualPrototype('已完成并对照');
+    if (action === 'dual-skip-task') return advanceDualPrototype('已跳过 · 未判定');
+    if (action === 'dual-restart') {
       cleanupMedia();
       dualPrototypeState = defaultDualPrototypeState();
-      dualPrototypeState.previewRetest = true;
       return renderDualPrototype();
     }
     if (action === 'hard-words-difficulty') {
@@ -8693,16 +8789,69 @@
   }
 
   function handleMainSubmit(event) {
-    var dualSpellForm = event.target.closest('[data-dual-spell-form]');
-    if (dualSpellForm) {
+    var dualReadInfoForm = event.target.closest('[data-dual-read-info-form]');
+    if (dualReadInfoForm) {
       event.preventDefault();
-      checkDualColdSpelling(new FormData(dualSpellForm).get('answer'));
+      var readInfo = new FormData(dualReadInfoForm);
+      var readMeaning = String(readInfo.get('meaning') || '').trim();
+      var readPos = String(readInfo.get('pos') || '').trim();
+      if (!readMeaning || !readPos) return setDualTaskError('请先写出意思和词性。');
+      dualPrototypeState.task.meaning = readMeaning;
+      dualPrototypeState.task.pos = readPos;
+      dualPrototypeState.task.error = '';
+      dualPrototypeState.step = 'read-syllables';
+      renderDualPrototype();
       return;
     }
-    var dualRepairForm = event.target.closest('[data-dual-repair-form]');
-    if (dualRepairForm) {
+    var dualReadSyllablesForm = event.target.closest('[data-dual-read-syllables-form]');
+    if (dualReadSyllablesForm) {
       event.preventDefault();
-      checkDualRepairSpelling(new FormData(dualRepairForm).get('answer'));
+      var readSyllables = String(new FormData(dualReadSyllablesForm).get('syllables') || '').trim();
+      if (!readSyllables) return setDualTaskError('请先划分音节。');
+      dualPrototypeState.task.syllables = readSyllables;
+      dualPrototypeState.task.error = '';
+      dualPrototypeState.step = 'read-record';
+      renderDualPrototype();
+      return;
+    }
+    var dualSpellCountForm = event.target.closest('[data-dual-spell-count-form]');
+    if (dualSpellCountForm) {
+      event.preventDefault();
+      if (!dualPrototypeState.task.audioReady) return setDualTaskError('先播放音频。');
+      var syllableCount = String(new FormData(dualSpellCountForm).get('count') || '').trim();
+      if (!syllableCount) return setDualTaskError('请先写出音节数。');
+      dualPrototypeState.task.syllableCount = syllableCount;
+      return changeDualSpellStep('spell-syllables');
+    }
+    var dualSpellSyllablesForm = event.target.closest('[data-dual-spell-syllables-form]');
+    if (dualSpellSyllablesForm) {
+      event.preventDefault();
+      if (!dualPrototypeState.task.audioReady) return setDualTaskError('先播放音频。');
+      var heardSyllables = String(
+        new FormData(dualSpellSyllablesForm).get('syllables') || '',
+      ).trim();
+      if (!heardSyllables) return setDualTaskError('请先写出听到的音节。');
+      dualPrototypeState.task.syllables = heardSyllables;
+      return changeDualSpellStep('spell-final');
+    }
+    var dualSpellFinalForm = event.target.closest('[data-dual-spell-final-form]');
+    if (dualSpellFinalForm) {
+      event.preventDefault();
+      if (!dualPrototypeState.task.audioReady) return setDualTaskError('先播放音频。');
+      var finalAnswer = new FormData(dualSpellFinalForm);
+      var spelling = String(finalAnswer.get('spelling') || '').trim();
+      var meaning = String(finalAnswer.get('meaning') || '').trim();
+      var pos = String(finalAnswer.get('pos') || '').trim();
+      if (!spelling || !meaning || !pos) {
+        return setDualTaskError('请把单词、意思和词性都写完。');
+      }
+      dualPrototypeState.task.spelling = spelling;
+      dualPrototypeState.task.meaning = meaning;
+      dualPrototypeState.task.pos = pos;
+      dualPrototypeState.task.error = '';
+      dualPrototypeState.step = 'spell-result';
+      stopAudio();
+      renderDualPrototype();
       return;
     }
     var hardWordSpellForm = event.target.closest('[data-hard-word-spell-form]');
@@ -8737,6 +8886,25 @@
     if (skill === 'spell') checkSpelling(new FormData(form).get('answer'));
     if (skill === 'forms') checkFormAnswer(form);
     if (skill === 'sentence') evaluateSentence(new FormData(form).get('sentence'));
+  }
+
+  function setDualTaskError(message) {
+    if (!dualPrototypeState || !dualPrototypeState.task) return;
+    dualPrototypeState.task.error = message;
+    var feedback = main.querySelector('[data-dual-feedback]');
+    if (feedback) {
+      feedback.className = 'feedback is-wrong';
+      feedback.textContent = message;
+    }
+  }
+
+  function changeDualSpellStep(step) {
+    stopAudio();
+    dualPrototypeState.step = step;
+    dualPrototypeState.task.audioReady = false;
+    dualPrototypeState.task.audioFailed = false;
+    dualPrototypeState.task.error = '';
+    renderDualPrototype();
   }
 
   function handleMainChange(event) {
@@ -11177,8 +11345,8 @@
       !navigator.mediaDevices.getUserMedia ||
       typeof MediaRecorder === 'undefined'
     ) {
-      if (dualPrototypeState && dualPrototypeState.step === 'read-cold') {
-        dualPrototypeState.read.error = '当前浏览器未检测到录音能力。本项不判错，可跳过。';
+      if (dualPrototypeState && dualPrototypeState.step === 'read-record') {
+        dualPrototypeState.task.error = '当前浏览器未检测到录音能力。本项不判错，可跳过。';
         renderDualPrototype();
       } else {
         showToast('当前浏览器不支持本地录音；听音和其余训练仍可使用。');
@@ -11205,8 +11373,8 @@
         if (recorder && recorder.state === 'recording') recorder.stop();
       }, 8000);
     } catch (error) {
-      if (dualPrototypeState && dualPrototypeState.step === 'read-cold') {
-        dualPrototypeState.read.error = '麦克风未授权。本项不会判错，可重试或跳过。';
+      if (dualPrototypeState && dualPrototypeState.step === 'read-record') {
+        dualPrototypeState.task.error = '麦克风未授权。本项不会判错，可重试或跳过。';
         renderDualPrototype();
       } else {
         showToast('未获得麦克风权限。你仍可继续听音、拼写和词形训练。');
@@ -11219,7 +11387,7 @@
     var isDualRead = Boolean(
       dualPrototypeState &&
       currentView === 'dual-prototype' &&
-      dualPrototypeState.step === 'read-cold',
+      dualPrototypeState.step === 'read-record',
     );
     if ((!session || currentSkill() !== 'sound') && !isDualRead) {
       if (recordStream) {
@@ -11245,7 +11413,7 @@
       recordChunks = [];
       recorder = null;
       recordStartedAt = 0;
-      dualPrototypeState.read.error = '录音太短，没有形成可核对的朗读。请完整读一遍。';
+      dualPrototypeState.task.error = '录音太短，没有形成可核对的朗读。请完整读一遍。';
       renderDualPrototype();
       return;
     }
