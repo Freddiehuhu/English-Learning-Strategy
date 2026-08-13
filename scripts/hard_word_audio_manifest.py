@@ -12,7 +12,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import tempfile
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +69,7 @@ EXPECTED_HEADWORD_COUNT = 751
 EXPECTED_SHARED_HEADWORD_COUNT = 23
 EXPECTED_GENERATED_HEADWORD_COUNT = 728
 EXPECTED_SOURCE_AUDITED_HEADWORD_COUNT = 12
+DURATION_DRIFT_TOLERANCE_SECONDS = 0.1
 REVIEW_STATUSES = {
     "needs_lexical_approval",
     "needs_lexical_source",
@@ -80,6 +83,33 @@ class HardWordAudioError(RuntimeError):
     """Raised when the hard-word pronunciation contract is invalid."""
 
 
+def finite_number(value: Any) -> bool:
+    """Return true only for finite JSON numbers, never booleans."""
+
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(float(value))
+    except (OverflowError, TypeError, ValueError):
+        return False
+
+
+def type_strict_equal(left: Any, right: Any) -> bool:
+    """Compare JSON-like values without treating booleans as integers."""
+
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return set(left) == set(right) and all(
+            type_strict_equal(left[key], right[key]) for key in left
+        )
+    if isinstance(left, list):
+        return len(left) == len(right) and all(
+            type_strict_equal(old, new) for old, new in zip(left, right)
+        )
+    return bool(left == right)
+
+
 def load_catalog(catalog_file: Path = CATALOG_FILE) -> dict[str, Any]:
     try:
         catalog = json.loads(catalog_file.read_text(encoding="utf-8"))
@@ -90,7 +120,7 @@ def load_catalog(catalog_file: Path = CATALOG_FILE) -> dict[str, Any]:
 
     entries = catalog.get("entries")
     if (
-        catalog.get("schemaVersion") != 1
+        not type_strict_equal(catalog.get("schemaVersion"), 1)
         or catalog.get("catalogId") != CATALOG_ID
         or not isinstance(entries, list)
         or len(entries) != EXPECTED_HEADWORD_COUNT
@@ -507,7 +537,7 @@ def validate_manifest_schema(manifest: dict[str, Any]) -> None:
         },
         "manifest",
     )
-    if manifest["schemaVersion"] != SCHEMA_VERSION:
+    if not type_strict_equal(manifest["schemaVersion"], SCHEMA_VERSION):
         raise HardWordAudioError("Unsupported hard-word audio manifest schema")
     exact_keys(
         manifest["catalog"], {"catalogId", "entryCount", "path", "sha256"}, "catalog"
@@ -529,7 +559,7 @@ def validate_manifest_schema(manifest: dict[str, Any]) -> None:
     catalog = manifest["catalog"]
     if (
         catalog["catalogId"] != CATALOG_ID
-        or catalog["entryCount"] != EXPECTED_HEADWORD_COUNT
+        or not type_strict_equal(catalog["entryCount"], EXPECTED_HEADWORD_COUNT)
         or catalog["path"] != "public/ielts/corpus/student-hard-words.json"
         or not isinstance(catalog["sha256"], str)
         or len(catalog["sha256"]) != 64
@@ -545,7 +575,7 @@ def validate_manifest_schema(manifest: dict[str, Any]) -> None:
         "sharedHeadwords": EXPECTED_SHARED_HEADWORD_COUNT,
         "sourceAuditedHeadwords": EXPECTED_SOURCE_AUDITED_HEADWORD_COUNT,
     }
-    if manifest["coverage"] != expected_coverage:
+    if not type_strict_equal(manifest["coverage"], expected_coverage):
         raise HardWordAudioError("Invalid hard-word audio manifest coverage")
     entries = manifest["entries"]
     if not isinstance(entries, list) or len(entries) != EXPECTED_HEADWORD_COUNT:
@@ -608,15 +638,15 @@ def validate_manifest_schema(manifest: dict[str, Any]) -> None:
                 audio["accent"] != accent
                 or audio["kind"] != "word"
                 or audio["codec"] != "mp3"
-                or audio["channels"] != 1
-                or audio["sampleRateHz"] != 24_000
+                or not type_strict_equal(audio["channels"], 1)
+                or not type_strict_equal(audio["sampleRateHz"], 24_000)
                 or audio["src"] != f"./audio/{path}"
                 or audio["textSha256"] != sha256_text(headword)
                 or audio["assetSource"]
                 not in {"hard_word_generated", "shared_reviewed_word"}
-                or not isinstance(audio["bytes"], int)
+                or type(audio["bytes"]) is not int
                 or audio["bytes"] <= 0
-                or not isinstance(audio["durationSeconds"], (int, float))
+                or not finite_number(audio["durationSeconds"])
                 or audio["durationSeconds"] <= 0
             ):
                 raise HardWordAudioError("Invalid audio entry contract")
@@ -665,7 +695,7 @@ def validate_manifest_schema(manifest: dict[str, Any]) -> None:
         "id": PROFILE_ID,
         **generation_profile(),
     }
-    if profile != expected_profile:
+    if not type_strict_equal(profile, expected_profile):
         raise HardWordAudioError("Invalid hard-word generation profile")
     exact_keys(
         manifest["privacy"],
@@ -676,17 +706,120 @@ def validate_manifest_schema(manifest: dict[str, Any]) -> None:
         },
         "privacy",
     )
-    if manifest["privacy"] != {
-        "containsLearnerIdentity": False,
-        "generatedTextSentToExternalService": False,
-        "lexicalAnswerFieldsIncluded": False,
-    }:
+    if not type_strict_equal(
+        manifest["privacy"],
+        {
+            "containsLearnerIdentity": False,
+            "generatedTextSentToExternalService": False,
+            "lexicalAnswerFieldsIncluded": False,
+        },
+    ):
         raise HardWordAudioError("Hard-word manifest privacy declaration changed")
     exact_keys(
         manifest["provenance"],
         {"assurance", "generatedAudioOrigin", "limitation", "sharedAudioOrigin"},
         "provenance",
     )
+
+
+def manifest_drift_messages(
+    committed: dict[str, Any],
+    current: dict[str, Any],
+) -> list[str]:
+    """Compare manifests while tolerating only cross-ffprobe duration drift."""
+
+    if type_strict_equal(committed, current):
+        return []
+
+    messages: list[str] = []
+    top_level_keys = set(committed) | set(current)
+    for field in sorted(top_level_keys - {"entries"}):
+        if field not in committed or field not in current:
+            messages.append(f"manifest field presence changed: {field}")
+        elif not type_strict_equal(committed[field], current[field]):
+            messages.append(f"manifest field changed: {field}")
+
+    old_entries = committed.get("entries")
+    new_entries = current.get("entries")
+    if not isinstance(old_entries, list) or not isinstance(new_entries, list):
+        messages.append("manifest entries are not lists")
+    elif len(old_entries) != len(new_entries):
+        messages.append(
+            f"manifest entry count changed: {len(old_entries)}->{len(new_entries)}"
+        )
+    else:
+        for index, (old_entry, new_entry) in enumerate(zip(old_entries, new_entries)):
+            if not isinstance(old_entry, dict) or not isinstance(new_entry, dict):
+                if not type_strict_equal(old_entry, new_entry):
+                    messages.append(f"manifest entry changed at index {index}")
+                continue
+
+            entry_id = old_entry.get("entryId", f"index-{index}")
+            entry_fields = (set(old_entry) | set(new_entry)) - {"audio"}
+            changed_entry_fields = [
+                field
+                for field in sorted(entry_fields)
+                if field not in old_entry
+                or field not in new_entry
+                or not type_strict_equal(old_entry[field], new_entry[field])
+            ]
+            if changed_entry_fields:
+                messages.append(
+                    f"{entry_id} changed entry fields: "
+                    + ", ".join(changed_entry_fields)
+                )
+
+            old_audio = old_entry.get("audio")
+            new_audio = new_entry.get("audio")
+            if not isinstance(old_audio, dict) or not isinstance(new_audio, dict):
+                if not type_strict_equal(old_audio, new_audio):
+                    messages.append(f"{entry_id} changed audio container")
+                continue
+            if set(old_audio) != set(new_audio):
+                messages.append(f"{entry_id} changed audio accents")
+                continue
+
+            for accent in sorted(old_audio):
+                old_link = old_audio[accent]
+                new_link = new_audio[accent]
+                if not isinstance(old_link, dict) or not isinstance(new_link, dict):
+                    if not type_strict_equal(old_link, new_link):
+                        messages.append(f"{entry_id}/{accent} changed audio link")
+                    continue
+
+                changed_audio_fields = {
+                    field
+                    for field in set(old_link) | set(new_link)
+                    if field != "durationSeconds"
+                    and (
+                        field not in old_link
+                        or field not in new_link
+                        or not type_strict_equal(old_link[field], new_link[field])
+                    )
+                }
+                old_duration = old_link.get("durationSeconds")
+                new_duration = new_link.get("durationSeconds")
+                if not finite_number(old_duration) or not finite_number(new_duration):
+                    changed_audio_fields.add("durationSeconds")
+                else:
+                    difference = abs(
+                        Decimal(str(old_duration)) - Decimal(str(new_duration))
+                    )
+                    if difference > Decimal(str(DURATION_DRIFT_TOLERANCE_SECONDS)):
+                        changed_audio_fields.add("durationSeconds")
+
+                if changed_audio_fields:
+                    messages.append(
+                        f"{entry_id}/{accent} changed audio fields: "
+                        + ", ".join(sorted(changed_audio_fields))
+                    )
+
+    if messages:
+        messages.insert(
+            0,
+            "Hard-word audio manifest differs from catalog/assets/generation contract",
+        )
+    return messages
 
 
 def compare_manifest(
@@ -703,9 +836,7 @@ def compare_manifest(
         )
     except (HardWordAudioError, RuntimeError) as error:
         return [str(error)]
-    if committed == current:
-        return []
-    return ["Hard-word audio manifest differs from catalog/assets/generation contract"]
+    return manifest_drift_messages(committed, current)
 
 
 def reusable_generated_asset(
