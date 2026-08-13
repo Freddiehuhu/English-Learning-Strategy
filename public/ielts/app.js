@@ -3933,10 +3933,8 @@
     var ids = new Set();
     var sharedAudioLinks = 0;
     var generatedAudioLinks = 0;
-    var generatedProfileSha256 =
-      '1afdacac57993e5dcf0d787479210ea3a6ca77d526cdbac59ef3643957320bcc';
-    var sharedProfileSha256 =
-      '07f4cd8abcdf6b72b0b8a75ee4c86ae572c6d0c7ba7acd6beec5e1a34fd4cda3';
+    var generatedProfileSha256 = '1afdacac57993e5dcf0d787479210ea3a6ca77d526cdbac59ef3643957320bcc';
+    var sharedProfileSha256 = '07f4cd8abcdf6b72b0b8a75ee4c86ae572c6d0c7ba7acd6beec5e1a34fd4cda3';
     var audioKeys = [
       'accent',
       'assetSource',
@@ -3992,9 +3990,7 @@
         var expectedProfile = isGenerated
           ? 'macos-say-hard-word-2026-08-13.2'
           : 'edge-tts-word-2026-07-30.1';
-        var expectedProfileSha256 = isGenerated
-          ? generatedProfileSha256
-          : sharedProfileSha256;
+        var expectedProfileSha256 = isGenerated ? generatedProfileSha256 : sharedProfileSha256;
         if (
           !hasExactObjectKeys(item, audioKeys) ||
           item.accent !== accent ||
