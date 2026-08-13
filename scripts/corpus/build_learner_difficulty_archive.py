@@ -499,6 +499,298 @@ hesitate3
 critically3
 get carried away3"""
 
+FOLLOWUP_BATCH_2 = """blanket3
+forget1
+broadcast3
+temple3
+commercial3
+zoom2
+regret3
+particular3
+fresh2
+random2
+moral3
+forehead2
+organ3
+scare
+tentative3
+leather3
+generation2
+permission3
+uncertain2
+vest2
+civilization3
+cheque
+bathe1
+convenient3
+glory3
+wipe2
+bonus2
+weed2
+agenda2
+institution2
+sceptical3
+classic1
+violence3
+diploma2
+format2
+allocate2
+practical3
+vehicle1
+polite2
+chapter2
+regardless3
+diverse3
+refuse2
+whistle3
+competence3
+accumulate3
+resign2
+consistent3
+greet2
+fortune3
+guarantee3
+cater3
+brief3
+pension3
+rescue2
+scream2
+merely3
+bounce2
+optional2
+advertise3
+blind1
+status3
+theoretical3
+greedy2
+prevent2
+unconscious3
+civil3
+calm2
+hate2
+acquaintance3
+patent3
+unconditional3
+recipe2
+though1
+dynasty3
+idiom3
+resist2
+strict2
+receipt3
+conversation3
+brochure3
+divorce3
+consritution3
+friction3
+absurd3
+latter3
+whisper3
+preview3
+accustomed2
+centigrade3
+editor2
+leak2
+session3
+disgusting2
+injury3
+adventure3
+pride3
+fluency3
+drill3
+adopt2
+dip2
+appreciate2
+minus3
+acquisition3
+outing3
+sell1
+vacant2
+mineral2
+gymnastics2
+religion2
+wrestle3
+frontier3
+vital2
+consume2
+seminar3
+parcel3
+material1
+volcano1
+dynamic3
+ambulance3
+interpreter3
+harbour3
+temporary2
+plot3
+endless3
+bridgeroom3
+outspoken2
+voluntary2
+deny3
+seaweed2
+entrance1
+pavement3
+register3
+booth2
+reliable3
+adequate3
+tension3
+unfit2
+fundamental2
+sick3
+wrinkle3
+theory3
+foresee3
+dive3
+summary2
+correct2
+shelter2
+justice2
+fault3
+reform2
+continent2
+pity2
+adjustment2
+credit3
+shame2
+graduate2
+earn2
+pile2
+heap2
+religious3
+grasp3
+violate3
+desire3
+shabby3
+regulation3
+personnel3
+thriller3
+poison3
+struggle3
+drawback2
+ancestor3
+vote3
+straight1
+contradictory3
+competition2
+bargain3
+acknowledge3
+fortnight3
+defence3
+influence2
+flesh2
+recreation2
+burglar1
+require2
+physician3
+dirt3
+buffet3
+aboard1
+deliver2
+bark3
+contrary3
+choir3
+wrist2
+breast2
+shaver2
+generous2
+criminal3
+restriction2
+distant2
+applaud2
+immediately2
+garage3
+politician3
+sideways2
+rely3
+tiresome2
+polish3
+aggressive3
+middle1
+brewery3
+attack3
+tissue3
+clumsy2
+withdraw3
+campaign2
+applicant3
+funeral3
+crash2
+delay3
+admirable3
+least2
+marry2
+possess3
+instruct2
+educate3
+comment2
+statistics3
+muddy2
+rewind3
+shuttle1
+comprehension3
+porter3
+premier2
+architect3
+reserve3
+track2
+pregnant3
+glad3
+communism3
+terrible3
+term3
+sorrow3
+devote2
+passage2
+sniff2
+accurate1
+reputation2
+guard3
+urge3
+erupt1
+capsule3
+pause3
+universal2
+bury3
+tendency3
+hesitate3
+alcoholic1
+crew2
+sweat2
+candidate2
+burden3
+devotion3
+royal3
+astronomer3
+mercy3
+ambassador3
+profession2
+insurance2
+conscience3
+ancient1
+spit3
+ambassadress2
+chain store3
+explore2
+database2
+consensus3
+false1
+anxious2
+split3
+brake2
+stain2
+urgent3
+ambiguous2
+outwards2
+steward3
+foster3
+vacation2
+tear2
+horrible2
+ample3
+panic3"""
+
 SOURCE_BATCHES = (
     {
         "batch_id": "student-hard-words-2026-08-12-initial",
@@ -509,6 +801,11 @@ SOURCE_BATCHES = (
         "batch_id": "student-hard-words-2026-08-12-followup-1",
         "received_at": "2026-08-12",
         "raw_batch": FOLLOWUP_BATCH,
+    },
+    {
+        "batch_id": "student-hard-words-2026-08-12-followup-2",
+        "received_at": "2026-08-12",
+        "raw_batch": FOLLOWUP_BATCH_2,
     },
 )
 
@@ -543,20 +840,26 @@ CONFIRMED_CORRECTIONS = {
         ("instant", 2, "student-confirmed joined-token split: instant2 + alcohol"),
         ("alcohol", 1, "student-confirmed joined-token split: instant2 + alcohol"),
     ],
+    "consritution3": [
+        ("constitution", 3, "user-confirmed typo: consritution -> constitution")
+    ],
+    "bridgeroom3": [
+        ("bridegroom", 3, "user-confirmed typo: bridgeroom -> bridegroom")
+    ],
 }
 
 EXPECTED_STATISTICS = {
-    "raw_nonempty_lines": 464,
-    "normalized_reports": 465,
-    "unique_headwords": 462,
-    "duplicate_report_count": 3,
-    "difficulty_counts": {"1": 194, "2": 111, "3": 157},
-    "correction_event_count": 8,
-    "corrected_output_count": 9,
+    "raw_nonempty_lines": 755,
+    "normalized_reports": 756,
+    "unique_headwords": 751,
+    "duplicate_report_count": 5,
+    "difficulty_counts": {"1": 215, "2": 223, "3": 313},
+    "correction_event_count": 10,
+    "corrected_output_count": 11,
     "corpus_match_counts": {
-        "active": 388,
-        "candidate_only": 34,
-        "unmatched": 40,
+        "active": 621,
+        "candidate_only": 54,
+        "unmatched": 76,
     },
 }
 
@@ -635,6 +938,11 @@ def build_archive() -> dict:
                             "confirmed" if correction_note is not None else "not_needed"
                         ),
                         "correction_note": correction_note,
+                        "correction_source": (
+                            "user_confirmation_2026-08-12"
+                            if correction_note is not None
+                            else None
+                        ),
                         "split_group_id": split_group_id,
                         "batch_id": source_batch["batch_id"],
                         "received_at": source_batch["received_at"],

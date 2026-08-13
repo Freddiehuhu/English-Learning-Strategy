@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wordlab-v24-hard-word-practice';
+const CACHE_NAME = 'wordlab-v29-formal-hard-word-sound-form';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -35,7 +35,8 @@ self.addEventListener('fetch', (event) => {
 
   if (
     url.pathname.endsWith('/ielts/corpus/catalog.json') ||
-    url.pathname.endsWith('/ielts/corpus/student-hard-words.json')
+    url.pathname.endsWith('/ielts/corpus/student-hard-words.json') ||
+    url.pathname.endsWith('/ielts/audio/hard-words/manifest.json')
   ) {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {

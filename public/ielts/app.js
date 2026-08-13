@@ -12,7 +12,12 @@
   var STORAGE_KEY = 'els-ielts-wordlab-v1';
   var VISUAL_STORAGE_KEY = 'els-ielts-visual-lab-v1';
   var HARD_WORD_PRACTICE_STORAGE_KEY = 'els-ielts-hard-word-practice-v1';
-  var AUDIO_ASSET_VERSION = 'natural-20260812-rescue';
+  var HARD_WORD_SOUND_FORM_STORAGE_KEY = 'els-ielts-hard-word-sound-form-v1';
+  var HARD_WORD_AUDIO_MANIFEST_URL = './audio/hard-words/manifest.json';
+  var HARD_WORD_AUDIO_CATALOG_ID = 'student-hard-words-2026-08-12';
+  var HARD_WORD_CATALOG_SHA256 = '0db08fa501961bc0ccdc1a044be8d86793858761cc43e4db9f68087a05560a95';
+  var HARD_WORD_SOUND_FORM_BATCH_SIZE = 10;
+  var AUDIO_ASSET_VERSION = 'mixed-local-20260813.2-hard-words';
   var STATE_VERSION = 5;
   var VISUAL_STATE_VERSION = 5;
   var ADAPTIVE_MODEL_VERSION = 2;
@@ -40,6 +45,40 @@
     listenForm: '盲听成形',
     meaningRecall: '语境辨义',
   };
+  var SYLLABLE_TUTORIAL_STEPS = ['idea', 'layers', 'examples', 'quiz', 'finish'];
+  var SYLLABLE_TUTORIAL_WORDS = {
+    squeeze: {
+      count: 1,
+      stress: 0,
+      sounds: ['SQUEEZE'],
+      spelling: ['squ', 'ee', 'ze'],
+    },
+    fountain: {
+      count: 2,
+      stress: 0,
+      sounds: ['FOUN', 'tain'],
+      spelling: ['foun', 'tain'],
+    },
+    certificate: {
+      count: 4,
+      stress: 1,
+      sounds: ['cer', 'TIF', 'i', 'cate'],
+      spelling: ['cer', 'tif', 'i', 'cate'],
+    },
+    pronunciation: {
+      count: 5,
+      stress: 3,
+      sounds: ['pro', 'nun', 'ci', 'A', 'tion'],
+      spelling: ['pro', 'nun', 'ci', 'a', 'tion'],
+    },
+    controversial: {
+      count: 4,
+      stress: 2,
+      sounds: ['con', 'tro', 'VER', 'sial'],
+      spelling: ['con', 'tro', 'ver', 'sial'],
+    },
+  };
+  var SYLLABLE_TUTORIAL_QUIZ = ['squeeze', 'certificate', 'controversial'];
   var STAGE_SECONDS = {
     sound: 45,
     spell: 75,
@@ -665,7 +704,14 @@
   var hardWordsPracticeFilter = 'all';
   var hardWordsVisible = 60;
   var hardWordPracticeState = loadHardWordPracticeState();
+  var hardWordSoundFormState = loadHardWordSoundFormState();
+  var hardWordAudioManifest = null;
+  var hardWordAudioLoadState = 'idle';
+  var hardWordAudioLoadError = '';
   var hardWordMemoryTimer = null;
+  var dualPrototypeState = null;
+  var dualActionLocked = false;
+  var syllableTutorialState = null;
   var currentView = 'today';
   var session = null;
   var currentAudio = null;
@@ -680,6 +726,10 @@
   var recordChunks = [];
   var recordUrl = '';
   var recordTimer = null;
+  var recordStartedAt = 0;
+  var recordRequestPending = false;
+  var recordingTechnicalFailure = false;
+  var recordingToken = 0;
   var toastTimer = null;
   var advanceTimer = null;
 
@@ -748,11 +798,15 @@
     document.addEventListener('visibilitychange', syncTaskActivityVisibility);
 
     if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+    var recoverDualPrototype = Boolean(history.state && history.state.dualPrototype);
     if (history.replaceState) {
       var initialHistoryState = Object.assign({}, history.state || {});
       delete initialHistoryState.wordlabSession;
+      delete initialHistoryState.dualPrototype;
       history.replaceState(
-        Object.assign({}, initialHistoryState, { wordlabView: 'today' }),
+        Object.assign({}, initialHistoryState, {
+          wordlabView: recoverDualPrototype ? 'hard-words' : 'today',
+        }),
         '',
         location.href,
       );
@@ -762,6 +816,8 @@
     }
     if (hardWordPracticeState.active) {
       resumeHardWordPractice();
+    } else if (hardWordSoundFormState.active || recoverDualPrototype) {
+      renderHardWordsCatalog();
     } else {
       renderToday();
     }
@@ -3322,6 +3378,8 @@
     clearTimeout(advanceTimer);
     clearTimeout(hardWordMemoryTimer);
     cleanupMedia();
+    dualPrototypeState = null;
+    syllableTutorialState = null;
     if (currentView === 'hard-word-practice' && view !== 'hard-word-practice') {
       hardWordPracticeState.active = null;
       saveHardWordPracticeState();
@@ -3330,11 +3388,14 @@
     var isSessionHistoryEntry = Boolean(previousHistoryState.wordlabSession);
     var isLeavingSession = Boolean(session) || isSessionHistoryEntry;
     delete previousHistoryState.wordlabSession;
+    delete previousHistoryState.dualPrototype;
     session = null;
     currentView = view;
     if (!(options && options.fromPopState) && history.pushState) {
       var nextHistoryState = Object.assign({}, previousHistoryState, { wordlabView: view });
       if (isLeavingSession && history.replaceState) {
+        history.replaceState(nextHistoryState, '', location.href);
+      } else if (history.state && history.state.dualPrototype && history.replaceState) {
         history.replaceState(nextHistoryState, '', location.href);
       } else if (!history.state || history.state.wordlabView !== view) {
         history.pushState(nextHistoryState, '', location.href);
@@ -3359,6 +3420,8 @@
       renderHardWordsCatalog();
     } else if (view === 'hard-word-practice') {
       resumeHardWordPractice();
+    } else if (view === 'syllable-tutorial') {
+      startSyllableTutorial({ historyReady: true });
     } else if (view === 'visual') {
       renderVisualLab();
     } else if (SKILLS.indexOf(view) >= 0) {
@@ -3676,6 +3739,7 @@
     validateHardWordsCatalog(payload);
     hardWordsCatalog = payload;
     sanitiseHardWordPracticeForCatalog();
+    sanitiseHardWordSoundFormForCatalog();
     hardWordsCatalog.entries.forEach(function (entry) {
       entry._searchText = normaliseAnswer(
         String(entry.displayWord || '') + ' ' + String(entry.normalizedHeadword || ''),
@@ -3686,29 +3750,359 @@
     if (currentView === 'hard-words') renderHardWordsContent();
   }
 
-  function sanitiseHardWordPracticeForCatalog() {
+  function sanitiseHardWordSoundFormForCatalog() {
     if (!hardWordsCatalog) return;
     var validIds = new Set(
       hardWordsCatalog.entries.map(function (entry) {
         return entry.id;
       }),
     );
-    Object.keys(hardWordPracticeState.entries).forEach(function (wordId) {
-      if (!validIds.has(wordId)) delete hardWordPracticeState.entries[wordId];
+    Object.keys(hardWordSoundFormState.entries).forEach(function (wordId) {
+      if (!validIds.has(wordId)) delete hardWordSoundFormState.entries[wordId];
     });
-    hardWordPracticeState.journal = hardWordPracticeState.journal.filter(function (item) {
+    hardWordSoundFormState.journal = hardWordSoundFormState.journal.filter(function (item) {
       return validIds.has(item.wordId);
     });
+    hardWordSoundFormState.active = normaliseHardWordSoundFormActive(hardWordSoundFormState.active);
+    var active = hardWordSoundFormState.active;
+    if (
+      active &&
+      active.queue.some(function (item) {
+        return !validIds.has(item.wordId);
+      })
+    ) {
+      hardWordSoundFormState.active = null;
+      dualPrototypeState = null;
+    }
+    saveHardWordSoundFormState();
+    if (hardWordSoundFormState.active && currentView === 'hard-words') {
+      ensureHardWordAudioManifest()
+        .then(function () {
+          if (!hardWordSoundFormState.active || currentView !== 'hard-words') return;
+          dualPrototypeState = hardWordSoundFormState.active;
+          renderDualPrototype();
+        })
+        .catch(function () {
+          showToast('正式声形练习暂时无法恢复：' + hardWordAudioLoadError);
+        });
+    }
+  }
+
+  function fetchHardWordAudioManifest(cacheMode) {
+    var networkError = null;
+    return fetch(HARD_WORD_AUDIO_MANIFEST_URL, { cache: cacheMode || 'no-cache' })
+      .then(function (response) {
+        if (!response.ok) throw new Error('练习音频服务器返回 ' + response.status);
+        return response;
+      })
+      .catch(function (error) {
+        networkError = error;
+        if (!('caches' in window)) throw error;
+        return caches.match(HARD_WORD_AUDIO_MANIFEST_URL).then(function (cached) {
+          if (cached) return cached;
+          throw networkError;
+        });
+      })
+      .then(function (response) {
+        return response.json();
+      });
+  }
+
+  function hasExactObjectKeys(value, expectedKeys) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    var actual = Object.keys(value).sort();
+    var expected = expectedKeys.slice().sort();
+    return (
+      actual.length === expected.length &&
+      actual.every(function (key, index) {
+        return key === expected[index];
+      })
+    );
+  }
+
+  function validateHardWordAudioManifest(payload) {
+    var manifestKeys = [
+      'catalog',
+      'coverage',
+      'entries',
+      'generationProfile',
+      'privacy',
+      'provenance',
+      'schemaVersion',
+    ];
+    var coverage = payload && payload.coverage;
+    if (
+      !payload ||
+      !hasExactObjectKeys(payload, manifestKeys) ||
+      payload.schemaVersion !== 1 ||
+      !hasExactObjectKeys(payload.catalog, ['catalogId', 'entryCount', 'path', 'sha256']) ||
+      payload.catalog.catalogId !== HARD_WORD_AUDIO_CATALOG_ID ||
+      payload.catalog.entryCount !== 751 ||
+      payload.catalog.path !== 'public/ielts/corpus/student-hard-words.json' ||
+      payload.catalog.sha256 !== HARD_WORD_CATALOG_SHA256 ||
+      !hasExactObjectKeys(coverage, [
+        'accents',
+        'audioLinks',
+        'generatedFiles',
+        'generatedHeadwords',
+        'headwords',
+        'sharedAudioLinks',
+        'sharedHeadwords',
+        'sourceAuditedHeadwords',
+      ]) ||
+      coverage.headwords !== 751 ||
+      coverage.audioLinks !== 1502 ||
+      coverage.accents !== 2 ||
+      coverage.generatedFiles !== 1456 ||
+      coverage.generatedHeadwords !== 728 ||
+      coverage.sharedAudioLinks !== 46 ||
+      coverage.sharedHeadwords !== 23 ||
+      coverage.sourceAuditedHeadwords !== 12 ||
+      !hasExactObjectKeys(payload.privacy, [
+        'containsLearnerIdentity',
+        'generatedTextSentToExternalService',
+        'lexicalAnswerFieldsIncluded',
+      ]) ||
+      payload.privacy.containsLearnerIdentity !== false ||
+      payload.privacy.generatedTextSentToExternalService !== false ||
+      payload.privacy.lexicalAnswerFieldsIncluded !== false ||
+      !hasExactObjectKeys(payload.provenance, [
+        'assurance',
+        'generatedAudioOrigin',
+        'limitation',
+        'sharedAudioOrigin',
+      ]) ||
+      typeof payload.provenance.assurance !== 'string' ||
+      typeof payload.provenance.generatedAudioOrigin !== 'string' ||
+      typeof payload.provenance.limitation !== 'string' ||
+      typeof payload.provenance.sharedAudioOrigin !== 'string' ||
+      !hasExactObjectKeys(payload.generationProfile, [
+        'appliesToAssetSource',
+        'id',
+        'parameters',
+        'pipelineVersion',
+        'synthesisEngine',
+        'synthesisEngineVersion',
+      ]) ||
+      !hasExactObjectKeys(payload.generationProfile.parameters, [
+        'channels',
+        'between_repetitions_seconds',
+        'closing_silence_seconds',
+        'codec',
+        'ffmpeg_quality',
+        'opening_silence_seconds',
+        'repeat_count',
+        'sample_rate_hz',
+        'source_channels',
+        'source_codec',
+        'source_container',
+        'source_sample_rate_hz',
+        'speech_rate_wpm',
+      ]) ||
+      payload.generationProfile.appliesToAssetSource !== 'hard_word_generated' ||
+      payload.generationProfile.id !== 'macos-say-hard-word-2026-08-13.2' ||
+      payload.generationProfile.pipelineVersion !== '2026-08-13.2' ||
+      payload.generationProfile.synthesisEngine !== 'macos-say' ||
+      payload.generationProfile.synthesisEngineVersion !== 'macOS-26.5-25F71' ||
+      payload.generationProfile.parameters.between_repetitions_seconds !== 0.55 ||
+      payload.generationProfile.parameters.channels !== 1 ||
+      payload.generationProfile.parameters.closing_silence_seconds !== 0.3 ||
+      payload.generationProfile.parameters.codec !== 'mp3' ||
+      payload.generationProfile.parameters.ffmpeg_quality !== 2 ||
+      payload.generationProfile.parameters.opening_silence_seconds !== 0.7 ||
+      payload.generationProfile.parameters.repeat_count !== 3 ||
+      payload.generationProfile.parameters.sample_rate_hz !== 24000 ||
+      payload.generationProfile.parameters.source_channels !== 1 ||
+      payload.generationProfile.parameters.source_codec !== 'pcm_s16be' ||
+      payload.generationProfile.parameters.source_container !== 'aiff' ||
+      payload.generationProfile.parameters.source_sample_rate_hz !== 22050 ||
+      payload.generationProfile.parameters.speech_rate_wpm !== 175 ||
+      !Array.isArray(payload.entries) ||
+      payload.entries.length !== 751
+    ) {
+      throw new Error('难词自然语音清单结构或覆盖不完整');
+    }
+    if (!hardWordsCatalog || hardWordsCatalog.entries.length !== 751) {
+      throw new Error('难词表尚未准备好');
+    }
+    var catalogById = new Map(
+      hardWordsCatalog.entries.map(function (entry) {
+        return [entry.id, entry];
+      }),
+    );
+    var ids = new Set();
+    var sharedAudioLinks = 0;
+    var generatedAudioLinks = 0;
+    var generatedProfileSha256 =
+      '1afdacac57993e5dcf0d787479210ea3a6ca77d526cdbac59ef3643957320bcc';
+    var sharedProfileSha256 =
+      '07f4cd8abcdf6b72b0b8a75ee4c86ae572c6d0c7ba7acd6beec5e1a34fd4cda3';
+    var audioKeys = [
+      'accent',
+      'assetSource',
+      'audioSha256',
+      'bindingSha256',
+      'bytes',
+      'channels',
+      'codec',
+      'durationSeconds',
+      'generationProfile',
+      'generationProfileSha256',
+      'kind',
+      'path',
+      'sampleRateHz',
+      'src',
+      'textSha256',
+      'voice',
+    ];
+    payload.entries.forEach(function (entry) {
+      if (!hasExactObjectKeys(entry, ['audio', 'entryId', 'headword', 'lexicalReview'])) {
+        throw new Error('难词自然语音条目字段无效');
+      }
+      var entryId = String(entry.entryId || '');
+      var catalogEntry = catalogById.get(entryId);
+      var headword = String(entry.headword || '').trim();
+      var audio = entry.audio;
+      if (
+        !catalogEntry ||
+        ids.has(entryId) ||
+        normaliseAnswer(headword) !== normaliseAnswer(catalogEntry.displayWord) ||
+        !hasExactObjectKeys(entry.lexicalReview, ['sourceAudited', 'status']) ||
+        entry.lexicalReview.status !== catalogEntry.reviewStatus ||
+        entry.lexicalReview.sourceAudited !==
+          (catalogEntry.reviewStatus === 'source_audited_for_rescue') ||
+        !hasExactObjectKeys(audio, ['uk', 'us'])
+      ) {
+        throw new Error('难词自然语音条目未通过身份校验');
+      }
+      ids.add(entryId);
+      ['uk', 'us'].forEach(function (accent) {
+        var item = audio[accent];
+        var src = String((item && item.src) || '');
+        var path = String((item && item.path) || '');
+        var isGenerated = item && item.assetSource === 'hard_word_generated';
+        var isShared = item && item.assetSource === 'shared_reviewed_word';
+        var expectedVoice = isGenerated
+          ? accent === 'uk'
+            ? 'Daniel'
+            : 'Samantha'
+          : accent === 'uk'
+            ? 'en-GB-SoniaNeural'
+            : 'en-US-AvaNeural';
+        var expectedProfile = isGenerated
+          ? 'macos-say-hard-word-2026-08-13.2'
+          : 'edge-tts-word-2026-07-30.1';
+        var expectedProfileSha256 = isGenerated
+          ? generatedProfileSha256
+          : sharedProfileSha256;
+        if (
+          !hasExactObjectKeys(item, audioKeys) ||
+          item.accent !== accent ||
+          item.kind !== 'word' ||
+          item.voice !== expectedVoice ||
+          (!isGenerated && !isShared) ||
+          item.generationProfile !== expectedProfile ||
+          item.generationProfileSha256 !== expectedProfileSha256 ||
+          src !== './audio/' + path ||
+          path.indexOf('..') >= 0 ||
+          !path.endsWith('.mp3') ||
+          (isGenerated && path !== 'hard-words/' + accent + '/' + entryId + '.mp3') ||
+          (isShared && !path.startsWith(accent + '/')) ||
+          !/^[a-f0-9]{64}$/.test(String(item.audioSha256 || '')) ||
+          !/^[a-f0-9]{64}$/.test(String(item.bindingSha256 || '')) ||
+          !/^[a-f0-9]{64}$/.test(String(item.generationProfileSha256 || '')) ||
+          !/^[a-f0-9]{64}$/.test(String(item.textSha256 || '')) ||
+          !String(item.generationProfile || '') ||
+          Number(item.bytes) <= 1000 ||
+          Number(item.durationSeconds) <= 0 ||
+          Number(item.sampleRateHz) !== 24000 ||
+          Number(item.channels) !== 1 ||
+          item.codec !== 'mp3'
+        ) {
+          throw new Error('难词自然语音文件绑定无效');
+        }
+        if (isGenerated) generatedAudioLinks += 1;
+        if (isShared) sharedAudioLinks += 1;
+      });
+    });
+    if (ids.size !== 751 || generatedAudioLinks !== 1456 || sharedAudioLinks !== 46) {
+      throw new Error('难词自然语音清单覆盖或来源数量无效');
+    }
+  }
+
+  function ensureHardWordAudioManifest() {
+    if (hardWordAudioLoadState === 'ready' && hardWordAudioManifest) {
+      return Promise.resolve(hardWordAudioManifest);
+    }
+    if (hardWordAudioLoadState === 'loading' && ensureHardWordAudioManifest.promise) {
+      return ensureHardWordAudioManifest.promise;
+    }
+    hardWordAudioLoadState = 'loading';
+    hardWordAudioLoadError = '';
+    ensureHardWordAudioManifest.promise = fetchHardWordAudioManifest('no-cache')
+      .then(function (payload) {
+        validateHardWordAudioManifest(payload);
+        hardWordAudioManifest = payload;
+        hardWordAudioLoadState = 'ready';
+        return payload;
+      })
+      .catch(function (error) {
+        hardWordAudioManifest = null;
+        hardWordAudioLoadState = 'error';
+        hardWordAudioLoadError = error && error.message ? error.message : '自然语音载入失败';
+        throw error;
+      })
+      .finally(function () {
+        ensureHardWordAudioManifest.promise = null;
+      });
+    return ensureHardWordAudioManifest.promise;
+  }
+
+  function findHardWordAudioEntry(wordId) {
+    if (!hardWordAudioManifest) return null;
+    return (
+      hardWordAudioManifest.entries.find(function (entry) {
+        return String(entry.entryId || entry.id) === wordId;
+      }) || null
+    );
+  }
+
+  function sanitiseHardWordPracticeForCatalog() {
+    if (!hardWordsCatalog) return;
+    var changed = false;
+    var validIds = new Set(
+      hardWordsCatalog.entries.map(function (entry) {
+        return entry.id;
+      }),
+    );
+    Object.keys(hardWordPracticeState.entries).forEach(function (wordId) {
+      if (!validIds.has(wordId)) {
+        delete hardWordPracticeState.entries[wordId];
+        changed = true;
+      }
+    });
+    var filteredJournal = hardWordPracticeState.journal.filter(function (item) {
+      return validIds.has(item.wordId);
+    });
+    if (filteredJournal.length !== hardWordPracticeState.journal.length) {
+      hardWordPracticeState.journal = filteredJournal;
+      changed = true;
+    }
     var active = hardWordPracticeState.active;
     if (active) {
-      active.wordIds = active.wordIds.filter(function (wordId) {
+      var filteredWordIds = active.wordIds.filter(function (wordId) {
         return validIds.has(wordId);
       });
+      if (filteredWordIds.length !== active.wordIds.length) {
+        active.wordIds = filteredWordIds;
+        changed = true;
+      }
       if (!active.wordIds.length || active.index >= active.wordIds.length) {
         hardWordPracticeState.active = null;
+        changed = true;
       }
     }
-    saveHardWordPracticeState();
+    if (changed) saveHardWordPracticeState();
   }
 
   function validateHardWordsCatalog(payload) {
@@ -3839,18 +4233,18 @@
         return publishedRescueHeadwords.has(headword);
       });
     if (
-      payload.entries.length !== 462 ||
-      Number(payload.statistics.unique_headwords) !== 462 ||
-      normalizedReportCount !== 465 ||
-      Number(reportedCounts[1]) !== 194 ||
-      Number(reportedCounts[2]) !== 111 ||
-      Number(reportedCounts[3]) !== 157 ||
+      payload.entries.length !== 751 ||
+      Number(payload.statistics.unique_headwords) !== 751 ||
+      normalizedReportCount !== 756 ||
+      Number(reportedCounts[1]) !== 215 ||
+      Number(reportedCounts[2]) !== 223 ||
+      Number(reportedCounts[3]) !== 313 ||
       Number(payload.statistics.normalized_reports) !== normalizedReportCount ||
       Number(payload.statistics.duplicate_report_count) !==
         normalizedReportCount - payload.entries.length ||
-      counts[1] !== 194 ||
-      counts[2] !== 111 ||
-      counts[3] !== 157 ||
+      counts[1] !== 215 ||
+      counts[2] !== 223 ||
+      counts[3] !== 313 ||
       !trainingMatchesPublished
     ) {
       throw new Error('学生难词统计或练习清单与条目不一致');
@@ -3902,7 +4296,7 @@
     if (!savedEntries || typeof savedEntries !== 'object' || Array.isArray(savedEntries)) return {};
     var entries = {};
     Object.keys(savedEntries)
-      .slice(0, 500)
+      .slice(0, 1000)
       .forEach(function (wordId) {
         var source = savedEntries[wordId];
         if (!source || typeof source !== 'object' || Array.isArray(source)) return;
@@ -3933,9 +4327,12 @@
     return entries;
   }
 
-  function loadHardWordPracticeState() {
+  function loadHardWordPracticeState(rawOverride) {
     try {
-      var saved = JSON.parse(localStorage.getItem(HARD_WORD_PRACTICE_STORAGE_KEY) || 'null');
+      var saved =
+        rawOverride === undefined
+          ? JSON.parse(localStorage.getItem(HARD_WORD_PRACTICE_STORAGE_KEY) || 'null')
+          : rawOverride;
       if (!saved || typeof saved !== 'object' || Array.isArray(saved)) {
         return defaultHardWordPracticeState();
       }
@@ -4017,6 +4414,479 @@
     }
   }
 
+  function defaultHardWordSoundFormState() {
+    return {
+      version: 1,
+      catalogId: HARD_WORD_AUDIO_CATALOG_ID,
+      cursor: 0,
+      entries: {},
+      journal: [],
+      active: null,
+    };
+  }
+
+  function normaliseSoundFormStatus(value, allowed) {
+    var status = String(value || '');
+    return allowed.indexOf(status) >= 0 ? status : '';
+  }
+
+  function normaliseHardWordSoundFormEntries(savedEntries) {
+    if (!savedEntries || typeof savedEntries !== 'object' || Array.isArray(savedEntries)) return {};
+    var entries = {};
+    Object.keys(savedEntries)
+      .slice(0, 1000)
+      .forEach(function (wordId) {
+        var source = savedEntries[wordId];
+        if (!source || typeof source !== 'object' || Array.isArray(source)) return;
+        var read = source.read && typeof source.read === 'object' ? source.read : {};
+        var spell = source.spell && typeof source.spell === 'object' ? source.spell : {};
+        entries[String(wordId)] = {
+          read: {
+            attempts: normaliseHardWordCounter(read.attempts, 10000),
+            recordings: normaliseHardWordCounter(read.recordings, 10000),
+            skips: normaliseHardWordCounter(read.skips, 10000),
+            lastAt: normaliseHardWordCounter(read.lastAt, Number.MAX_SAFE_INTEGER),
+            status: normaliseSoundFormStatus(read.status, [
+              'recorded_pending_human_review',
+              'skipped',
+            ]),
+          },
+          spell: {
+            attempts: normaliseHardWordCounter(spell.attempts, 10000),
+            independentPasses: normaliseHardWordCounter(spell.independentPasses, 10000),
+            repairNeeded: normaliseHardWordCounter(spell.repairNeeded, 10000),
+            skips: normaliseHardWordCounter(spell.skips, 10000),
+            lastAt: normaliseHardWordCounter(spell.lastAt, Number.MAX_SAFE_INTEGER),
+            status: normaliseSoundFormStatus(spell.status, [
+              'independent_correct',
+              'needs_repair',
+              'skipped',
+            ]),
+          },
+        };
+      });
+    return entries;
+  }
+
+  function normaliseHardWordSoundFormActive(raw, catalogOverride) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !Array.isArray(raw.queue)) {
+      return null;
+    }
+    var queue = raw.queue
+      .slice(0, HARD_WORD_SOUND_FORM_BATCH_SIZE * 2)
+      .map(function (item) {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+        var type = item.type === 'read' || item.type === 'spell' ? item.type : '';
+        var wordId = String(item.wordId || '');
+        return type && wordId ? { wordId: wordId, type: type } : null;
+      })
+      .filter(Boolean);
+    if (queue.length !== HARD_WORD_SOUND_FORM_BATCH_SIZE * 2) return null;
+    var counts = {};
+    queue.forEach(function (item, index) {
+      counts[item.wordId] = counts[item.wordId] || { read: 0, spell: 0, positions: [] };
+      counts[item.wordId][item.type] += 1;
+      counts[item.wordId].positions.push(index);
+    });
+    var ids = Object.keys(counts);
+    if (
+      ids.length !== HARD_WORD_SOUND_FORM_BATCH_SIZE ||
+      ids.some(function (wordId) {
+        var pair = counts[wordId];
+        return pair.read !== 1 || pair.spell !== 1 || pair.positions[1] - pair.positions[0] !== 10;
+      }) ||
+      queue.slice(0, HARD_WORD_SOUND_FORM_BATCH_SIZE).some(function (item, index) {
+        var paired = queue[index + HARD_WORD_SOUND_FORM_BATCH_SIZE];
+        var expectedType =
+          index % 2 === 0 ? queue[0].type : queue[0].type === 'read' ? 'spell' : 'read';
+        return (
+          item.type !== expectedType ||
+          !paired ||
+          paired.wordId !== item.wordId ||
+          paired.type === item.type
+        );
+      })
+    ) {
+      return null;
+    }
+    var index = Math.max(0, Math.min(queue.length, Math.floor(Number(raw.index) || 0)));
+    var item = queue[index] || null;
+    var allowedSteps = item
+      ? item.type === 'read'
+        ? ['read-info', 'read-syllables', 'read-record', 'read-compare']
+        : ['spell-count', 'spell-syllables', 'spell-final', 'spell-result']
+      : ['summary'];
+    var step =
+      allowedSteps.indexOf(raw.step) >= 0 ? raw.step : item ? item.type + '-info' : 'summary';
+    if (item && item.type === 'spell' && step === 'spell-info') step = 'spell-count';
+    if (step === 'read-compare') step = 'read-record';
+    var task = raw.task && typeof raw.task === 'object' && !Array.isArray(raw.task) ? raw.task : {};
+    var activeEntry =
+      item && catalogOverride && Array.isArray(catalogOverride.entries)
+        ? catalogOverride.entries.find(function (entry) {
+            return entry.id === item.wordId;
+          })
+        : item && findHardWordEntry(item.wordId);
+    var activeLength = activeEntry
+      ? Array.from(String(activeEntry.displayWord || activeEntry.normalizedHeadword || '')).length
+      : 80;
+    var splitBoundaries = Array.isArray(task.splitBoundaries)
+      ? task.splitBoundaries
+          .map(Number)
+          .filter(function (value, boundaryIndex, all) {
+            return (
+              Number.isInteger(value) &&
+              value > 0 &&
+              value < activeLength &&
+              all.indexOf(value) === boundaryIndex
+            );
+          })
+          .sort(function (a, b) {
+            return a - b;
+          })
+          .slice(0, 30)
+      : [];
+    var safeResults = Array.isArray(raw.results)
+      ? raw.results.slice(0, index).map(function (result, resultIndex) {
+          var expected = queue[resultIndex];
+          if (
+            !result ||
+            typeof result !== 'object' ||
+            !expected ||
+            String(result.wordId || '') !== expected.wordId ||
+            result.type !== expected.type ||
+            (expected.type === 'read'
+              ? ['recorded_pending_human_review', 'skipped', 'technical_deferred']
+              : ['independent_correct', 'needs_repair', 'skipped', 'technical_deferred']
+            ).indexOf(String(result.status || '')) < 0
+          ) {
+            return null;
+          }
+          return {
+            wordId: expected.wordId,
+            type: expected.type,
+            status: String(result.status),
+          };
+        })
+      : [];
+    if (
+      safeResults.length !== index ||
+      safeResults.some(function (result) {
+        return !result;
+      })
+    ) {
+      return null;
+    }
+    var safeSyllableCount = String(task.syllableCount || '').slice(0, 3);
+    if (
+      item &&
+      item.type === 'spell' &&
+      ['spell-syllables', 'spell-final', 'spell-result'].indexOf(step) >= 0 &&
+      (!/^\d{1,2}$/.test(safeSyllableCount) ||
+        Number(safeSyllableCount) < 1 ||
+        Number(safeSyllableCount) > 12)
+    ) {
+      return null;
+    }
+    return {
+      runId: String(raw.runId || '').slice(0, 80) || 'restored-' + Date.now(),
+      queue: queue,
+      index: index,
+      step: item ? step : 'summary',
+      results: safeResults,
+      task: item
+        ? {
+            meaning: String(task.meaning || '').slice(0, 160),
+            pos: String(task.pos || '').slice(0, 60),
+            syllableCount: safeSyllableCount,
+            syllables: String(task.syllables || '').slice(0, 160),
+            splitBoundaries: splitBoundaries,
+            spelling: String(task.spelling || '').slice(0, 120),
+            audioReady: false,
+            audioFailed: false,
+            technicalFailure: false,
+            error: '',
+          }
+        : null,
+    };
+  }
+
+  function loadHardWordSoundFormState(rawOverride, catalogOverride) {
+    try {
+      var saved =
+        rawOverride === undefined
+          ? JSON.parse(localStorage.getItem(HARD_WORD_SOUND_FORM_STORAGE_KEY) || 'null')
+          : rawOverride;
+      if (
+        !saved ||
+        typeof saved !== 'object' ||
+        Array.isArray(saved) ||
+        Number(saved.version) !== 1 ||
+        saved.catalogId !== HARD_WORD_AUDIO_CATALOG_ID
+      ) {
+        return defaultHardWordSoundFormState();
+      }
+      return {
+        version: 1,
+        catalogId: HARD_WORD_AUDIO_CATALOG_ID,
+        cursor: Math.max(0, Math.floor(Number(saved.cursor) || 0)) % 751,
+        entries: normaliseHardWordSoundFormEntries(saved.entries),
+        journal: Array.isArray(saved.journal)
+          ? saved.journal
+              .filter(function (item) {
+                return (
+                  item &&
+                  typeof item === 'object' &&
+                  (item.type === 'read' || item.type === 'spell') &&
+                  String(item.wordId || '')
+                );
+              })
+              .map(function (item) {
+                return {
+                  wordId: String(item.wordId),
+                  type: item.type,
+                  status: normaliseSoundFormStatus(
+                    item.status,
+                    item.type === 'read'
+                      ? ['recorded_pending_human_review', 'skipped', 'technical_deferred']
+                      : ['independent_correct', 'needs_repair', 'skipped', 'technical_deferred'],
+                  ),
+                  at: normaliseHardWordCounter(item.at, Number.MAX_SAFE_INTEGER),
+                };
+              })
+              .filter(function (item) {
+                return Boolean(item.status);
+              })
+              .slice(-500)
+          : [],
+        active: normaliseHardWordSoundFormActive(saved.active, catalogOverride),
+      };
+    } catch (error) {
+      return defaultHardWordSoundFormState();
+    }
+  }
+
+  function saveHardWordSoundFormState() {
+    hardWordSoundFormState.version = 1;
+    hardWordSoundFormState.catalogId = HARD_WORD_AUDIO_CATALOG_ID;
+    try {
+      localStorage.setItem(
+        HARD_WORD_SOUND_FORM_STORAGE_KEY,
+        JSON.stringify(hardWordSoundFormState),
+      );
+    } catch (error) {
+      showToast('这台设备暂时无法保存声形练习进度。');
+    }
+  }
+
+  function validateImportedHardWordSoundFormState(raw, catalogOverride) {
+    if (
+      !catalogOverride ||
+      !Array.isArray(catalogOverride.entries) ||
+      catalogOverride.entries.length !== 751 ||
+      !hasExactObjectKeys(raw, [
+        'active',
+        'catalogId',
+        'cursor',
+        'entries',
+        'journal',
+        'version',
+      ]) ||
+      raw.version !== 1 ||
+      raw.catalogId !== HARD_WORD_AUDIO_CATALOG_ID ||
+      !Number.isInteger(raw.cursor) ||
+      raw.cursor < 0 ||
+      raw.cursor >= 751 ||
+      !raw.entries ||
+      typeof raw.entries !== 'object' ||
+      Array.isArray(raw.entries) ||
+      Object.keys(raw.entries).length > 751 ||
+      !Array.isArray(raw.journal) ||
+      raw.journal.length > 500 ||
+      (raw.active !== null &&
+        (!raw.active || typeof raw.active !== 'object' || Array.isArray(raw.active)))
+    ) {
+      throw new Error('Invalid hard-word sound-form state');
+    }
+    var readKeys = ['attempts', 'lastAt', 'recordings', 'skips', 'status'];
+    var spellKeys = ['attempts', 'independentPasses', 'lastAt', 'repairNeeded', 'skips', 'status'];
+    Object.keys(raw.entries).forEach(function (wordId) {
+      var entry = raw.entries[wordId];
+      if (
+        typeof wordId !== 'string' ||
+        !wordId ||
+        !hasExactObjectKeys(entry, ['read', 'spell']) ||
+        !hasExactObjectKeys(entry.read, readKeys) ||
+        !hasExactObjectKeys(entry.spell, spellKeys)
+      ) {
+        throw new Error('Invalid hard-word sound-form entry');
+      }
+      [
+        [entry.read, readKeys],
+        [entry.spell, spellKeys],
+      ].forEach(function (group) {
+        group[1]
+          .filter(function (key) {
+            return key !== 'status';
+          })
+          .forEach(function (key) {
+            var maximum = key === 'lastAt' ? Number.MAX_SAFE_INTEGER : 10000;
+            if (!Number.isInteger(group[0][key]) || group[0][key] < 0 || group[0][key] > maximum) {
+              throw new Error('Invalid hard-word sound-form counter');
+            }
+          });
+      });
+      if (
+        ['', 'recorded_pending_human_review', 'skipped'].indexOf(entry.read.status) < 0 ||
+        ['', 'independent_correct', 'needs_repair', 'skipped'].indexOf(entry.spell.status) < 0 ||
+        entry.read.recordings + entry.read.skips !== entry.read.attempts ||
+        entry.spell.independentPasses + entry.spell.repairNeeded + entry.spell.skips !==
+          entry.spell.attempts ||
+        (entry.read.attempts === 0
+          ? entry.read.status !== '' || entry.read.lastAt !== 0
+          : !entry.read.status || entry.read.lastAt === 0) ||
+        (entry.spell.attempts === 0
+          ? entry.spell.status !== '' || entry.spell.lastAt !== 0
+          : !entry.spell.status || entry.spell.lastAt === 0)
+      ) {
+        throw new Error('Invalid hard-word sound-form status');
+      }
+    });
+    raw.journal.forEach(function (item) {
+      var allowed =
+        item && item.type === 'read'
+          ? ['recorded_pending_human_review', 'skipped', 'technical_deferred']
+          : item && item.type === 'spell'
+            ? ['independent_correct', 'needs_repair', 'skipped', 'technical_deferred']
+            : [];
+      if (
+        !hasExactObjectKeys(item, ['at', 'status', 'type', 'wordId']) ||
+        typeof item.wordId !== 'string' ||
+        !item.wordId ||
+        allowed.indexOf(item.status) < 0 ||
+        !Number.isInteger(item.at) ||
+        item.at < 0 ||
+        item.at > Number.MAX_SAFE_INTEGER
+      ) {
+        throw new Error('Invalid hard-word sound-form journal');
+      }
+    });
+    if (raw.active) {
+      if (
+        !hasExactObjectKeys(raw.active, ['index', 'queue', 'results', 'runId', 'step', 'task']) ||
+        typeof raw.active.runId !== 'string' ||
+        !raw.active.runId.trim() ||
+        raw.active.runId.length > 80 ||
+        !Number.isInteger(raw.active.index) ||
+        raw.active.index < 0 ||
+        raw.active.index > 20 ||
+        !Array.isArray(raw.active.queue) ||
+        raw.active.queue.length !== 20 ||
+        !Array.isArray(raw.active.results) ||
+        raw.active.results.length !== raw.active.index
+      ) {
+        throw new Error('Invalid hard-word sound-form active session');
+      }
+      raw.active.queue.forEach(function (item) {
+        if (
+          !hasExactObjectKeys(item, ['type', 'wordId']) ||
+          ['read', 'spell'].indexOf(item.type) < 0 ||
+          typeof item.wordId !== 'string' ||
+          !item.wordId
+        ) {
+          throw new Error('Invalid hard-word sound-form queue');
+        }
+      });
+      var currentImportedItem = raw.active.queue[raw.active.index] || null;
+      var allowedImportedSteps = currentImportedItem
+        ? currentImportedItem.type === 'read'
+          ? ['read-info', 'read-syllables', 'read-record', 'read-compare']
+          : ['spell-count', 'spell-syllables', 'spell-final', 'spell-result']
+        : ['summary'];
+      if (allowedImportedSteps.indexOf(raw.active.step) < 0) {
+        throw new Error('Invalid hard-word sound-form step');
+      }
+      raw.active.results.forEach(function (result) {
+        if (
+          !hasExactObjectKeys(result, ['status', 'type', 'wordId']) ||
+          typeof result.wordId !== 'string'
+        ) {
+          throw new Error('Invalid hard-word sound-form result');
+        }
+      });
+      if (raw.active.index < 20) {
+        if (
+          !hasExactObjectKeys(raw.active.task, [
+            'audioFailed',
+            'audioReady',
+            'error',
+            'meaning',
+            'pos',
+            'spelling',
+            'splitBoundaries',
+            'syllableCount',
+            'syllables',
+            'technicalFailure',
+          ]) ||
+          typeof raw.active.task.audioFailed !== 'boolean' ||
+          typeof raw.active.task.audioReady !== 'boolean' ||
+          typeof raw.active.task.technicalFailure !== 'boolean' ||
+          typeof raw.active.task.meaning !== 'string' ||
+          raw.active.task.meaning.length > 160 ||
+          typeof raw.active.task.pos !== 'string' ||
+          raw.active.task.pos.length > 60 ||
+          typeof raw.active.task.spelling !== 'string' ||
+          raw.active.task.spelling.length > 120 ||
+          typeof raw.active.task.syllableCount !== 'string' ||
+          raw.active.task.syllableCount.length > 3 ||
+          typeof raw.active.task.syllables !== 'string' ||
+          raw.active.task.syllables.length > 160 ||
+          typeof raw.active.task.error !== 'string' ||
+          raw.active.task.error.length > 240 ||
+          !Array.isArray(raw.active.task.splitBoundaries) ||
+          raw.active.task.splitBoundaries.length > 30
+        ) {
+          throw new Error('Invalid hard-word sound-form task');
+        }
+        var importedEntry =
+          catalogOverride && Array.isArray(catalogOverride.entries)
+            ? catalogOverride.entries.find(function (entry) {
+                return entry.id === currentImportedItem.wordId;
+              })
+            : null;
+        var importedWordLength = importedEntry
+          ? Array.from(String(importedEntry.displayWord || importedEntry.normalizedHeadword)).length
+          : 0;
+        if (
+          !importedWordLength ||
+          raw.active.task.splitBoundaries.some(function (value, index, list) {
+            return (
+              !Number.isInteger(value) ||
+              value <= 0 ||
+              value >= importedWordLength ||
+              (index > 0 && list[index - 1] >= value)
+            );
+          })
+        ) {
+          throw new Error('Invalid hard-word sound-form split boundaries');
+        }
+      } else if (raw.active.task !== null || raw.active.step !== 'summary') {
+        throw new Error('Invalid hard-word sound-form summary');
+      }
+    }
+    var normalised = loadHardWordSoundFormState(raw, catalogOverride);
+    if (raw.active && !normalised.active) {
+      throw new Error('Invalid hard-word sound-form active session');
+    }
+    if (
+      Object.keys(normalised.entries).length !== Object.keys(raw.entries).length ||
+      normalised.journal.length !== raw.journal.length
+    ) {
+      throw new Error('Hard-word sound-form state was truncated');
+    }
+    return normalised;
+  }
+
   function hardWordEntryState(wordId) {
     if (!hardWordPracticeState.entries[wordId]) {
       hardWordPracticeState.entries[wordId] = {
@@ -4065,6 +4935,18 @@
     );
   }
 
+  function hardWordSoundFormProgress() {
+    return Object.keys(hardWordSoundFormState.entries).reduce(
+      function (summary, wordId) {
+        var entry = hardWordSoundFormState.entries[wordId] || {};
+        if (Number(entry.read && entry.read.recordings) > 0) summary.recorded += 1;
+        if (Number(entry.spell && entry.spell.independentPasses) > 0) summary.spelled += 1;
+        return summary;
+      },
+      { recorded: 0, spelled: 0 },
+    );
+  }
+
   function appendHardWordJournal(wordId, mode, outcome) {
     hardWordPracticeState.journal.push({
       wordId: wordId,
@@ -4081,6 +4963,10 @@
     var entries = hardWordsCatalog.entries;
     var counts = hardWordsCounts(entries);
     var practiceProgress = hardWordCatalogProgress();
+    var soundFormProgress = hardWordSoundFormProgress();
+    var soundFormButtonLabel = hardWordSoundFormState.active
+      ? '继续上次声形练习'
+      : '正式声形练习 · 10 词 20 题';
     mount.innerHTML =
       '<section class="hard-words-stats" aria-label="学生难词统计">' +
       hardWordsStat(entries.length, '全部难词', 'all') +
@@ -4117,11 +5003,27 @@
         hardWordsPracticeFilter,
       ) +
       '</div></section>' +
-      '<section class="panel hard-words-practice-launch" aria-label="学生难词基础练习"><div><p class="eyebrow">BASIC PRACTICE</p><h2>462 词都能练</h2><p>独立拼对 <strong>' +
+      '<section class="panel hard-words-practice-launch" aria-label="学生难词基础练习"><div><p class="eyebrow">BASIC PRACTICE</p><h2>' +
+      entries.length +
+      ' 词都能练</h2><p>独立拼对 <strong>' +
       practiceProgress.independent +
-      '</strong> / 462 · 已交句子 <strong>' +
+      '</strong> / ' +
+      entries.length +
+      ' · 已交句子 <strong>' +
       practiceProgress.sentences +
-      '</strong> / 462</p></div><div class="hard-words-launch-actions"><button class="primary-button" type="button" data-action="hard-words-start-spell">拼写练习 · 10 词</button><button class="secondary-button" type="button" data-action="hard-words-start-sentence">造句练习 · 5 词</button></div></section>' +
+      '</strong> / ' +
+      entries.length +
+      '<br>声形练习：已录朗读 <strong>' +
+      soundFormProgress.recorded +
+      '</strong> / ' +
+      entries.length +
+      ' · 独立拼对 <strong>' +
+      soundFormProgress.spelled +
+      '</strong> / ' +
+      entries.length +
+      '</p></div><div class="hard-words-launch-actions"><button class="primary-button" type="button" data-action="start-sound-form-practice">' +
+      esc(soundFormButtonLabel) +
+      '</button><button class="secondary-button" type="button" data-action="hard-words-start-spell">基础拼写 · 10 词</button><button class="secondary-button" type="button" data-action="hard-words-start-sentence">造句草稿 · 5 词</button><button class="text-button hard-words-dual-launch" type="button" data-action="open-syllable-tutorial">先学音节 · 约 7 分钟</button></div></section>' +
       '<section class="hard-words-results" aria-live="polite"><div class="hard-words-result-head"><p>找到 <strong data-hard-words-match-count>0</strong> 个词</p><small>以下每个词都可单独练习</small></div><small class="hard-words-practice-note">未经审校的词不提供词义或标准句答案；造句只保存为待老师评阅。</small><div data-hard-words-results></div></section>';
     renderHardWordsResults(true);
   }
@@ -4244,7 +5146,9 @@
       '">' +
       esc(hardWordsPracticeLabel(entry.practiceStatus)) +
       '</span></div>' +
-      '<div class="hard-word-actions"><button class="secondary-button" type="button" data-action="hard-word-spell" data-word-id="' +
+      '<div class="hard-word-actions"><button class="primary-button" type="button" data-action="start-sound-form-practice" data-word-id="' +
+      esc(entry.id) +
+      '">练声形</button><button class="secondary-button" type="button" data-action="hard-word-spell" data-word-id="' +
       esc(entry.id) +
       '">练拼写</button><button class="secondary-button" type="button" data-action="hard-word-sentence" data-word-id="' +
       esc(entry.id) +
@@ -4302,6 +5206,1125 @@
         return entry.id === wordId;
       }) || null
     );
+  }
+
+  function startSyllableTutorial(options) {
+    cleanupMedia();
+    session = null;
+    syllableTutorialState = {
+      step: 0,
+      quizIndex: 0,
+      answered: false,
+      correct: false,
+      feedback: '',
+      audioReady: false,
+      audioFailed: false,
+    };
+    currentView = 'syllable-tutorial';
+    if (!(options && options.historyReady) && history.pushState) {
+      history.pushState(
+        Object.assign({}, history.state || {}, { wordlabView: 'syllable-tutorial' }),
+        '',
+        location.href,
+      );
+    }
+    renderSyllableTutorial();
+    scrollToTop();
+  }
+
+  function renderSyllableTutorial() {
+    if (!syllableTutorialState) return startSyllableTutorial({ historyReady: true });
+    currentView = 'syllable-tutorial';
+    setActiveNav('hard-words');
+    var step = SYLLABLE_TUTORIAL_STEPS[syllableTutorialState.step] || 'finish';
+    main.innerHTML =
+      '<section class="syllable-tutorial-shell" data-syllable-tutorial data-syllable-step="' +
+      esc(step) +
+      '"><header class="syllable-tutorial-head"><button class="text-button" type="button" data-action="syllable-exit">← 难词表</button><p>' +
+      (syllableTutorialState.step + 1) +
+      ' / ' +
+      SYLLABLE_TUTORIAL_STEPS.length +
+      '</p></header><div class="hard-word-practice-track" aria-hidden="true"><i style="width:' +
+      ((syllableTutorialState.step + 1) / SYLLABLE_TUTORIAL_STEPS.length) * 100 +
+      '%"></i></div>' +
+      renderSyllableTutorialStep(step) +
+      '</section>';
+  }
+
+  function renderSyllableTutorialStep(step) {
+    if (step === 'idea') return renderSyllableIdea();
+    if (step === 'layers') return renderSyllableLayers();
+    if (step === 'examples') return renderSyllableExamples();
+    if (step === 'quiz') return renderSyllableQuiz();
+    return renderSyllableFinish();
+  }
+
+  function syllableNextButton(label) {
+    return (
+      '<button class="primary-button" type="button" data-action="syllable-next">' +
+      esc(label || '继续') +
+      '</button>'
+    );
+  }
+
+  function renderSyllableIdea() {
+    return (
+      '<article class="panel syllable-tutorial-card"><p class="eyebrow">第 1 课 · 声音拍</p><h1>音节是声音的“拍”</h1><p class="syllable-lead">先听嘴里发出几拍声音，再看字母。<strong>不要数元音字母。</strong></p>' +
+      '<div class="syllable-beat-demo" data-syllable-example="squeeze" data-syllable-count="1" data-primary-stress="0"><span>squeeze</span><strong>●</strong><small>1 拍。ee 有两个字母，却只发一个元音声音。</small></div>' +
+      '<div class="syllable-callout"><strong>快速做法</strong><p>自然地读词；轻轻把手放在下巴下；每听见一个元音核，通常就是一拍。少数词尾的 l、n 也能独立成拍，所以最后仍要用词典音频核对。</p></div>' +
+      '<footer class="syllable-card-actions">' +
+      syllableNextButton('看懂三种“分法”') +
+      '</footer></article>'
+    );
+  }
+
+  function renderSyllableLayers() {
+    return (
+      '<article class="panel syllable-tutorial-card"><p class="eyebrow">第 2 课 · 三层表示</p><h1>同一个词，有三层表示</h1><div class="syllable-layer-grid">' +
+      '<section data-syllable-layer="sound"><span>① 听音音节</span><h2>先数声音拍</h2><p><strong>fountain</strong> 听成两拍：/faʊn/ · /tɪn/。这是本课判断音节数的依据。</p></section>' +
+      '<section data-syllable-layer="dictionary"><span>② 词典音标分节</span><h2>用点号核对</h2><p>词典可写 /ˈfaʊn.tɪn/。重音符号在重读音节前；词典和口音之间可能略有差异。</p></section>' +
+      '<section data-syllable-layer="spelling"><span>③ 本课拼写分块</span><h2>帮助记字母</h2><p><strong>foun / tain</strong> 是拼写支架。它方便听写，但不等于唯一的书面断词规则。</p></section>' +
+      '</div><p class="syllable-caution">不要机械套 VCV/CVC。形态块、书面断词与语音音节可能不同；弱读、成音节辅音及英美口音也会造成差异。</p><footer class="syllable-card-actions"><button class="secondary-button" type="button" data-action="syllable-back">返回</button>' +
+      syllableNextButton('看 5 个难词') +
+      '</footer></article>'
+    );
+  }
+
+  function renderSyllableExamples() {
+    var accent = state.settings.accent === 'us' ? 'us' : 'uk';
+    var rows = Object.keys(SYLLABLE_TUTORIAL_WORDS)
+      .map(function (wordId) {
+        var word = findRescueWord(wordId);
+        var guide = SYLLABLE_TUTORIAL_WORDS[wordId];
+        if (!word) return '';
+        var spoken = guide.sounds
+          .map(function (block, index) {
+            return index === guide.stress ? '<strong>' + esc(block) + '</strong>' : esc(block);
+          })
+          .join(' · ');
+        return (
+          '<li data-syllable-example="' +
+          esc(word.id) +
+          '" data-syllable-count="' +
+          guide.count +
+          '" data-syllable-stress="' +
+          guide.stress +
+          '" data-primary-stress="' +
+          guide.stress +
+          '"><button class="audio-button syllable-word-audio" type="button" data-action="syllable-audio" data-word-id="' +
+          esc(word.id) +
+          '" data-accent="' +
+          accent +
+          '" data-audio-label="' +
+          esc(word.word) +
+          ' 范音"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">' +
+          esc(word.word) +
+          '</span></button><div><span class="syllable-count-chip">' +
+          guide.count +
+          ' 拍</span><p>' +
+          spoken +
+          '</p><small>本课拼写块：' +
+          guide.spelling.map(esc).join(' / ') +
+          '</small></div></li>'
+        );
+      })
+      .join('');
+    return (
+      '<article class="panel syllable-tutorial-card"><p class="eyebrow">第 3 课 · 例词</p><h1>听一遍，再看分块</h1><p class="syllable-lead">大写的发音音节块表示主重音；下一行斜线分的是记忆用拼写块。</p><ul class="syllable-example-list">' +
+      rows +
+      '</ul><p class="syllable-audio-status" data-syllable-audio-status role="status" aria-live="polite">音频若加载失败，不算学习错误。</p><div class="syllable-variation" data-syllable-variation><strong>注意变体</strong><p><em>certificate</em> 本课锁定名词读音；<em>controversial</em> 会随口音或说话方式出现可接受的分节差异。本课只按当前播放的范音练习，不把权威词典记录的另一种读法判错。</p></div><footer class="syllable-card-actions"><button class="secondary-button" type="button" data-action="syllable-back">返回</button>' +
+      syllableNextButton('试着数声音拍') +
+      '</footer></article>'
+    );
+  }
+
+  function renderSyllableQuiz() {
+    var wordId = SYLLABLE_TUTORIAL_QUIZ[syllableTutorialState.quizIndex];
+    var word = findRescueWord(wordId);
+    var guide = SYLLABLE_TUTORIAL_WORDS[wordId];
+    var accent = state.settings.accent === 'us' ? 'us' : 'uk';
+    var buttons = [1, 2, 3, 4, 5]
+      .map(function (count) {
+        return (
+          '<button type="button" data-action="syllable-answer" data-count="' +
+          count +
+          '"' +
+          (!syllableTutorialState.audioReady || syllableTutorialState.answered ? ' disabled' : '') +
+          '>' +
+          count +
+          '</button>'
+        );
+      })
+      .join('');
+    return (
+      '<article class="panel syllable-tutorial-card" data-syllable-quiz' +
+      (syllableTutorialState.answered
+        ? ' data-syllable-example="' +
+          esc(wordId) +
+          '" data-syllable-count="' +
+          guide.count +
+          '" data-syllable-stress="' +
+          guide.stress +
+          '" data-primary-stress="' +
+          guide.stress +
+          '"'
+        : '') +
+      '><p class="eyebrow">小测 · ' +
+      (syllableTutorialState.quizIndex + 1) +
+      ' / ' +
+      SYLLABLE_TUTORIAL_QUIZ.length +
+      '</p><h1>你听到几拍？</h1><button class="listen-orb syllable-quiz-audio" type="button" data-action="syllable-audio" data-syllable-audio data-syllable-quiz-audio data-quiz-index="' +
+      syllableTutorialState.quizIndex +
+      '" data-accent="' +
+      accent +
+      '" data-audio-label="练习范音" aria-label="播放练习范音"><span class="audio-control-icon" aria-hidden="true">▶</span></button><div class="syllable-count-options" data-syllable-answer data-syllable-quiz-answer>' +
+      buttons +
+      '</div><p class="feedback' +
+      (syllableTutorialState.feedback
+        ? syllableTutorialState.correct
+          ? ' is-correct'
+          : ' is-wrong'
+        : '') +
+      '" data-syllable-feedback data-syllable-quiz-feedback role="status" aria-live="polite">' +
+      esc(
+        syllableTutorialState.audioFailed
+          ? '音频没有成功播放，本题不判错。请重试或继续。'
+          : syllableTutorialState.feedback ||
+              (syllableTutorialState.audioReady
+                ? '已经听到范音，现在选择拍数。'
+                : '先播放范音；声音真正开始后才能作答。'),
+      ) +
+      '</p>' +
+      (syllableTutorialState.answered
+        ? '<div class="syllable-reveal"><strong>' +
+          esc(word.word) +
+          '：' +
+          guide.count +
+          ' 拍</strong><span>' +
+          guide.spelling.map(esc).join(' / ') +
+          '</span></div>'
+        : '') +
+      '<footer class="syllable-card-actions"><button class="secondary-button" type="button" data-action="syllable-back">返回</button>' +
+      (syllableTutorialState.answered
+        ? '<button class="primary-button" type="button" data-action="syllable-quiz-next">' +
+          (syllableTutorialState.quizIndex + 1 === SYLLABLE_TUTORIAL_QUIZ.length
+            ? '完成小课'
+            : '下一词') +
+          '</button>'
+        : '<button class="quiet-button" type="button" data-action="syllable-quiz-skip">跳过，不判错</button>') +
+      '</footer></article>'
+    );
+  }
+
+  function renderSyllableFinish() {
+    return '<article class="panel syllable-tutorial-card syllable-finish"><p class="eyebrow">小课完成</p><h1>以后按这个顺序分</h1><ol><li><strong>先听</strong>：数声音拍，不数元音字母。</li><li><strong>再核对</strong>：查看该词典的音标、重音标记和音频；若它用点号分节，可用来辅助核对。</li><li><strong>后拼写</strong>：按本课拼写块记字母，但不把它冒充唯一音节答案。</li></ol><p>如果词典或口音之间不同，记录所用口音与来源，不把另一种读法判错。</p><div class="syllable-sources" data-syllable-sources><h2>权威参考</h2><a href="https://dictionary.cambridge.org/dictionary/english/syllable" target="_blank" rel="noreferrer">Cambridge Dictionary：音节的定义</a><a href="https://www.oxfordlearnersdictionaries.com/about/english/pronunciation_english" target="_blank" rel="noreferrer">Oxford Learner’s Dictionaries：发音、重音与成音节辅音</a><a href="https://www.merriam-webster.com/grammar/word-division-dots-and-syllable-pronunciation-hyphens" target="_blank" rel="noreferrer">Merriam-Webster：书面断词与发音音节的区别</a></div><footer class="syllable-card-actions"><button class="secondary-button" type="button" data-action="syllable-restart">再学一次</button><button class="primary-button" type="button" data-action="syllable-exit">返回难词表</button></footer></article>';
+  }
+
+  function advanceSyllableTutorial(direction) {
+    if (!syllableTutorialState) return;
+    stopAudio();
+    syllableTutorialState.step = Math.max(
+      0,
+      Math.min(SYLLABLE_TUTORIAL_STEPS.length - 1, syllableTutorialState.step + direction),
+    );
+    syllableTutorialState.feedback = '';
+    syllableTutorialState.correct = false;
+    syllableTutorialState.audioReady = false;
+    syllableTutorialState.audioFailed = false;
+    renderSyllableTutorial();
+    scrollToTop();
+  }
+
+  function answerSyllableQuiz(button) {
+    if (
+      !syllableTutorialState ||
+      syllableTutorialState.answered ||
+      !syllableTutorialState.audioReady
+    )
+      return;
+    var wordId = SYLLABLE_TUTORIAL_QUIZ[syllableTutorialState.quizIndex];
+    var expected = SYLLABLE_TUTORIAL_WORDS[wordId].count;
+    var chosen = Number(button.dataset.count);
+    syllableTutorialState.answered = true;
+    syllableTutorialState.correct = chosen === expected;
+    syllableTutorialState.feedback =
+      chosen === expected
+        ? '听对了：每一拍通常都有一个元音核。'
+        : '这条范音是 ' + expected + ' 拍。慢放一次，再跟着节奏读。';
+    renderSyllableTutorial();
+  }
+
+  function nextSyllableQuiz(skipped) {
+    if (!syllableTutorialState) return;
+    stopAudio();
+    if (skipped) syllableTutorialState.feedback = '已跳过，本题不判错。';
+    if (syllableTutorialState.quizIndex + 1 < SYLLABLE_TUTORIAL_QUIZ.length) {
+      syllableTutorialState.quizIndex += 1;
+      syllableTutorialState.answered = false;
+      syllableTutorialState.correct = false;
+      syllableTutorialState.feedback = '';
+      syllableTutorialState.audioReady = false;
+      syllableTutorialState.audioFailed = false;
+      renderSyllableTutorial();
+      return;
+    }
+    advanceSyllableTutorial(1);
+  }
+
+  function playSyllableTutorialAudio(button) {
+    var wordId = button.matches('[data-syllable-quiz-audio]')
+      ? SYLLABLE_TUTORIAL_QUIZ[syllableTutorialState.quizIndex]
+      : button.dataset.wordId;
+    var word = findRescueWord(wordId);
+    if (!word) return;
+    if (toggleCurrentPlayback(button)) return;
+    var accent = button.dataset.accent === 'us' ? 'us' : 'uk';
+    var source = rescueAudioSource(word, accent);
+    if (!source) {
+      if (button.matches('[data-syllable-quiz-audio]')) lockSyllableTutorialAudioFailure();
+      else {
+        var feedback = main.querySelector('[data-syllable-audio-status]');
+        if (feedback) feedback.textContent = '音频没有成功播放，本次不判错。';
+      }
+      return;
+    }
+    startAudioPlayback(source + '?v=' + encodeURIComponent(AUDIO_ASSET_VERSION), button, 1, {
+      syllableTutorial: button.matches('[data-syllable-quiz-audio]'),
+    });
+  }
+
+  function unlockSyllableTutorialAnswers(button) {
+    if (
+      !syllableTutorialState ||
+      currentView !== 'syllable-tutorial' ||
+      !button ||
+      !button.matches('[data-syllable-quiz-audio]')
+    )
+      return;
+    syllableTutorialState.audioReady = true;
+    syllableTutorialState.audioFailed = false;
+    main.querySelectorAll('[data-action="syllable-answer"]').forEach(function (choice) {
+      choice.disabled = false;
+    });
+    var feedback = main.querySelector('[data-syllable-quiz-feedback]');
+    if (feedback) feedback.textContent = '已经听到范音，现在选择拍数。';
+  }
+
+  function lockSyllableTutorialAudioFailure() {
+    if (!syllableTutorialState || currentView !== 'syllable-tutorial') return;
+    syllableTutorialState.audioReady = false;
+    syllableTutorialState.audioFailed = true;
+    main.querySelectorAll('[data-action="syllable-answer"]').forEach(function (choice) {
+      choice.disabled = true;
+    });
+    var feedback = main.querySelector('[data-syllable-quiz-feedback]');
+    if (feedback) {
+      feedback.classList.remove('is-correct', 'is-wrong');
+      feedback.textContent = '音频没有成功播放，本题不判错。请重试或跳过。';
+    }
+  }
+
+  function buildHardWordSoundFormQueue(entries, startsWithRead) {
+    var firstType = startsWithRead ? 'read' : 'spell';
+    var first = entries.map(function (entry, index) {
+      return {
+        wordId: entry.id,
+        type: index % 2 === 0 ? firstType : firstType === 'read' ? 'spell' : 'read',
+      };
+    });
+    return first.concat(
+      first.map(function (item) {
+        return { wordId: item.wordId, type: item.type === 'read' ? 'spell' : 'read' };
+      }),
+    );
+  }
+
+  function chooseHardWordSoundFormBatch(targetWordId) {
+    if (!hardWordsCatalog || hardWordsCatalog.entries.length !== 751) return [];
+    var all = hardWordsCatalog.entries;
+    var cursor = hardWordSoundFormState.cursor % all.length;
+    var selected = [];
+    if (targetWordId) {
+      var target = findHardWordEntry(targetWordId);
+      if (target) selected.push(target);
+    }
+    for (var offset = 0; selected.length < HARD_WORD_SOUND_FORM_BATCH_SIZE; offset += 1) {
+      var candidate = all[(cursor + offset) % all.length];
+      if (
+        candidate &&
+        !selected.some(function (entry) {
+          return entry.id === candidate.id;
+        })
+      ) {
+        selected.push(candidate);
+      }
+    }
+    if (!targetWordId) {
+      hardWordSoundFormState.cursor = (cursor + HARD_WORD_SOUND_FORM_BATCH_SIZE) % all.length;
+    }
+    return selected;
+  }
+
+  function defaultDualPrototypeState(queue) {
+    if (!Array.isArray(queue) || queue.length !== HARD_WORD_SOUND_FORM_BATCH_SIZE * 2) {
+      return null;
+    }
+    var prototype = {
+      runId: 'sound-form-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+      queue: queue,
+      index: 0,
+      step: '',
+      task: null,
+      results: [],
+    };
+    resetDualPrototypeTask(prototype);
+    return prototype;
+  }
+
+  function resetDualPrototypeTask(prototype) {
+    var item = prototype.queue[prototype.index];
+    if (!item) {
+      prototype.step = 'summary';
+      prototype.task = null;
+      return;
+    }
+    prototype.task = {
+      meaning: '',
+      pos: '',
+      syllableCount: '',
+      syllables: '',
+      splitBoundaries: [],
+      spelling: '',
+      audioReady: false,
+      audioFailed: false,
+      technicalFailure: false,
+      error: '',
+    };
+    prototype.step = item.type === 'read' ? 'read-info' : 'spell-count';
+  }
+
+  function currentDualPrototypeItem() {
+    return dualPrototypeState && dualPrototypeState.queue[dualPrototypeState.index];
+  }
+
+  function currentDualPrototypeWord() {
+    var item = currentDualPrototypeItem();
+    if (!item) return null;
+    var entry = findHardWordEntry(item.wordId);
+    if (!entry) return null;
+    var rescue = findRescueWordForCatalogEntry(entry);
+    return {
+      id: entry.id,
+      word: entry.displayWord,
+      catalogEntry: entry,
+      rescue: rescue,
+      ipaUk: rescue ? rescue.ipaUk : '',
+      ipaUs: rescue ? rescue.ipaUs : '',
+      blocks: rescue ? rescue.blocks : [],
+      pos: rescue ? rescue.pos : '',
+      zh: rescue ? rescue.zh : '',
+      senseStatus: rescue ? rescue.senseStatus : '',
+      meaningTask: rescue ? rescue.meaningTask : null,
+    };
+  }
+
+  function startDualPrototype(targetWordId, options) {
+    if (!hardWordsCatalog) return showToast('请先载入学生难词表。');
+    var resume = Boolean(options && options.resume && hardWordSoundFormState.active);
+    cleanupMedia();
+    session = null;
+    currentView = 'dual-prototype-loading';
+    main.innerHTML =
+      '<section class="dual-prototype-shell" data-hard-word-sound-form-loading><div class="panel hard-words-loading" role="status" aria-live="polite"><span class="loading-dot" aria-hidden="true"></span><p>正在准备正式声形练习……</p></div></section>';
+    ensureHardWordAudioManifest()
+      .then(function () {
+        dualActionLocked = false;
+        if (resume) {
+          dualPrototypeState = normaliseHardWordSoundFormActive(hardWordSoundFormState.active);
+        } else {
+          var startingCursor = hardWordSoundFormState.cursor;
+          var selected = chooseHardWordSoundFormBatch(targetWordId);
+          if (selected.length !== HARD_WORD_SOUND_FORM_BATCH_SIZE) {
+            throw new Error('本组难词数量不足');
+          }
+          var queue = buildHardWordSoundFormQueue(
+            selected,
+            targetWordId ? true : Math.floor(startingCursor / 10) % 2 === 0,
+          );
+          dualPrototypeState = defaultDualPrototypeState(queue);
+          hardWordSoundFormState.active = dualPrototypeState;
+          saveHardWordSoundFormState();
+        }
+        if (!dualPrototypeState) throw new Error('已保存的练习进度无效');
+        currentView = 'dual-prototype';
+        if (!(options && options.historyReady) && history.pushState) {
+          history.pushState(
+            Object.assign({}, history.state || {}, {
+              wordlabView: 'hard-words',
+              dualPrototype: true,
+            }),
+            '',
+            location.href,
+          );
+        }
+        renderDualPrototype();
+        scrollToTop();
+      })
+      .catch(function (error) {
+        dualPrototypeState = null;
+        currentView = 'hard-words';
+        renderHardWordsCatalog();
+        showToast('正式声形练习暂时无法启动：' + (error.message || hardWordAudioLoadError));
+      });
+  }
+
+  function renderDualPrototype() {
+    if (!dualPrototypeState) return renderHardWordsCatalog();
+    currentView = 'dual-prototype';
+    setActiveNav('hard-words');
+    var prototype = dualPrototypeState;
+    var item = currentDualPrototypeItem();
+    var queueLength = prototype.queue.length;
+    var isBlind = Boolean(item && item.type === 'spell' && prototype.step !== 'spell-result');
+    var taskAttributes = item
+      ? ' data-dual-task-type="' +
+        esc(item.type) +
+        '"' +
+        (isBlind ? ' data-dual-blind="true"' : ' data-dual-word-id="' + esc(item.wordId) + '"')
+      : '';
+    var answerHiddenAttribute = isBlind ? ' data-answer-hidden="true"' : '';
+    main.innerHTML =
+      '<section class="dual-prototype-shell" data-dual-prototype data-dual-mixed-prototype data-hard-word-sound-form data-dual-step="' +
+      esc(prototype.step) +
+      '" data-step="' +
+      esc(prototype.step) +
+      '" data-dual-queue-position="' +
+      Math.min(prototype.index + 1, queueLength) +
+      '" data-task-position="' +
+      Math.min(prototype.index + 1, queueLength) +
+      '" data-task-type="' +
+      esc(item ? item.type : 'summary') +
+      '"' +
+      answerHiddenAttribute +
+      taskAttributes +
+      '"><header class="dual-prototype-head"><button class="text-button" type="button" data-action="dual-exit" data-dual-exit>← 难词表</button><p>' +
+      Math.min(prototype.index + 1, queueLength) +
+      ' / ' +
+      queueLength +
+      '</p></header><div class="hard-word-practice-track" aria-hidden="true"><i style="width:' +
+      (prototype.index / queueLength) * 100 +
+      '%"></i></div>' +
+      renderDualPrototypeStep(prototype) +
+      '</section>';
+    var field = main.querySelector('input:not(:disabled)');
+    if (field) field.focus({ preventScroll: true });
+  }
+
+  function renderDualPrototypeStep(state) {
+    if (state.step === 'read-info') return renderDualReadInfo(state);
+    if (state.step === 'read-syllables') return renderDualReadSyllables(state);
+    if (state.step === 'read-record') return renderDualReadRecord(state);
+    if (state.step === 'read-compare') return renderDualReadCompare(state);
+    if (state.step === 'spell-count') return renderDualSpellCount(state);
+    if (state.step === 'spell-syllables') return renderDualSpellSyllables(state);
+    if (state.step === 'spell-final') return renderDualSpellFinal(state);
+    if (state.step === 'spell-result') return renderDualSpellResult(state);
+    if (state.step === 'summary') return renderDualSummary(state);
+    return '';
+  }
+
+  function dualTaskHeading(label) {
+    return (
+      '<p class="eyebrow">' + esc(label) + '</p><p class="dual-task-kicker">这题只做当前一步</p>'
+    );
+  }
+
+  function renderDualReadInfo(prototype) {
+    var word = currentDualPrototypeWord();
+    return (
+      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-read-info>' +
+      dualTaskHeading('看词读音 · 1/3') +
+      '<h1 data-dual-visible-word>' +
+      esc(word.word) +
+      '</h1><p class="dual-source-note">先写你记得的内容；未经审校的答案会留给老师核对。</p><form class="dual-stacked-form" data-dual-read-info-form><label>写出中文意思<input name="meaning" data-dual-read-meaning autocomplete="off" value="' +
+      esc(prototype.task.meaning) +
+      '"></label><label>写出词性<input name="pos" data-dual-read-pos autocomplete="off" autocapitalize="none" placeholder="例如 n." value="' +
+      esc(prototype.task.pos) +
+      '"></label><button class="primary-button" type="submit">下一步</button></form>' +
+      dualSkipButton() +
+      '<p class="feedback" data-dual-feedback role="status" aria-live="polite">' +
+      esc(prototype.task.error) +
+      '</p></article>'
+    );
+  }
+
+  function renderDualReadSyllables(prototype) {
+    var word = currentDualPrototypeWord();
+    var boundaries = Array.isArray(prototype.task.splitBoundaries)
+      ? prototype.task.splitBoundaries
+      : [];
+    return (
+      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-read-syllables>' +
+      '<p class="eyebrow">看词读音 · 2/3</p>' +
+      '<h1>你会怎么分拍？</h1><p class="dual-split-instruction">轻点字母缝隙，按你准备朗读的节奏分组。</p>' +
+      renderDualWordSplitter(word.word, boundaries) +
+      '<p class="dual-split-preview' +
+      (boundaries.length ? ' is-ready' : '') +
+      '" data-dual-split-preview aria-live="polite">' +
+      esc(dualSplitPreview(word.word, boundaries)) +
+      '</p><div class="dual-split-actions"><button class="quiet-button" type="button" data-action="dual-clear-splits"' +
+      (boundaries.length ? '' : ' disabled') +
+      '>重新切</button><button class="primary-button" type="button" data-action="dual-confirm-splits">切好了，继续</button></div><p class="dual-split-note">这是声音和字母的对应；不同口音，分法可以不同。</p>' +
+      dualSkipButton() +
+      '<p class="feedback" data-dual-feedback role="status" aria-live="polite">' +
+      esc(prototype.task.error) +
+      '</p></article>'
+    );
+  }
+
+  function renderDualWordSplitter(word, boundaries) {
+    var letters = Array.from(String(word || ''));
+    var selected = Array.isArray(boundaries) ? boundaries : [];
+    var chunks = dualSplitChunks(word, selected);
+    var chunkOffset = 0;
+    return (
+      '<div class="dual-word-splitter" data-dual-word-splitter role="group" aria-label="给 ' +
+      esc(word) +
+      ' 添加本课拼写分块">' +
+      chunks
+        .map(function (chunk) {
+          var chunkStart = chunkOffset;
+          chunkOffset += Array.from(chunk).length;
+          return (
+            '<span class="dual-split-chunk">' +
+            Array.from(chunk)
+              .map(function (letter, localIndex) {
+                var index = chunkStart + localIndex;
+                var isLast = index === letters.length - 1;
+                var isActive = selected.indexOf(index + 1) >= 0;
+                if (isLast) {
+                  return (
+                    '<span class="dual-split-unit is-last"><span class="dual-split-letter" aria-hidden="true">' +
+                    esc(letter) +
+                    '</span></span>'
+                  );
+                }
+                return (
+                  '<button class="dual-split-unit dual-split-gap' +
+                  (isActive ? ' is-active' : '') +
+                  '" type="button" data-action="dual-toggle-split" data-boundary="' +
+                  (index + 1) +
+                  '" aria-pressed="' +
+                  String(isActive) +
+                  '" aria-label="在第 ' +
+                  (index + 1) +
+                  ' 个字母后' +
+                  (isActive ? '撤销分隔' : '添加分隔') +
+                  '"><span class="dual-split-letter" aria-hidden="true">' +
+                  esc(letter) +
+                  '</span><span class="dual-split-mark" aria-hidden="true"></span></button>'
+                );
+              })
+              .join('') +
+            '</span>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
+  function dualSplitChunks(word, boundaries) {
+    var text = String(word || '');
+    var safe = (Array.isArray(boundaries) ? boundaries : [])
+      .map(Number)
+      .filter(function (boundary, index, list) {
+        return (
+          Number.isInteger(boundary) &&
+          boundary > 0 &&
+          boundary < text.length &&
+          list.indexOf(boundary) === index
+        );
+      })
+      .sort(function (a, b) {
+        return a - b;
+      });
+    var chunks = [];
+    var start = 0;
+    safe.forEach(function (boundary) {
+      chunks.push(text.slice(start, boundary));
+      start = boundary;
+    });
+    chunks.push(text.slice(start));
+    return chunks;
+  }
+
+  function dualSplitPreview(word, boundaries) {
+    var chunks = dualSplitChunks(word, boundaries);
+    return boundaries.length ? chunks.join(' · ') : '保持完整 · 按 1 拍读';
+  }
+
+  function toggleDualSplitBoundary(button) {
+    if (!dualPrototypeState || dualPrototypeState.step !== 'read-syllables') return;
+    if (button.dataset.splitToggleLocked === 'true') return;
+    button.dataset.splitToggleLocked = 'true';
+    queueMicrotask(function () {
+      if (button.isConnected) delete button.dataset.splitToggleLocked;
+    });
+    var boundary = Number(button.dataset.boundary);
+    var word = currentDualPrototypeWord();
+    if (!word || !Number.isInteger(boundary) || boundary <= 0 || boundary >= word.word.length) {
+      return;
+    }
+    var boundaries = dualPrototypeState.task.splitBoundaries;
+    var existing = boundaries.indexOf(boundary);
+    if (existing >= 0) boundaries.splice(existing, 1);
+    else boundaries.push(boundary);
+    boundaries.sort(function (a, b) {
+      return a - b;
+    });
+    dualPrototypeState.task.error = '';
+    var isActive = boundaries.indexOf(boundary) >= 0;
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-pressed', String(isActive));
+    button.setAttribute(
+      'aria-label',
+      '在第 ' + boundary + ' 个字母后' + (isActive ? '撤销分隔' : '添加分隔'),
+    );
+    var preview = main.querySelector('[data-dual-split-preview]');
+    if (preview) {
+      preview.textContent = dualSplitPreview(word.word, boundaries);
+      preview.classList.toggle('is-ready', Boolean(boundaries.length));
+    }
+    var clear = main.querySelector('[data-action="dual-clear-splits"]');
+    if (clear) clear.disabled = !boundaries.length;
+    var feedback = main.querySelector('[data-dual-feedback]');
+    if (feedback) feedback.textContent = '';
+    persistDualPrototypeProgress();
+  }
+
+  function clearDualSplitBoundaries() {
+    if (!dualPrototypeState || dualPrototypeState.step !== 'read-syllables') return;
+    dualPrototypeState.task.splitBoundaries = [];
+    dualPrototypeState.task.error = '';
+    main.querySelectorAll('[data-action="dual-toggle-split"]').forEach(function (button) {
+      button.classList.remove('is-active');
+      button.setAttribute('aria-pressed', 'false');
+      button.setAttribute('aria-label', '在第 ' + button.dataset.boundary + ' 个字母后添加分隔');
+    });
+    var preview = main.querySelector('[data-dual-split-preview]');
+    if (preview) {
+      preview.textContent = '保持完整 · 按 1 拍读';
+      preview.classList.remove('is-ready');
+    }
+    var clear = main.querySelector('[data-action="dual-clear-splits"]');
+    if (clear) clear.disabled = true;
+    var feedback = main.querySelector('[data-dual-feedback]');
+    if (feedback) feedback.textContent = '';
+    persistDualPrototypeProgress();
+  }
+
+  function confirmDualSplitBoundaries() {
+    if (!dualPrototypeState || dualPrototypeState.step !== 'read-syllables') return;
+    var word = currentDualPrototypeWord();
+    var boundaries = dualPrototypeState.task.splitBoundaries;
+    if (!word) return;
+    dualPrototypeState.task.syllables = dualSplitChunks(word.word, boundaries).join(' / ');
+    dualPrototypeState.task.error = '';
+    dualPrototypeState.step = 'read-record';
+    persistDualPrototypeProgress();
+    renderDualPrototype();
+  }
+
+  function renderDualReadRecord(prototype) {
+    var word = currentDualPrototypeWord();
+    return (
+      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-read-record>' +
+      dualTaskHeading('看词读音 · 3/3') +
+      '<h1 data-dual-visible-word>' +
+      esc(word.word) +
+      '</h1><p>现在读一遍，完成后才显示范音。</p><div class="dual-record-actions"><button class="primary-button" type="button" data-action="dual-record" data-dual-record>● 开始录音</button>' +
+      dualSkipButton() +
+      '</div><p id="recordStatus" class="dual-status" data-dual-record-status role="status" aria-live="polite">' +
+      esc(prototype.task.error || '录音只保留在当前页面。') +
+      '</p></article>'
+    );
+  }
+
+  function renderDualReadCompare(prototype) {
+    var word = currentDualPrototypeWord();
+    var accent = state.settings.accent === 'us' ? 'us' : 'uk';
+    var ipa = accent === 'us' ? word.ipaUs : word.ipaUk;
+    var rescue = word.rescue;
+    var hasPronunciationReference = Boolean(rescue);
+    var hasLexicalReference = Boolean(
+      rescue &&
+      rescue.senseStatus !== 'pending_context' &&
+      !(rescue.meaningTask && rescue.meaningTask.masteryEligible === false),
+    );
+    var syllables = rescue && Array.isArray(rescue.blocks) ? rescue.blocks : [];
+    var referenceHtml = hasLexicalReference
+      ? '<p data-sound-form-lexical-reference><span>审校参考</span><strong>' +
+        esc(word.zh + ' · ' + word.pos) +
+        '</strong></p>'
+      : '<p data-sound-form-pending-review><span>意思 / 词性</span><strong>待教师结合原句核对</strong></p>';
+    var pronunciationHtml = hasPronunciationReference
+      ? '<p class="dual-pronunciation-line" data-sound-form-pronunciation-reference>' +
+        esc(ipa) +
+        '</p>'
+      : '';
+    var blockHtml = syllables.length
+      ? '<p data-sound-form-block-reference><span>本卡范音的分块</span><strong>' +
+        esc(syllables.join(' · ')) +
+        '</strong></p>'
+      : '<p data-sound-form-pending-review><span>声音—拼写分块</span><strong>你的分法已保存，待教师核对</strong></p>';
+    var modelAudioLabel = hasPronunciationReference ? '审校范音' : '本次合成范音';
+    return (
+      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-read-compare><p class="eyebrow">录音对照 · 待人工核对</p><h1>' +
+      esc(word.word) +
+      '</h1>' +
+      pronunciationHtml +
+      '<div class="dual-answer-compare" data-dual-read-answer-compare><p><span>你写的意思 / 词性</span><strong>' +
+      esc(prototype.task.meaning + ' · ' + prototype.task.pos) +
+      '</strong></p>' +
+      referenceHtml +
+      '<p><span>你的声音分块</span><strong>' +
+      esc(prototype.task.syllables) +
+      '</strong></p>' +
+      blockHtml +
+      '</div><p class="dual-split-note">录音只证明你完成了朗读；请交替听自己与范音，最终由老师核对。' +
+      (hasPronunciationReference
+        ? ''
+        : ' 该词尚未锁定义项，合成范音只是本次练习读法，不代表所有读音。') +
+      '</p><div class="dual-compare-actions"><button class="secondary-button" type="button" data-action="play-recording" data-dual-own-audio data-audio-label="自己的朗读"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">听自己</span></button><button class="audio-button" type="button" data-action="dual-model-audio" data-dual-model-audio data-accent="' +
+      accent +
+      '" data-audio-label="' +
+      esc(modelAudioLabel) +
+      '" data-status-target="dualModelStatus"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">' +
+      esc(modelAudioLabel) +
+      '</span></button></div><p id="dualModelStatus" class="dual-status" aria-live="polite">交替听自己与范音。</p><div class="dual-footer-actions"><button class="quiet-button" type="button" data-action="dual-rerecord" data-dual-rerecord>重新录音</button><button class="primary-button" type="button" data-action="dual-finish-read" data-dual-finish-read>下一题</button></div></article>'
+    );
+  }
+
+  function renderDualBlindAudio(prototype) {
+    var disabled = prototype.task.audioReady && !prototype.task.audioFailed ? '' : ' disabled';
+    return (
+      '<button class="listen-orb dual-listen-orb" type="button" data-action="dual-spell-audio" data-dual-spell-audio data-accent="' +
+      (state.settings.accent === 'us' ? 'us' : 'uk') +
+      '" data-audio-label="盲听音频" data-status-target="dualSpellAudioStatus" aria-label="播放盲听音频"><span class="audio-control-icon" aria-hidden="true">▶</span></button><p id="dualSpellAudioStatus" class="dual-status" aria-live="polite">' +
+      (prototype.task.audioReady ? '可以作答，也可再听。' : '先播放，再作答。') +
+      '</p><input type="hidden" data-dual-input-lock' +
+      disabled +
+      '>'
+    );
+  }
+
+  function dualBlindDisabled(prototype) {
+    return prototype.task.audioReady && !prototype.task.audioFailed ? '' : ' disabled';
+  }
+
+  function renderDualSpellCount(prototype) {
+    return (
+      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-spell-count>' +
+      dualTaskHeading('听写 · 1/3') +
+      '<h1>听音，写音节数</h1>' +
+      renderDualBlindAudio(prototype) +
+      '<form class="dual-stacked-form" data-dual-spell-count-form><label>几个音节？<input type="number" min="1" max="12" inputmode="numeric" name="count" data-dual-spell-count-input aria-label="输入音节数"' +
+      ' value="' +
+      esc(prototype.task.syllableCount) +
+      '"' +
+      dualBlindDisabled(prototype) +
+      '></label><button class="primary-button" type="submit"' +
+      dualBlindDisabled(prototype) +
+      '>下一步</button></form>' +
+      dualSkipButton() +
+      dualFeedback(prototype) +
+      '</article>'
+    );
+  }
+
+  function renderDualSpellSyllables(prototype) {
+    return (
+      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-spell-syllables>' +
+      dualTaskHeading('听写 · 2/3') +
+      '<h1>把听到的音节写出来</h1>' +
+      renderDualBlindAudio(prototype) +
+      '<form class="dual-stacked-form" data-dual-spell-syllables-form><label>音节<input name="syllables" data-dual-spell-syllables-input autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="用 / 分开"' +
+      ' value="' +
+      esc(prototype.task.syllables) +
+      '"' +
+      dualBlindDisabled(prototype) +
+      '></label><button class="primary-button" type="submit"' +
+      dualBlindDisabled(prototype) +
+      '>下一步</button></form>' +
+      dualSkipButton() +
+      dualFeedback(prototype) +
+      '</article>'
+    );
+  }
+
+  function renderDualSpellFinal(prototype) {
+    return (
+      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-spell-final>' +
+      dualTaskHeading('听写 · 3/3') +
+      '<h1>最后写完整信息</h1>' +
+      renderDualBlindAudio(prototype) +
+      '<p class="dual-own-work" data-dual-own-syllables>你刚写的音节：' +
+      esc(prototype.task.syllables) +
+      '</p>' +
+      '<form class="dual-stacked-form" data-dual-spell-final-form><label>完整单词<input name="spelling" data-dual-spell-word-input autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"' +
+      ' value="' +
+      esc(prototype.task.spelling) +
+      '"' +
+      dualBlindDisabled(prototype) +
+      '></label><label>中文意思<input name="meaning" data-dual-spell-meaning-input autocomplete="off"' +
+      ' value="' +
+      esc(prototype.task.meaning) +
+      '"' +
+      dualBlindDisabled(prototype) +
+      '></label><label>词性<input name="pos" data-dual-spell-pos-input autocomplete="off" autocapitalize="none" placeholder="例如 n."' +
+      ' value="' +
+      esc(prototype.task.pos) +
+      '"' +
+      dualBlindDisabled(prototype) +
+      '></label><button class="primary-button" type="submit"' +
+      dualBlindDisabled(prototype) +
+      '>提交后对照</button></form>' +
+      dualSkipButton() +
+      dualFeedback(prototype) +
+      '</article>'
+    );
+  }
+
+  function renderDualSpellResult(prototype) {
+    var word = currentDualPrototypeWord();
+    var rescue = word.rescue;
+    var syllables = rescue && Array.isArray(rescue.blocks) ? rescue.blocks : [];
+    var hasLexicalReference = Boolean(
+      rescue &&
+      rescue.senseStatus !== 'pending_context' &&
+      !(rescue.meaningTask && rescue.meaningTask.masteryEligible === false),
+    );
+    var spellingCorrect = normaliseAnswer(prototype.task.spelling) === normaliseAnswer(word.word);
+    var analysisHtml = syllables.length
+      ? '<p data-sound-form-block-reference><span>音节数</span><strong>' +
+        esc(prototype.task.syllableCount + ' → ' + syllables.length) +
+        '</strong></p><p data-sound-form-block-reference><span>声音—拼写分块</span><strong>' +
+        esc(prototype.task.syllables + ' → ' + syllables.join(' · ')) +
+        '</strong></p>'
+      : '<p data-sound-form-pending-review><span>音节分析</span><strong>' +
+        esc(prototype.task.syllableCount + ' 拍 · ' + prototype.task.syllables) +
+        ' · 待教师核对</strong></p>';
+    var lexicalHtml = hasLexicalReference
+      ? '<p data-sound-form-lexical-reference><span>审校参考</span><strong>' +
+        esc(word.zh + ' · ' + word.pos) +
+        '</strong></p>'
+      : '<p data-sound-form-pending-review><span>意思 / 词性</span><strong>你的答案已保存，待教师结合原句核对</strong></p>';
+    var pronunciationBoundaryHtml = rescue
+      ? ''
+      : '<p class="dual-source-note" data-sound-form-synthetic-audio-note>本题按当前合成范音练习；这个词的具体词义和读法尚未锁定，待教师结合原句核对。</p>';
+    return (
+      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-spell-result data-dual-word-id="' +
+      esc(word.id) +
+      '"><p class="eyebrow">完整提交后对照</p><h1>' +
+      esc(word.word) +
+      '</h1><p class="dual-spell-verdict ' +
+      (spellingCorrect ? 'is-correct' : 'is-wrong') +
+      '">' +
+      (spellingCorrect ? '完整拼写正确' : '完整拼写需修订') +
+      '</p><div class="dual-answer-compare" data-dual-spell-answer-compare>' +
+      analysisHtml +
+      '<p><span>你写的意思 / 词性</span><strong>' +
+      esc(prototype.task.meaning + ' · ' + prototype.task.pos) +
+      '</strong></p>' +
+      lexicalHtml +
+      '</div>' +
+      pronunciationBoundaryHtml +
+      '<p class="dual-summary-note">完整拼写按词形判定；意思、词性和分块只在有审校资料时提供参考。</p><div class="dual-footer-actions"><button class="primary-button" type="button" data-action="dual-finish-spell" data-dual-finish-spell>下一题</button></div></article>'
+    );
+  }
+
+  function dualSkipButton() {
+    return '<button class="quiet-button dual-skip-button" type="button" data-action="dual-skip-task" data-dual-skip>跳过这题</button>';
+  }
+
+  function dualFeedback(prototype) {
+    var feedback = prototype.task.audioFailed
+      ? '音频未播放，本次不记错。请重试或跳过。'
+      : prototype.task.error;
+    return (
+      '<p class="feedback' +
+      (feedback ? ' is-wrong' : '') +
+      '" data-dual-feedback role="status" aria-live="polite">' +
+      esc(feedback) +
+      '</p>'
+    );
+  }
+
+  function renderDualSummary(prototype) {
+    var readDone = prototype.results.filter(function (result) {
+      return result.type === 'read' && result.status === 'recorded_pending_human_review';
+    }).length;
+    var spellCorrect = prototype.results.filter(function (result) {
+      return result.type === 'spell' && result.status === 'independent_correct';
+    }).length;
+    return (
+      '<article class="panel dual-prototype-card dual-summary" data-dual-summary data-sound-form-summary><p class="eyebrow">本组完成</p><h1>10 个词 · 20 道声形题</h1><p>已录朗读 <strong>' +
+      readDone +
+      '</strong> / 10 · 独立拼对 <strong>' +
+      spellCorrect +
+      '</strong> / 10</p><div class="dual-evidence">' +
+      prototype.results
+        .map(function (result, index) {
+          return (
+            '<p><span>' +
+            (index + 1) +
+            ' · ' +
+            esc((findHardWordEntry(result.wordId) || {}).displayWord || result.wordId) +
+            ' · ' +
+            esc(result.type === 'read' ? '看词读音' : '听音拼写') +
+            '</span><strong>' +
+            esc(soundFormStatusLabel(result.status)) +
+            '</strong></p>'
+          );
+        })
+        .join('') +
+      '</div><p class="dual-summary-note">朗读仍需人工核对；同一个词的第二种题型已用 9 道其他题隔开。</p><div class="dual-footer-actions"><button class="secondary-button" type="button" data-action="sound-form-exit">返回难词表</button><button class="primary-button" type="button" data-action="sound-form-next-batch">继续下一组</button></div></article>'
+    );
+  }
+
+  function soundFormStatusLabel(status) {
+    if (status === 'recorded_pending_human_review') return '已录音 · 待人工核对';
+    if (status === 'independent_correct') return '独立拼对';
+    if (status === 'needs_repair') return '拼写需修订';
+    if (status === 'technical_deferred') return '设备故障 · 未判定';
+    return '已跳过 · 未判定';
+  }
+
+  function persistDualPrototypeProgress() {
+    if (!dualPrototypeState) return;
+    hardWordSoundFormState.active = dualPrototypeState;
+    saveHardWordSoundFormState();
+  }
+
+  function advanceDualPrototype(status) {
+    if (!dualPrototypeState || dualActionLocked) return;
+    dualActionLocked = true;
+    var item = currentDualPrototypeItem();
+    var allowed =
+      item && item.type === 'read'
+        ? ['recorded_pending_human_review', 'skipped', 'technical_deferred']
+        : ['independent_correct', 'needs_repair', 'skipped', 'technical_deferred'];
+    if (!item || allowed.indexOf(status) < 0) {
+      dualActionLocked = false;
+      return;
+    }
+    dualPrototypeState.results.push({ wordId: item.wordId, type: item.type, status: status });
+    var entryState = hardWordSoundFormState.entries[item.wordId] || {
+      read: { attempts: 0, recordings: 0, skips: 0, lastAt: 0, status: '' },
+      spell: {
+        attempts: 0,
+        independentPasses: 0,
+        repairNeeded: 0,
+        skips: 0,
+        lastAt: 0,
+        status: '',
+      },
+    };
+    var eventAt = Date.now();
+    if (status !== 'technical_deferred') {
+      var target = entryState[item.type];
+      target.attempts += 1;
+      target.lastAt = eventAt;
+      target.status = status;
+      if (item.type === 'read' && status === 'recorded_pending_human_review') {
+        target.recordings += 1;
+      }
+      if (item.type === 'spell' && status === 'independent_correct') {
+        target.independentPasses += 1;
+      }
+      if (item.type === 'spell' && status === 'needs_repair') target.repairNeeded += 1;
+      if (status === 'skipped') target.skips += 1;
+      hardWordSoundFormState.entries[item.wordId] = entryState;
+    }
+    hardWordSoundFormState.journal.push({
+      wordId: item.wordId,
+      type: item.type,
+      status: status,
+      at: eventAt,
+    });
+    hardWordSoundFormState.journal = hardWordSoundFormState.journal.slice(-500);
+    cleanupMedia();
+    dualPrototypeState.index += 1;
+    resetDualPrototypeTask(dualPrototypeState);
+    hardWordSoundFormState.active = dualPrototypeState;
+    saveHardWordSoundFormState();
+    renderDualPrototype();
+    setTimeout(function () {
+      dualActionLocked = false;
+    }, 650);
+    scrollToTop();
+  }
+
+  function playDualModelAudio(button, blind) {
+    if (!dualPrototypeState) return;
+    if (toggleCurrentPlayback(button)) return;
+    var word = currentDualPrototypeWord();
+    var accent = button.dataset.accent === 'us' ? 'us' : 'uk';
+    var audioEntry = findHardWordAudioEntry(word.id);
+    var source =
+      audioEntry && audioEntry.audio && audioEntry.audio[accent]
+        ? audioEntry.audio[accent].src
+        : '';
+    if (!source) {
+      if (blind) lockDualSpellAudioFailure();
+      showToast('这条练习音频尚未就绪。');
+      return;
+    }
+    startAudioPlayback(source + '?v=' + encodeURIComponent(AUDIO_ASSET_VERSION), button, 1, {
+      dualBlind: Boolean(blind),
+    });
+  }
+
+  function unlockDualSpellControls() {
+    if (!dualPrototypeState || dualPrototypeState.step.indexOf('spell-') !== 0) return;
+    dualPrototypeState.task.audioReady = true;
+    dualPrototypeState.task.audioFailed = false;
+    dualPrototypeState.task.technicalFailure = false;
+    persistDualPrototypeProgress();
+    main
+      .querySelectorAll('[data-dual-task-card] input, [data-dual-task-card] form button')
+      .forEach(function (control) {
+        control.disabled = false;
+      });
+    var input = main.querySelector('[data-dual-task-card] input:not([type="hidden"])');
+    if (input) input.focus({ preventScroll: true });
+  }
+
+  function lockDualSpellAudioFailure() {
+    if (!dualPrototypeState || dualPrototypeState.step.indexOf('spell-') !== 0) return;
+    dualPrototypeState.task.audioReady = false;
+    dualPrototypeState.task.audioFailed = true;
+    dualPrototypeState.task.technicalFailure = true;
+    persistDualPrototypeProgress();
+    main
+      .querySelectorAll('[data-dual-task-card] input, [data-dual-task-card] form button')
+      .forEach(function (control) {
+        control.disabled = true;
+      });
+    var feedback = main.querySelector('[data-dual-feedback]');
+    if (feedback) {
+      feedback.className = 'feedback is-wrong';
+      feedback.textContent = '音频未播放，本次不记错。请重试或跳过。';
+    }
+  }
+
+  function markDualTechnicalFailure(message) {
+    if (!dualPrototypeState || !dualPrototypeState.task) return;
+    dualPrototypeState.task.technicalFailure = true;
+    dualPrototypeState.task.error = message;
+    persistDualPrototypeProgress();
+    renderDualPrototype();
   }
 
   function startHardWordPractice(mode, wordIds) {
@@ -7871,6 +9894,78 @@
     if (action === 'hard-word-skip') return skipHardWordPractice();
     if (action === 'hard-word-next') return nextHardWordPractice();
     if (action === 'hard-word-exit') return navigate('hard-words');
+    if (action === 'start-sound-form-practice') {
+      var directWordId = String(button.dataset.wordId || '');
+      return startDualPrototype(directWordId, {
+        resume: !directWordId && Boolean(hardWordSoundFormState.active),
+      });
+    }
+    if (action === 'start-dual-prototype') {
+      return startDualPrototype('', { resume: Boolean(hardWordSoundFormState.active) });
+    }
+    if (action === 'open-syllable-tutorial') return startSyllableTutorial();
+    if (action === 'syllable-exit') return navigate('hard-words');
+    if (action === 'syllable-next') return advanceSyllableTutorial(1);
+    if (action === 'syllable-back') return advanceSyllableTutorial(-1);
+    if (action === 'syllable-audio') return playSyllableTutorialAudio(button);
+    if (action === 'syllable-answer') return answerSyllableQuiz(button);
+    if (action === 'syllable-quiz-next') return nextSyllableQuiz(false);
+    if (action === 'syllable-quiz-skip') return nextSyllableQuiz(true);
+    if (action === 'syllable-restart') return startSyllableTutorial({ historyReady: true });
+    if (action === 'dual-exit') {
+      persistDualPrototypeProgress();
+      return navigate('hard-words');
+    }
+    if (action === 'dual-toggle-split') return toggleDualSplitBoundary(button);
+    if (action === 'dual-clear-splits') return clearDualSplitBoundaries();
+    if (action === 'dual-confirm-splits') return confirmDualSplitBoundaries();
+    if (action === 'dual-record') return toggleRecording(button);
+    if (action === 'dual-rerecord') {
+      cleanupMedia();
+      dualPrototypeState.step = 'read-record';
+      dualPrototypeState.task.error = '';
+      persistDualPrototypeProgress();
+      return renderDualPrototype();
+    }
+    if (action === 'dual-finish-read') {
+      if (!dualPrototypeState || !recordUrl) return;
+      return advanceDualPrototype('recorded_pending_human_review');
+    }
+    if (action === 'dual-model-audio') return playDualModelAudio(button, false);
+    if (action === 'dual-spell-audio') return playDualModelAudio(button, true);
+    if (action === 'dual-finish-spell') {
+      var finishedWord = currentDualPrototypeWord();
+      var spellingCorrect =
+        finishedWord &&
+        normaliseAnswer(dualPrototypeState.task.spelling) === normaliseAnswer(finishedWord.word);
+      return advanceDualPrototype(spellingCorrect ? 'independent_correct' : 'needs_repair');
+    }
+    if (action === 'dual-skip-task') {
+      var technical = Boolean(
+        dualPrototypeState && dualPrototypeState.task && dualPrototypeState.task.technicalFailure,
+      );
+      return advanceDualPrototype(technical ? 'technical_deferred' : 'skipped');
+    }
+    if (action === 'sound-form-next-batch') {
+      hardWordSoundFormState.active = null;
+      dualPrototypeState = null;
+      saveHardWordSoundFormState();
+      return startDualPrototype('', { historyReady: true });
+    }
+    if (action === 'sound-form-exit') {
+      cleanupMedia();
+      hardWordSoundFormState.active = null;
+      dualPrototypeState = null;
+      saveHardWordSoundFormState();
+      return navigate('hard-words');
+    }
+    if (action === 'dual-restart') {
+      cleanupMedia();
+      var restartQueue = dualPrototypeState ? dualPrototypeState.queue.slice() : [];
+      dualPrototypeState = defaultDualPrototypeState(restartQueue);
+      persistDualPrototypeProgress();
+      return renderDualPrototype();
+    }
     if (action === 'hard-words-difficulty') {
       hardWordsDifficulty = String(button.dataset.difficulty || 'all');
       renderHardWordsContent();
@@ -8363,6 +10458,64 @@
   }
 
   function handleMainSubmit(event) {
+    var dualReadInfoForm = event.target.closest('[data-dual-read-info-form]');
+    if (dualReadInfoForm) {
+      event.preventDefault();
+      var readInfo = new FormData(dualReadInfoForm);
+      var readMeaning = String(readInfo.get('meaning') || '').trim();
+      var readPos = String(readInfo.get('pos') || '').trim();
+      if (!readMeaning || !readPos) return setDualTaskError('请先写出意思和词性。');
+      dualPrototypeState.task.meaning = readMeaning;
+      dualPrototypeState.task.pos = readPos;
+      dualPrototypeState.task.error = '';
+      dualPrototypeState.step = 'read-syllables';
+      persistDualPrototypeProgress();
+      renderDualPrototype();
+      return;
+    }
+    var dualSpellCountForm = event.target.closest('[data-dual-spell-count-form]');
+    if (dualSpellCountForm) {
+      event.preventDefault();
+      if (!dualPrototypeState.task.audioReady) return setDualTaskError('先播放音频。');
+      var syllableCount = String(new FormData(dualSpellCountForm).get('count') || '').trim();
+      if (!syllableCount) return setDualTaskError('请先写出音节数。');
+      dualPrototypeState.task.syllableCount = syllableCount;
+      persistDualPrototypeProgress();
+      return changeDualSpellStep('spell-syllables');
+    }
+    var dualSpellSyllablesForm = event.target.closest('[data-dual-spell-syllables-form]');
+    if (dualSpellSyllablesForm) {
+      event.preventDefault();
+      if (!dualPrototypeState.task.audioReady) return setDualTaskError('先播放音频。');
+      var heardSyllables = String(
+        new FormData(dualSpellSyllablesForm).get('syllables') || '',
+      ).trim();
+      if (!heardSyllables) return setDualTaskError('请先写出听到的音节。');
+      dualPrototypeState.task.syllables = heardSyllables;
+      persistDualPrototypeProgress();
+      return changeDualSpellStep('spell-final');
+    }
+    var dualSpellFinalForm = event.target.closest('[data-dual-spell-final-form]');
+    if (dualSpellFinalForm) {
+      event.preventDefault();
+      if (!dualPrototypeState.task.audioReady) return setDualTaskError('先播放音频。');
+      var finalAnswer = new FormData(dualSpellFinalForm);
+      var spelling = String(finalAnswer.get('spelling') || '').trim();
+      var meaning = String(finalAnswer.get('meaning') || '').trim();
+      var pos = String(finalAnswer.get('pos') || '').trim();
+      if (!spelling || !meaning || !pos) {
+        return setDualTaskError('请把单词、意思和词性都写完。');
+      }
+      dualPrototypeState.task.spelling = spelling;
+      dualPrototypeState.task.meaning = meaning;
+      dualPrototypeState.task.pos = pos;
+      dualPrototypeState.task.error = '';
+      dualPrototypeState.step = 'spell-result';
+      stopAudio();
+      persistDualPrototypeProgress();
+      renderDualPrototype();
+      return;
+    }
     var hardWordSpellForm = event.target.closest('[data-hard-word-spell-form]');
     if (hardWordSpellForm) {
       event.preventDefault();
@@ -8397,6 +10550,27 @@
     if (skill === 'sentence') evaluateSentence(new FormData(form).get('sentence'));
   }
 
+  function setDualTaskError(message) {
+    if (!dualPrototypeState || !dualPrototypeState.task) return;
+    dualPrototypeState.task.error = message;
+    var feedback = main.querySelector('[data-dual-feedback]');
+    if (feedback) {
+      feedback.className = 'feedback is-wrong';
+      feedback.textContent = message;
+    }
+  }
+
+  function changeDualSpellStep(step) {
+    stopAudio();
+    dualPrototypeState.step = step;
+    dualPrototypeState.task.audioReady = true;
+    dualPrototypeState.task.audioFailed = false;
+    dualPrototypeState.task.technicalFailure = false;
+    dualPrototypeState.task.error = '';
+    persistDualPrototypeProgress();
+    renderDualPrototype();
+  }
+
   function handleMainChange(event) {
     var input = event.target;
     if (input.matches('[data-action="hard-words-filter"]')) {
@@ -8419,6 +10593,16 @@
   }
 
   function handleMainInput(event) {
+    if (dualPrototypeState && event.target.closest('[data-hard-word-sound-form]')) {
+      var name = String(event.target.name || '');
+      if (['meaning', 'pos', 'count', 'syllables', 'spelling'].indexOf(name) >= 0) {
+        if (name === 'count') dualPrototypeState.task.syllableCount = event.target.value;
+        else if (name === 'spelling') dualPrototypeState.task.spelling = event.target.value;
+        else dualPrototypeState.task[name] = event.target.value;
+        persistDualPrototypeProgress();
+      }
+      return;
+    }
     if (event.target.matches('[data-hard-word-sentence-input]')) {
       var activeEntry = activeHardWordEntry();
       if (activeEntry) {
@@ -10656,6 +12840,10 @@
       updatePlaybackButton(button, 'idle');
       updatePlaybackMessage(button, 'error');
       if (adaptiveEvidence && adaptiveEvidence.rescueBlind) lockRescueAudioFailure();
+      if (adaptiveEvidence && adaptiveEvidence.dualBlind) lockDualSpellAudioFailure();
+      if (adaptiveEvidence && adaptiveEvidence.syllableTutorial) {
+        lockSyllableTutorialAudioFailure();
+      }
       showToast('自然语音加载失败，请检查网络后重试。');
     };
 
@@ -10680,6 +12868,10 @@
       }
       unlockSoundPrecheck(button);
       if (adaptiveEvidence && adaptiveEvidence.rescueBlind) unlockRescueAnswerControls(button);
+      if (adaptiveEvidence && adaptiveEvidence.dualBlind) unlockDualSpellControls();
+      if (adaptiveEvidence && adaptiveEvidence.syllableTutorial) {
+        unlockSyllableTutorialAnswers(button);
+      }
     });
     audio.addEventListener('waiting', function () {
       if (!isCurrent() || playbackDesired !== 'playing') return;
@@ -10730,11 +12922,17 @@
     updatePlaybackMessage(button, 'loading');
     armPlaybackTimeout(token, audio, button, {
       rescueBlind: Boolean(button && button.matches('[data-rescue-play]')),
+      dualBlind: Boolean(button && button.matches('[data-dual-spell-audio]')),
+      syllableTutorial: Boolean(button && button.matches('[data-syllable-quiz-audio]')),
     });
     audio.play().catch(function (error) {
       if (playbackToken !== token || currentAudio !== audio || playingButton !== button) return;
       if (error && error.name === 'AbortError') return;
       if (button && button.matches('[data-rescue-play]')) lockRescueAudioFailure();
+      if (button && button.matches('[data-dual-spell-audio]')) lockDualSpellAudioFailure();
+      if (button && button.matches('[data-syllable-quiz-audio]')) {
+        lockSyllableTutorialAudioFailure();
+      }
       stopAudio();
       updatePlaybackMessage(button, 'error');
       showToast('自然语音无法继续播放，请重新点击播放。');
@@ -10755,6 +12953,10 @@
         return;
       }
       if (adaptiveEvidence && adaptiveEvidence.rescueBlind) lockRescueAudioFailure();
+      if (adaptiveEvidence && adaptiveEvidence.dualBlind) lockDualSpellAudioFailure();
+      if (adaptiveEvidence && adaptiveEvidence.syllableTutorial) {
+        lockSyllableTutorialAudioFailure();
+      }
       stopAudio();
       updatePlaybackMessage(button, 'error');
       showToast('自然语音加载超时，请检查网络后重试。');
@@ -10825,58 +13027,198 @@
       recorder.stop();
       return;
     }
+    if (recordRequestPending) return;
     if (
       !navigator.mediaDevices ||
       !navigator.mediaDevices.getUserMedia ||
       typeof MediaRecorder === 'undefined'
     ) {
-      showToast('当前浏览器不支持本地录音；听音和其余训练仍可使用。');
+      if (dualPrototypeState && dualPrototypeState.step === 'read-record') {
+        markDualTechnicalFailure('当前浏览器未检测到录音能力。本项不判错，可跳过。');
+      } else {
+        showToast('当前浏览器不支持本地录音；听音和其余训练仍可使用。');
+      }
       return;
     }
+    var requestToken = ++recordingToken;
+    var requestedDualRunId =
+      dualPrototypeState && dualPrototypeState.step === 'read-record'
+        ? dualPrototypeState.runId
+        : '';
+    var requestedDualIndex = dualPrototypeState ? dualPrototypeState.index : -1;
+    var requestedSessionToken = session ? session.token : '';
+    var requestedStream = null;
     try {
+      recordRequestPending = true;
+      button.disabled = true;
       revokeRecording();
-      recordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      recordChunks = [];
-      recorder = new MediaRecorder(recordStream);
-      recorder.addEventListener('dataavailable', function (event) {
-        if (event.data.size) recordChunks.push(event.data);
+      recordingTechnicalFailure = false;
+      requestedStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      var dualRequestStillCurrent = Boolean(
+        requestedDualRunId &&
+        dualPrototypeState &&
+        currentView === 'dual-prototype' &&
+        dualPrototypeState.runId === requestedDualRunId &&
+        dualPrototypeState.index === requestedDualIndex &&
+        dualPrototypeState.step === 'read-record',
+      );
+      var coreRequestStillCurrent = Boolean(
+        !requestedDualRunId &&
+        session &&
+        session.token === requestedSessionToken &&
+        currentSkill() === 'sound',
+      );
+      if (
+        requestToken !== recordingToken ||
+        (!dualRequestStillCurrent && !coreRequestStillCurrent)
+      ) {
+        requestedStream.getTracks().forEach(function (track) {
+          track.stop();
+        });
+        return;
+      }
+      var localChunks = [];
+      var localRecorder = new MediaRecorder(requestedStream);
+      var localStartedAt = Date.now();
+      recordStream = requestedStream;
+      recordChunks = localChunks;
+      recorder = localRecorder;
+      localRecorder.addEventListener('dataavailable', function (event) {
+        if (requestToken === recordingToken && event.data.size) localChunks.push(event.data);
       });
-      recorder.addEventListener('stop', finishRecording, { once: true });
-      recorder.start();
+      localRecorder.addEventListener(
+        'error',
+        function () {
+          if (requestToken !== recordingToken || recorder !== localRecorder) return;
+          recordingTechnicalFailure = true;
+          clearTimeout(recordTimer);
+          requestedStream.getTracks().forEach(function (track) {
+            track.stop();
+          });
+          if (recordStream === requestedStream) {
+            recordStream = null;
+          }
+          if (
+            dualPrototypeState &&
+            dualPrototypeState.runId === requestedDualRunId &&
+            dualPrototypeState.index === requestedDualIndex &&
+            dualPrototypeState.step === 'read-record'
+          ) {
+            markDualTechnicalFailure('录音设备在处理中断。本项不会判错，可重试或跳过。');
+          } else if (session && session.token === requestedSessionToken) {
+            showToast('录音设备在处理中断，请重新录音。');
+          }
+        },
+        { once: true },
+      );
+      localRecorder.addEventListener(
+        'stop',
+        function () {
+          finishRecording(
+            requestToken,
+            localRecorder,
+            requestedStream,
+            localChunks,
+            localStartedAt,
+          );
+        },
+        { once: true },
+      );
+      localRecorder.start();
+      recordStartedAt = localStartedAt;
       button.textContent = '■ 停止录音';
       button.classList.add('recording-state');
+      button.disabled = false;
       var status = document.getElementById('recordStatus');
       if (status) status.textContent = '正在录音… 最多 8 秒，只保留在当前页面。';
       clearTimeout(recordTimer);
       recordTimer = setTimeout(function () {
-        if (recorder && recorder.state === 'recording') recorder.stop();
+        if (
+          requestToken === recordingToken &&
+          recorder === localRecorder &&
+          localRecorder.state === 'recording'
+        ) {
+          localRecorder.stop();
+        }
       }, 8000);
     } catch (error) {
-      showToast('未获得麦克风权限。你仍可继续听音、拼写和词形训练。');
+      if (requestedStream) {
+        requestedStream.getTracks().forEach(function (track) {
+          track.stop();
+        });
+      }
+      if (requestToken !== recordingToken) return;
+      recordingTechnicalFailure = false;
+      if (dualPrototypeState && dualPrototypeState.step === 'read-record') {
+        markDualTechnicalFailure('麦克风未授权。本项不会判错，可重试或跳过。');
+      } else {
+        showToast('未获得麦克风权限。你仍可继续听音、拼写和词形训练。');
+      }
+    } finally {
+      if (requestToken === recordingToken) {
+        recordRequestPending = false;
+        if (button && button.isConnected) button.disabled = false;
+      }
     }
   }
 
-  function finishRecording() {
+  function finishRecording(token, finishedRecorder, finishedStream, finishedChunks, startedAt) {
+    if (token !== recordingToken || recorder !== finishedRecorder) {
+      finishedStream.getTracks().forEach(function (track) {
+        track.stop();
+      });
+      return;
+    }
     clearTimeout(recordTimer);
-    if (!session || currentSkill() !== 'sound') {
-      if (recordStream) {
-        recordStream.getTracks().forEach(function (track) {
-          track.stop();
-        });
-        recordStream = null;
-      }
+    var isDualRead = Boolean(
+      dualPrototypeState &&
+      currentView === 'dual-prototype' &&
+      dualPrototypeState.step === 'read-record',
+    );
+    if (recordingTechnicalFailure) {
+      recordingTechnicalFailure = false;
+      finishedStream.getTracks().forEach(function (track) {
+        track.stop();
+      });
+      if (recordStream === finishedStream) recordStream = null;
+      recordChunks = [];
+      recorder = null;
+      recordStartedAt = 0;
+      return;
+    }
+    if ((!session || currentSkill() !== 'sound') && !isDualRead) {
+      finishedStream.getTracks().forEach(function (track) {
+        track.stop();
+      });
+      if (recordStream === finishedStream) recordStream = null;
       recordChunks = [];
       recorder = null;
       return;
     }
-    var type = recorder && recorder.mimeType ? recorder.mimeType : 'audio/webm';
-    var blob = new Blob(recordChunks, { type: type });
+    var elapsed = Math.max(0, Date.now() - startedAt);
+    var type = finishedRecorder.mimeType || 'audio/webm';
+    var blob = new Blob(finishedChunks, { type: type });
+    finishedStream.getTracks().forEach(function (track) {
+      track.stop();
+    });
+    if (recordStream === finishedStream) recordStream = null;
+    if (isDualRead && (elapsed < 450 || blob.size < 100)) {
+      recordChunks = [];
+      recorder = null;
+      recordStartedAt = 0;
+      dualPrototypeState.task.error = '录音太短，没有形成可核对的朗读。请完整读一遍。';
+      persistDualPrototypeProgress();
+      renderDualPrototype();
+      return;
+    }
     recordUrl = URL.createObjectURL(blob);
-    if (recordStream) {
-      recordStream.getTracks().forEach(function (track) {
-        track.stop();
-      });
-      recordStream = null;
+    if (isDualRead) {
+      recorder = null;
+      recordStartedAt = 0;
+      dualPrototypeState.step = 'read-compare';
+      persistDualPrototypeProgress();
+      renderDualPrototype();
+      return;
     }
     var recordButton = document.querySelector('[data-action="record-toggle"]');
     var playButton = document.querySelector('[data-action="play-recording"]');
@@ -10888,6 +13230,7 @@
     var status = document.getElementById('recordStatus');
     if (status) status.textContent = '录音完成。请先播范音，再回放自己，检查重音和尾音。';
     recorder = null;
+    recordStartedAt = 0;
   }
 
   function playRecording(button) {
@@ -10902,6 +13245,7 @@
   }
 
   function cleanupMedia() {
+    recordingToken += 1;
     stopAudio();
     clearTimeout(recordTimer);
     if (recorder && recorder.state === 'recording') recorder.stop();
@@ -10912,6 +13256,9 @@
       recordStream = null;
     }
     recorder = null;
+    recordRequestPending = false;
+    recordingTechnicalFailure = false;
+    recordStartedAt = 0;
     revokeRecording();
   }
 
@@ -10958,6 +13305,7 @@
       state: state,
       visualState: visualState,
       hardWordPracticeState: hardWordPracticeState,
+      hardWordSoundFormState: hardWordSoundFormState,
     };
     var blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json',
@@ -10981,28 +13329,76 @@
       if (!payload || ['WordLab', 'WordLab 50'].indexOf(payload.app) < 0 || !payload.state) {
         throw new Error('Invalid WordLab export');
       }
-      state = normaliseState(payload.state);
-      visualState = normaliseVisualState(payload.visualState);
-      if (payload.hardWordPracticeState) {
-        var savedHardWordPractice = localStorage.getItem(HARD_WORD_PRACTICE_STORAGE_KEY);
-        try {
-          localStorage.setItem(
-            HARD_WORD_PRACTICE_STORAGE_KEY,
-            JSON.stringify(payload.hardWordPracticeState),
-          );
-          hardWordPracticeState = loadHardWordPracticeState();
-        } finally {
-          if (savedHardWordPractice == null) {
-            localStorage.removeItem(HARD_WORD_PRACTICE_STORAGE_KEY);
-          } else {
-            localStorage.setItem(HARD_WORD_PRACTICE_STORAGE_KEY, savedHardWordPractice);
-          }
+      var importedState = normaliseState(payload.state);
+      var importedVisualState = normaliseVisualState(payload.visualState);
+      var importedHardWordPracticeState = payload.hardWordPracticeState
+        ? loadHardWordPracticeState(payload.hardWordPracticeState)
+        : hardWordPracticeState;
+      var importedHardWordsCatalog = hardWordsCatalog;
+      if (
+        payload.hardWordSoundFormState &&
+        (!importedHardWordsCatalog || importedHardWordsCatalog.entries.length !== 751)
+      ) {
+        importedHardWordsCatalog = await fetchHardWordsCatalog('no-cache');
+        validateHardWordsCatalog(importedHardWordsCatalog);
+      }
+      var importedSoundFormState = payload.hardWordSoundFormState
+        ? validateImportedHardWordSoundFormState(
+            payload.hardWordSoundFormState,
+            importedHardWordsCatalog,
+          )
+        : defaultHardWordSoundFormState();
+      if (payload.hardWordSoundFormState) {
+        if (
+          !importedHardWordsCatalog ||
+          importedHardWordsCatalog.entries.length !== 751 ||
+          (importedSoundFormState.active === null && payload.hardWordSoundFormState.active)
+        ) {
+          throw new Error('Invalid hard-word sound-form state');
+        }
+        var validSoundIds = new Set(
+          importedHardWordsCatalog.entries.map(function (entry) {
+            return entry.id;
+          }),
+        );
+        var importedSoundIds = Object.keys(importedSoundFormState.entries).concat(
+          importedSoundFormState.journal.map(function (item) {
+            return item.wordId;
+          }),
+          importedSoundFormState.active
+            ? importedSoundFormState.active.queue.map(function (item) {
+                return item.wordId;
+              })
+            : [],
+        );
+        if (
+          importedSoundIds.some(function (wordId) {
+            return !validSoundIds.has(wordId);
+          })
+        ) {
+          throw new Error('Unknown hard-word sound-form entry');
         }
       }
+      state = importedState;
+      visualState = importedVisualState;
+      hardWordPracticeState = importedHardWordPracticeState;
+      hardWordSoundFormState = importedSoundFormState;
+      dualPrototypeState = null;
       visualRuntime = defaultVisualRuntime();
+      if (!hardWordsCatalog && importedHardWordsCatalog) {
+        hardWordsCatalog = importedHardWordsCatalog;
+        hardWordsCatalog.entries.forEach(function (entry) {
+          entry._searchText = normaliseAnswer(
+            String(entry.displayWord || '') + ' ' + String(entry.normalizedHeadword || ''),
+          );
+        });
+        hardWordsLoadState = 'ready';
+        hardWordsLoadError = '';
+      }
       saveState();
       saveVisualState();
       saveHardWordPracticeState();
+      saveHardWordSoundFormState();
       showToast('词汇与图像课程进度已导入。');
       renderProgress();
     } catch (error) {
@@ -11018,9 +13414,12 @@
     visualState = defaultVisualState();
     visualRuntime = defaultVisualRuntime();
     hardWordPracticeState = defaultHardWordPracticeState();
+    hardWordSoundFormState = defaultHardWordSoundFormState();
+    dualPrototypeState = null;
     localStorage.removeItem(STORAGE_KEY);
     localStorage.removeItem(VISUAL_STORAGE_KEY);
     localStorage.removeItem(HARD_WORD_PRACTICE_STORAGE_KEY);
+    localStorage.removeItem(HARD_WORD_SOUND_FORM_STORAGE_KEY);
     showToast('本机练习记录已清空。');
     renderProgress();
   }

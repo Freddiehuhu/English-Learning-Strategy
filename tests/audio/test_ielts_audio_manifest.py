@@ -318,6 +318,20 @@ process.stdout.write(JSON.stringify(context.window.IELTS_RESCUE_VOCABULARY));
         )
         audio_manifest.require_exact_coverage()
 
+    def test_independently_manifested_audio_subtrees_do_not_pollute_coverage(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            audio_root = Path(directory)
+            for accent in audio_manifest.VOICES:
+                (audio_root / accent).mkdir(parents=True)
+                (audio_root / accent / "owned.mp3").write_bytes(b"owned")
+            foreign = audio_root / "hard-words" / "uk" / "foreign.mp3"
+            foreign.parent.mkdir(parents=True)
+            foreign.write_bytes(b"foreign")
+            self.assertEqual(
+                audio_manifest.repository_audio_paths(audio_root),
+                {"uk/owned.mp3", "us/owned.mp3"},
+            )
+
     @unittest.skipUnless(
         shutil.which("ffprobe") and shutil.which("ffmpeg"),
         "ffprobe and ffmpeg are required for the full drift gate",
