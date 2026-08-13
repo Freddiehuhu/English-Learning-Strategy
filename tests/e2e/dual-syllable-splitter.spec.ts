@@ -3,6 +3,7 @@ import {
   AudioHarness,
   installRecorderHarness,
   openReadSplitter,
+  SOUND_FORM_KEY,
   startDirectWord,
 } from './helpers/hard-word-sound-form';
 
@@ -172,5 +173,14 @@ test('the splitter fits 320px and 375px screens with accessible touch targets', 
       );
       expect(control.height, `${width}px: ${control.label} height`).toBeGreaterThanOrEqual(44);
     }
+
+    await page.locator('[data-dual-exit]').click();
+    await expect(page.getByRole('heading', { name: '学生难词总表' })).toBeVisible();
+    await page.evaluate((key) => {
+      const saved = JSON.parse(localStorage.getItem(key) || 'null');
+      if (!saved) return;
+      saved.active = null;
+      localStorage.setItem(key, JSON.stringify(saved));
+    }, SOUND_FORM_KEY);
   }
 });
