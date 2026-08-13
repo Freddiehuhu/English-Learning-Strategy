@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from collections import Counter
+from decimal import Decimal
 from pathlib import Path
 
 
@@ -193,6 +194,86 @@ class HardWordAudioManifestTests(unittest.TestCase):
         self.assertEqual(raw, hard_audio.render_manifest(json.loads(raw)))
         hard_audio.validate_manifest_schema(self.manifest)
         self.assertEqual(hard_audio.compare_manifest(), [])
+
+    def test_manifest_comparison_tolerates_only_small_ffprobe_duration_drift(
+        self,
+    ) -> None:
+        for drift in (-0.1, 0.05, 0.1):
+            rebuilt = copy.deepcopy(self.manifest)
+            original = rebuilt["entries"][0]["audio"]["uk"]["durationSeconds"]
+            rebuilt["entries"][0]["audio"]["uk"]["durationSeconds"] = float(
+                Decimal(str(original)) + Decimal(str(drift))
+            )
+            self.assertEqual(
+                hard_audio.manifest_drift_messages(self.manifest, rebuilt), []
+            )
+
+        for drift in (-0.100001, 0.100001):
+            rebuilt = copy.deepcopy(self.manifest)
+            original = rebuilt["entries"][0]["audio"]["uk"]["durationSeconds"]
+            rebuilt["entries"][0]["audio"]["uk"]["durationSeconds"] = float(
+                Decimal(str(original)) + Decimal(str(drift))
+            )
+            self.assertTrue(
+                hard_audio.manifest_drift_messages(self.manifest, rebuilt)
+            )
+
+        reordered = copy.deepcopy(self.manifest)
+        reordered["entries"][0], reordered["entries"][1] = (
+            reordered["entries"][1],
+            reordered["entries"][0],
+        )
+        self.assertTrue(hard_audio.manifest_drift_messages(self.manifest, reordered))
+
+        for field, value in (
+            ("bytes", self.manifest["entries"][0]["audio"]["uk"]["bytes"] + 1),
+            ("voice", "Different voice"),
+            ("audioSha256", "0" * 64),
+        ):
+            rebuilt = copy.deepcopy(self.manifest)
+            rebuilt["entries"][0]["audio"]["uk"][field] = value
+            self.assertTrue(
+                hard_audio.manifest_drift_messages(self.manifest, rebuilt), field
+            )
+
+    def test_duration_contract_rejects_boolean_nan_and_infinity(self) -> None:
+        for value in (
+            True,
+            float("nan"),
+            float("inf"),
+            float("-inf"),
+            10**400,
+        ):
+            mutated = copy.deepcopy(self.manifest)
+            mutated["entries"][0]["audio"]["uk"]["durationSeconds"] = value
+            with self.assertRaises(hard_audio.HardWordAudioError):
+                hard_audio.validate_manifest_schema(mutated)
+
+    def test_manifest_schema_uses_type_strict_numeric_and_boolean_contracts(
+        self,
+    ) -> None:
+        mutations = (
+            (("schemaVersion",), True),
+            (("catalog", "entryCount"), True),
+            (("coverage", "accents"), True),
+            (("generationProfile", "parameters", "channels"), True),
+            (("privacy", "containsLearnerIdentity"), 0),
+            (("entries", 0, "audio", "uk", "channels"), True),
+            (("entries", 0, "audio", "uk", "sampleRateHz"), True),
+            (("entries", 0, "audio", "uk", "bytes"), True),
+        )
+        for path, value in mutations:
+            mutated = copy.deepcopy(self.manifest)
+            target = mutated
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = value
+            with self.subTest(path=path):
+                with self.assertRaises(hard_audio.HardWordAudioError):
+                    hard_audio.validate_manifest_schema(mutated)
+                self.assertTrue(
+                    hard_audio.manifest_drift_messages(self.manifest, mutated)
+                )
 
     def test_loader_schema_fails_closed_on_unknown_fields_and_bad_counts(self) -> None:
         mutated = copy.deepcopy(self.manifest)
