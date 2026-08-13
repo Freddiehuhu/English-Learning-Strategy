@@ -64,6 +64,13 @@ async function skipTask(page: Page) {
   await page.locator('[data-dual-skip]').click();
 }
 
+async function cutReadWordAt(page: Page, boundaries: number[]) {
+  for (const boundary of boundaries) {
+    await page.locator(`[data-action="dual-toggle-split"][data-boundary="${boundary}"]`).click();
+  }
+  await page.locator('[data-action="dual-confirm-splits"]').click();
+}
+
 test('uses the exact six-task interleaving and keeps each word pair two tasks apart', async ({
   page,
 }) => {
@@ -111,10 +118,8 @@ test('read task requires meaning, POS and syllables before cold recording and hi
     .evaluate((form: HTMLFormElement) => form.requestSubmit());
   await expect(root).toHaveAttribute('data-dual-step', 'read-syllables');
   await expect(page.locator('[data-dual-model-audio]')).toHaveCount(0);
-  await page.locator('[data-dual-read-syllables-input]').fill('pro / nun / ci / a / tion');
-  await page
-    .locator('[data-dual-read-syllables-form]')
-    .evaluate((form: HTMLFormElement) => form.requestSubmit());
+  await expect(page.locator('[data-dual-read-syllables] input')).toHaveCount(0);
+  await cutReadWordAt(page, [3, 6, 8, 9]);
   await expect(root).toHaveAttribute('data-dual-step', 'read-record');
   await expect(page.locator('[data-dual-model-audio]')).toHaveCount(0);
   await expect(root).not.toContainText('/prə');
@@ -157,10 +162,7 @@ test('valid recording reveals self/model comparison but remains pending human re
   await page
     .locator('[data-dual-read-info-form]')
     .evaluate((form: HTMLFormElement) => form.requestSubmit());
-  await page.locator('[data-dual-read-syllables-input]').fill('pro/nun/ci/a/tion');
-  await page
-    .locator('[data-dual-read-syllables-form]')
-    .evaluate((form: HTMLFormElement) => form.requestSubmit());
+  await cutReadWordAt(page, [3, 6, 8, 9]);
   await page.locator('[data-dual-record]').click();
   await page.waitForTimeout(500);
   await page.locator('[data-dual-record]').click();
@@ -241,10 +243,7 @@ test('audio and microphone failures remain technical and every task can be skipp
   await page
     .locator('[data-dual-read-info-form]')
     .evaluate((form: HTMLFormElement) => form.requestSubmit());
-  await page.locator('[data-dual-read-syllables-input]').fill('con/tro/ver/sial');
-  await page
-    .locator('[data-dual-read-syllables-form]')
-    .evaluate((form: HTMLFormElement) => form.requestSubmit());
+  await cutReadWordAt(page, [3, 6, 9]);
   await page.evaluate(() => {
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,

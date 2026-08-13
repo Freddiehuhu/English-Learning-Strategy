@@ -53,6 +53,40 @@
     { wordId: 'certificate', type: 'read' },
     { wordId: 'controversial', type: 'spell' },
   ];
+  var SYLLABLE_TUTORIAL_STEPS = ['idea', 'layers', 'examples', 'quiz', 'finish'];
+  var SYLLABLE_TUTORIAL_WORDS = {
+    squeeze: {
+      count: 1,
+      stress: 0,
+      sounds: ['SQUEEZE'],
+      spelling: ['squ', 'ee', 'ze'],
+    },
+    fountain: {
+      count: 2,
+      stress: 0,
+      sounds: ['FOUN', 'tain'],
+      spelling: ['foun', 'tain'],
+    },
+    certificate: {
+      count: 4,
+      stress: 1,
+      sounds: ['cer', 'TIF', 'i', 'cate'],
+      spelling: ['cer', 'tif', 'i', 'cate'],
+    },
+    pronunciation: {
+      count: 5,
+      stress: 3,
+      sounds: ['pro', 'nun', 'ci', 'A', 'tion'],
+      spelling: ['pro', 'nun', 'ci', 'a', 'tion'],
+    },
+    controversial: {
+      count: 4,
+      stress: 2,
+      sounds: ['con', 'tro', 'VER', 'sial'],
+      spelling: ['con', 'tro', 'ver', 'sial'],
+    },
+  };
+  var SYLLABLE_TUTORIAL_QUIZ = ['squeeze', 'certificate', 'controversial'];
   var STAGE_SECONDS = {
     sound: 45,
     spell: 75,
@@ -681,6 +715,7 @@
   var hardWordMemoryTimer = null;
   var dualPrototypeState = null;
   var dualActionLocked = false;
+  var syllableTutorialState = null;
   var currentView = 'today';
   var session = null;
   var currentAudio = null;
@@ -3345,6 +3380,7 @@
     clearTimeout(hardWordMemoryTimer);
     cleanupMedia();
     dualPrototypeState = null;
+    syllableTutorialState = null;
     if (currentView === 'hard-word-practice' && view !== 'hard-word-practice') {
       hardWordPracticeState.active = null;
       saveHardWordPracticeState();
@@ -3385,6 +3421,8 @@
       renderHardWordsCatalog();
     } else if (view === 'hard-word-practice') {
       resumeHardWordPractice();
+    } else if (view === 'syllable-tutorial') {
+      startSyllableTutorial({ historyReady: true });
     } else if (view === 'visual') {
       renderVisualLab();
     } else if (SKILLS.indexOf(view) >= 0) {
@@ -4153,7 +4191,7 @@
       practiceProgress.sentences +
       '</strong> / ' +
       entries.length +
-      '</p></div><div class="hard-words-launch-actions"><button class="primary-button" type="button" data-action="hard-words-start-spell">拼写练习 · 10 词</button><button class="secondary-button" type="button" data-action="hard-words-start-sentence">造句练习 · 5 词</button><button class="text-button hard-words-dual-launch" type="button" data-action="start-dual-prototype">混合声形样板 · 3 词 6 题</button></div></section>' +
+      '</p></div><div class="hard-words-launch-actions"><button class="primary-button" type="button" data-action="hard-words-start-spell">拼写练习 · 10 词</button><button class="secondary-button" type="button" data-action="hard-words-start-sentence">造句练习 · 5 词</button><button class="text-button hard-words-dual-launch" type="button" data-action="open-syllable-tutorial">先学音节 · 约 7 分钟</button><button class="text-button hard-words-dual-launch" type="button" data-action="start-dual-prototype">混合声形样板 · 3 词 6 题</button></div></section>' +
       '<section class="hard-words-results" aria-live="polite"><div class="hard-words-result-head"><p>找到 <strong data-hard-words-match-count>0</strong> 个词</p><small>以下每个词都可单独练习</small></div><small class="hard-words-practice-note">未经审校的词不提供词义或标准句答案；造句只保存为待老师评阅。</small><div data-hard-words-results></div></section>';
     renderHardWordsResults(true);
   }
@@ -4336,6 +4374,322 @@
     );
   }
 
+  function startSyllableTutorial(options) {
+    cleanupMedia();
+    session = null;
+    syllableTutorialState = {
+      step: 0,
+      quizIndex: 0,
+      answered: false,
+      correct: false,
+      feedback: '',
+      audioReady: false,
+      audioFailed: false,
+    };
+    currentView = 'syllable-tutorial';
+    if (!(options && options.historyReady) && history.pushState) {
+      history.pushState(
+        Object.assign({}, history.state || {}, { wordlabView: 'syllable-tutorial' }),
+        '',
+        location.href,
+      );
+    }
+    renderSyllableTutorial();
+    scrollToTop();
+  }
+
+  function renderSyllableTutorial() {
+    if (!syllableTutorialState) return startSyllableTutorial({ historyReady: true });
+    currentView = 'syllable-tutorial';
+    setActiveNav('hard-words');
+    var step = SYLLABLE_TUTORIAL_STEPS[syllableTutorialState.step] || 'finish';
+    main.innerHTML =
+      '<section class="syllable-tutorial-shell" data-syllable-tutorial data-syllable-step="' +
+      esc(step) +
+      '"><header class="syllable-tutorial-head"><button class="text-button" type="button" data-action="syllable-exit">← 难词表</button><p>' +
+      (syllableTutorialState.step + 1) +
+      ' / ' +
+      SYLLABLE_TUTORIAL_STEPS.length +
+      '</p></header><div class="hard-word-practice-track" aria-hidden="true"><i style="width:' +
+      ((syllableTutorialState.step + 1) / SYLLABLE_TUTORIAL_STEPS.length) * 100 +
+      '%"></i></div>' +
+      renderSyllableTutorialStep(step) +
+      '</section>';
+  }
+
+  function renderSyllableTutorialStep(step) {
+    if (step === 'idea') return renderSyllableIdea();
+    if (step === 'layers') return renderSyllableLayers();
+    if (step === 'examples') return renderSyllableExamples();
+    if (step === 'quiz') return renderSyllableQuiz();
+    return renderSyllableFinish();
+  }
+
+  function syllableNextButton(label) {
+    return (
+      '<button class="primary-button" type="button" data-action="syllable-next">' +
+      esc(label || '继续') +
+      '</button>'
+    );
+  }
+
+  function renderSyllableIdea() {
+    return (
+      '<article class="panel syllable-tutorial-card"><p class="eyebrow">第 1 课 · 声音拍</p><h1>音节是声音的“拍”</h1><p class="syllable-lead">先听嘴里发出几拍声音，再看字母。<strong>不要数元音字母。</strong></p>' +
+      '<div class="syllable-beat-demo" data-syllable-example="squeeze" data-syllable-count="1" data-primary-stress="0"><span>squeeze</span><strong>●</strong><small>1 拍。ee 有两个字母，却只发一个元音声音。</small></div>' +
+      '<div class="syllable-callout"><strong>快速做法</strong><p>自然地读词；轻轻把手放在下巴下；每听见一个元音核，通常就是一拍。少数词尾的 l、n 也能独立成拍，所以最后仍要用词典音频核对。</p></div>' +
+      '<footer class="syllable-card-actions">' +
+      syllableNextButton('看懂三种“分法”') +
+      '</footer></article>'
+    );
+  }
+
+  function renderSyllableLayers() {
+    return (
+      '<article class="panel syllable-tutorial-card"><p class="eyebrow">第 2 课 · 三层表示</p><h1>同一个词，有三层表示</h1><div class="syllable-layer-grid">' +
+      '<section data-syllable-layer="sound"><span>① 听音音节</span><h2>先数声音拍</h2><p><strong>fountain</strong> 听成两拍：/faʊn/ · /tɪn/。这是本课判断音节数的依据。</p></section>' +
+      '<section data-syllable-layer="dictionary"><span>② 词典音标分节</span><h2>用点号核对</h2><p>词典可写 /ˈfaʊn.tɪn/。重音符号在重读音节前；词典和口音之间可能略有差异。</p></section>' +
+      '<section data-syllable-layer="spelling"><span>③ 本课拼写分块</span><h2>帮助记字母</h2><p><strong>foun / tain</strong> 是拼写支架。它方便听写，但不等于唯一的书面断词规则。</p></section>' +
+      '</div><p class="syllable-caution">不要机械套 VCV/CVC。形态块、书面断词与语音音节可能不同；弱读、成音节辅音及英美口音也会造成差异。</p><footer class="syllable-card-actions"><button class="secondary-button" type="button" data-action="syllable-back">返回</button>' +
+      syllableNextButton('看 5 个难词') +
+      '</footer></article>'
+    );
+  }
+
+  function renderSyllableExamples() {
+    var accent = state.settings.accent === 'us' ? 'us' : 'uk';
+    var rows = Object.keys(SYLLABLE_TUTORIAL_WORDS)
+      .map(function (wordId) {
+        var word = findRescueWord(wordId);
+        var guide = SYLLABLE_TUTORIAL_WORDS[wordId];
+        if (!word) return '';
+        var spoken = guide.sounds
+          .map(function (block, index) {
+            return index === guide.stress ? '<strong>' + esc(block) + '</strong>' : esc(block);
+          })
+          .join(' · ');
+        return (
+          '<li data-syllable-example="' +
+          esc(word.id) +
+          '" data-syllable-count="' +
+          guide.count +
+          '" data-syllable-stress="' +
+          guide.stress +
+          '" data-primary-stress="' +
+          guide.stress +
+          '"><button class="audio-button syllable-word-audio" type="button" data-action="syllable-audio" data-word-id="' +
+          esc(word.id) +
+          '" data-accent="' +
+          accent +
+          '" data-audio-label="' +
+          esc(word.word) +
+          ' 范音"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">' +
+          esc(word.word) +
+          '</span></button><div><span class="syllable-count-chip">' +
+          guide.count +
+          ' 拍</span><p>' +
+          spoken +
+          '</p><small>本课拼写块：' +
+          guide.spelling.map(esc).join(' / ') +
+          '</small></div></li>'
+        );
+      })
+      .join('');
+    return (
+      '<article class="panel syllable-tutorial-card"><p class="eyebrow">第 3 课 · 例词</p><h1>听一遍，再看分块</h1><p class="syllable-lead">大写的发音音节块表示主重音；下一行斜线分的是记忆用拼写块。</p><ul class="syllable-example-list">' +
+      rows +
+      '</ul><p class="syllable-audio-status" data-syllable-audio-status role="status" aria-live="polite">音频若加载失败，不算学习错误。</p><div class="syllable-variation" data-syllable-variation><strong>注意变体</strong><p><em>certificate</em> 本课锁定名词读音；<em>controversial</em> 会随口音或说话方式出现可接受的分节差异。本课只按当前播放的范音练习，不把权威词典记录的另一种读法判错。</p></div><footer class="syllable-card-actions"><button class="secondary-button" type="button" data-action="syllable-back">返回</button>' +
+      syllableNextButton('试着数声音拍') +
+      '</footer></article>'
+    );
+  }
+
+  function renderSyllableQuiz() {
+    var wordId = SYLLABLE_TUTORIAL_QUIZ[syllableTutorialState.quizIndex];
+    var word = findRescueWord(wordId);
+    var guide = SYLLABLE_TUTORIAL_WORDS[wordId];
+    var accent = state.settings.accent === 'us' ? 'us' : 'uk';
+    var buttons = [1, 2, 3, 4, 5]
+      .map(function (count) {
+        return (
+          '<button type="button" data-action="syllable-answer" data-count="' +
+          count +
+          '"' +
+          (!syllableTutorialState.audioReady || syllableTutorialState.answered ? ' disabled' : '') +
+          '>' +
+          count +
+          '</button>'
+        );
+      })
+      .join('');
+    return (
+      '<article class="panel syllable-tutorial-card" data-syllable-quiz' +
+      (syllableTutorialState.answered
+        ? ' data-syllable-example="' +
+          esc(wordId) +
+          '" data-syllable-count="' +
+          guide.count +
+          '" data-syllable-stress="' +
+          guide.stress +
+          '" data-primary-stress="' +
+          guide.stress +
+          '"'
+        : '') +
+      '><p class="eyebrow">小测 · ' +
+      (syllableTutorialState.quizIndex + 1) +
+      ' / ' +
+      SYLLABLE_TUTORIAL_QUIZ.length +
+      '</p><h1>你听到几拍？</h1><button class="listen-orb syllable-quiz-audio" type="button" data-action="syllable-audio" data-syllable-audio data-syllable-quiz-audio data-quiz-index="' +
+      syllableTutorialState.quizIndex +
+      '" data-accent="' +
+      accent +
+      '" data-audio-label="练习范音" aria-label="播放练习范音"><span class="audio-control-icon" aria-hidden="true">▶</span></button><div class="syllable-count-options" data-syllable-answer data-syllable-quiz-answer>' +
+      buttons +
+      '</div><p class="feedback' +
+      (syllableTutorialState.feedback
+        ? syllableTutorialState.correct
+          ? ' is-correct'
+          : ' is-wrong'
+        : '') +
+      '" data-syllable-feedback data-syllable-quiz-feedback role="status" aria-live="polite">' +
+      esc(
+        syllableTutorialState.audioFailed
+          ? '音频没有成功播放，本题不判错。请重试或继续。'
+          : syllableTutorialState.feedback ||
+              (syllableTutorialState.audioReady
+                ? '已经听到范音，现在选择拍数。'
+                : '先播放范音；声音真正开始后才能作答。'),
+      ) +
+      '</p>' +
+      (syllableTutorialState.answered
+        ? '<div class="syllable-reveal"><strong>' +
+          esc(word.word) +
+          '：' +
+          guide.count +
+          ' 拍</strong><span>' +
+          guide.spelling.map(esc).join(' / ') +
+          '</span></div>'
+        : '') +
+      '<footer class="syllable-card-actions"><button class="secondary-button" type="button" data-action="syllable-back">返回</button>' +
+      (syllableTutorialState.answered
+        ? '<button class="primary-button" type="button" data-action="syllable-quiz-next">' +
+          (syllableTutorialState.quizIndex + 1 === SYLLABLE_TUTORIAL_QUIZ.length
+            ? '完成小课'
+            : '下一词') +
+          '</button>'
+        : '<button class="quiet-button" type="button" data-action="syllable-quiz-skip">跳过，不判错</button>') +
+      '</footer></article>'
+    );
+  }
+
+  function renderSyllableFinish() {
+    return '<article class="panel syllable-tutorial-card syllable-finish"><p class="eyebrow">小课完成</p><h1>以后按这个顺序分</h1><ol><li><strong>先听</strong>：数声音拍，不数元音字母。</li><li><strong>再核对</strong>：查看该词典的音标、重音标记和音频；若它用点号分节，可用来辅助核对。</li><li><strong>后拼写</strong>：按本课拼写块记字母，但不把它冒充唯一音节答案。</li></ol><p>如果词典或口音之间不同，记录所用口音与来源，不把另一种读法判错。</p><div class="syllable-sources" data-syllable-sources><h2>权威参考</h2><a href="https://dictionary.cambridge.org/dictionary/english/syllable" target="_blank" rel="noreferrer">Cambridge Dictionary：音节的定义</a><a href="https://www.oxfordlearnersdictionaries.com/about/english/pronunciation_english" target="_blank" rel="noreferrer">Oxford Learner’s Dictionaries：发音、重音与成音节辅音</a><a href="https://www.merriam-webster.com/grammar/word-division-dots-and-syllable-pronunciation-hyphens" target="_blank" rel="noreferrer">Merriam-Webster：书面断词与发音音节的区别</a></div><footer class="syllable-card-actions"><button class="secondary-button" type="button" data-action="syllable-restart">再学一次</button><button class="primary-button" type="button" data-action="syllable-exit">返回难词表</button></footer></article>';
+  }
+
+  function advanceSyllableTutorial(direction) {
+    if (!syllableTutorialState) return;
+    stopAudio();
+    syllableTutorialState.step = Math.max(
+      0,
+      Math.min(SYLLABLE_TUTORIAL_STEPS.length - 1, syllableTutorialState.step + direction),
+    );
+    syllableTutorialState.feedback = '';
+    syllableTutorialState.correct = false;
+    syllableTutorialState.audioReady = false;
+    syllableTutorialState.audioFailed = false;
+    renderSyllableTutorial();
+    scrollToTop();
+  }
+
+  function answerSyllableQuiz(button) {
+    if (
+      !syllableTutorialState ||
+      syllableTutorialState.answered ||
+      !syllableTutorialState.audioReady
+    )
+      return;
+    var wordId = SYLLABLE_TUTORIAL_QUIZ[syllableTutorialState.quizIndex];
+    var expected = SYLLABLE_TUTORIAL_WORDS[wordId].count;
+    var chosen = Number(button.dataset.count);
+    syllableTutorialState.answered = true;
+    syllableTutorialState.correct = chosen === expected;
+    syllableTutorialState.feedback =
+      chosen === expected
+        ? '听对了：每一拍通常都有一个元音核。'
+        : '这条范音是 ' + expected + ' 拍。慢放一次，再跟着节奏读。';
+    renderSyllableTutorial();
+  }
+
+  function nextSyllableQuiz(skipped) {
+    if (!syllableTutorialState) return;
+    stopAudio();
+    if (skipped) syllableTutorialState.feedback = '已跳过，本题不判错。';
+    if (syllableTutorialState.quizIndex + 1 < SYLLABLE_TUTORIAL_QUIZ.length) {
+      syllableTutorialState.quizIndex += 1;
+      syllableTutorialState.answered = false;
+      syllableTutorialState.correct = false;
+      syllableTutorialState.feedback = '';
+      syllableTutorialState.audioReady = false;
+      syllableTutorialState.audioFailed = false;
+      renderSyllableTutorial();
+      return;
+    }
+    advanceSyllableTutorial(1);
+  }
+
+  function playSyllableTutorialAudio(button) {
+    var wordId = button.matches('[data-syllable-quiz-audio]')
+      ? SYLLABLE_TUTORIAL_QUIZ[syllableTutorialState.quizIndex]
+      : button.dataset.wordId;
+    var word = findRescueWord(wordId);
+    if (!word) return;
+    if (toggleCurrentPlayback(button)) return;
+    var accent = button.dataset.accent === 'us' ? 'us' : 'uk';
+    var source = rescueAudioSource(word, accent);
+    if (!source) {
+      if (button.matches('[data-syllable-quiz-audio]')) lockSyllableTutorialAudioFailure();
+      else {
+        var feedback = main.querySelector('[data-syllable-audio-status]');
+        if (feedback) feedback.textContent = '音频没有成功播放，本次不判错。';
+      }
+      return;
+    }
+    startAudioPlayback(source + '?v=' + encodeURIComponent(AUDIO_ASSET_VERSION), button, 1, {
+      syllableTutorial: button.matches('[data-syllable-quiz-audio]'),
+    });
+  }
+
+  function unlockSyllableTutorialAnswers(button) {
+    if (
+      !syllableTutorialState ||
+      currentView !== 'syllable-tutorial' ||
+      !button ||
+      !button.matches('[data-syllable-quiz-audio]')
+    )
+      return;
+    syllableTutorialState.audioReady = true;
+    syllableTutorialState.audioFailed = false;
+    main.querySelectorAll('[data-action="syllable-answer"]').forEach(function (choice) {
+      choice.disabled = false;
+    });
+    var feedback = main.querySelector('[data-syllable-quiz-feedback]');
+    if (feedback) feedback.textContent = '已经听到范音，现在选择拍数。';
+  }
+
+  function lockSyllableTutorialAudioFailure() {
+    if (!syllableTutorialState || currentView !== 'syllable-tutorial') return;
+    syllableTutorialState.audioReady = false;
+    syllableTutorialState.audioFailed = true;
+    main.querySelectorAll('[data-action="syllable-answer"]').forEach(function (choice) {
+      choice.disabled = true;
+    });
+    var feedback = main.querySelector('[data-syllable-quiz-feedback]');
+    if (feedback) {
+      feedback.classList.remove('is-correct', 'is-wrong');
+      feedback.textContent = '音频没有成功播放，本题不判错。请重试或跳过。';
+    }
+  }
+
   function defaultDualPrototypeState() {
     var prototype = { index: 0, step: '', task: null, results: [] };
     resetDualPrototypeTask(prototype);
@@ -4355,6 +4709,7 @@
       pos: '',
       syllableCount: '',
       syllables: '',
+      splitBoundaries: [],
       spelling: '',
       audioReady: false,
       audioFailed: false,
@@ -4460,17 +4815,177 @@
 
   function renderDualReadSyllables(prototype) {
     var word = currentDualPrototypeWord();
+    var boundaries = Array.isArray(prototype.task.splitBoundaries)
+      ? prototype.task.splitBoundaries
+      : [];
     return (
       '<article class="panel dual-prototype-card" data-dual-task-card data-dual-read-syllables>' +
-      dualTaskHeading('看词读音 · 2/3') +
-      '<h1 data-dual-visible-word>' +
-      esc(word.word) +
-      '</h1><form class="dual-stacked-form" data-dual-read-syllables-form><label>划分音节<input name="syllables" data-dual-read-syllables-input autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="用 / 分开"></label><button class="primary-button" type="submit">下一步</button></form>' +
+      '<p class="eyebrow">看词读音 · 2/3</p>' +
+      '<h1>你会怎么分拍？</h1><p class="dual-split-instruction">轻点字母缝隙，按你准备朗读的节奏分组。</p>' +
+      renderDualWordSplitter(word.word, boundaries) +
+      '<p class="dual-split-preview' +
+      (boundaries.length ? ' is-ready' : '') +
+      '" data-dual-split-preview aria-live="polite">' +
+      esc(dualSplitPreview(word.word, boundaries)) +
+      '</p><div class="dual-split-actions"><button class="quiet-button" type="button" data-action="dual-clear-splits"' +
+      (boundaries.length ? '' : ' disabled') +
+      '>重新切</button><button class="primary-button" type="button" data-action="dual-confirm-splits">切好了，继续</button></div><p class="dual-split-note">这是声音和字母的对应；不同口音，分法可以不同。</p>' +
       dualSkipButton() +
       '<p class="feedback" data-dual-feedback role="status" aria-live="polite">' +
       esc(prototype.task.error) +
       '</p></article>'
     );
+  }
+
+  function renderDualWordSplitter(word, boundaries) {
+    var letters = Array.from(String(word || ''));
+    var selected = Array.isArray(boundaries) ? boundaries : [];
+    var chunks = dualSplitChunks(word, selected);
+    var chunkOffset = 0;
+    return (
+      '<div class="dual-word-splitter" data-dual-word-splitter role="group" aria-label="给 ' +
+      esc(word) +
+      ' 添加本课拼写分块">' +
+      chunks
+        .map(function (chunk) {
+          var chunkStart = chunkOffset;
+          chunkOffset += Array.from(chunk).length;
+          return (
+            '<span class="dual-split-chunk">' +
+            Array.from(chunk)
+              .map(function (letter, localIndex) {
+                var index = chunkStart + localIndex;
+                var isLast = index === letters.length - 1;
+                var isActive = selected.indexOf(index + 1) >= 0;
+                if (isLast) {
+                  return (
+                    '<span class="dual-split-unit is-last"><span class="dual-split-letter" aria-hidden="true">' +
+                    esc(letter) +
+                    '</span></span>'
+                  );
+                }
+                return (
+                  '<button class="dual-split-unit dual-split-gap' +
+                  (isActive ? ' is-active' : '') +
+                  '" type="button" data-action="dual-toggle-split" data-boundary="' +
+                  (index + 1) +
+                  '" aria-pressed="' +
+                  String(isActive) +
+                  '" aria-label="在第 ' +
+                  (index + 1) +
+                  ' 个字母后' +
+                  (isActive ? '撤销分隔' : '添加分隔') +
+                  '"><span class="dual-split-letter" aria-hidden="true">' +
+                  esc(letter) +
+                  '</span><span class="dual-split-mark" aria-hidden="true"></span></button>'
+                );
+              })
+              .join('') +
+            '</span>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
+  function dualSplitChunks(word, boundaries) {
+    var text = String(word || '');
+    var safe = (Array.isArray(boundaries) ? boundaries : [])
+      .map(Number)
+      .filter(function (boundary, index, list) {
+        return (
+          Number.isInteger(boundary) &&
+          boundary > 0 &&
+          boundary < text.length &&
+          list.indexOf(boundary) === index
+        );
+      })
+      .sort(function (a, b) {
+        return a - b;
+      });
+    var chunks = [];
+    var start = 0;
+    safe.forEach(function (boundary) {
+      chunks.push(text.slice(start, boundary));
+      start = boundary;
+    });
+    chunks.push(text.slice(start));
+    return chunks;
+  }
+
+  function dualSplitPreview(word, boundaries) {
+    var chunks = dualSplitChunks(word, boundaries);
+    return boundaries.length ? chunks.join(' · ') : '还没有切分';
+  }
+
+  function toggleDualSplitBoundary(button) {
+    if (!dualPrototypeState || dualPrototypeState.step !== 'read-syllables') return;
+    if (button.dataset.splitToggleLocked === 'true') return;
+    button.dataset.splitToggleLocked = 'true';
+    queueMicrotask(function () {
+      if (button.isConnected) delete button.dataset.splitToggleLocked;
+    });
+    var boundary = Number(button.dataset.boundary);
+    var word = currentDualPrototypeWord();
+    if (!word || !Number.isInteger(boundary) || boundary <= 0 || boundary >= word.word.length) {
+      return;
+    }
+    var boundaries = dualPrototypeState.task.splitBoundaries;
+    var existing = boundaries.indexOf(boundary);
+    if (existing >= 0) boundaries.splice(existing, 1);
+    else boundaries.push(boundary);
+    boundaries.sort(function (a, b) {
+      return a - b;
+    });
+    dualPrototypeState.task.error = '';
+    var isActive = boundaries.indexOf(boundary) >= 0;
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-pressed', String(isActive));
+    button.setAttribute(
+      'aria-label',
+      '在第 ' + boundary + ' 个字母后' + (isActive ? '撤销分隔' : '添加分隔'),
+    );
+    var preview = main.querySelector('[data-dual-split-preview]');
+    if (preview) {
+      preview.textContent = dualSplitPreview(word.word, boundaries);
+      preview.classList.toggle('is-ready', Boolean(boundaries.length));
+    }
+    var clear = main.querySelector('[data-action="dual-clear-splits"]');
+    if (clear) clear.disabled = !boundaries.length;
+    var feedback = main.querySelector('[data-dual-feedback]');
+    if (feedback) feedback.textContent = '';
+  }
+
+  function clearDualSplitBoundaries() {
+    if (!dualPrototypeState || dualPrototypeState.step !== 'read-syllables') return;
+    dualPrototypeState.task.splitBoundaries = [];
+    dualPrototypeState.task.error = '';
+    main.querySelectorAll('[data-action="dual-toggle-split"]').forEach(function (button) {
+      button.classList.remove('is-active');
+      button.setAttribute('aria-pressed', 'false');
+      button.setAttribute('aria-label', '在第 ' + button.dataset.boundary + ' 个字母后添加分隔');
+    });
+    var preview = main.querySelector('[data-dual-split-preview]');
+    if (preview) {
+      preview.textContent = '还没有切分';
+      preview.classList.remove('is-ready');
+    }
+    var clear = main.querySelector('[data-action="dual-clear-splits"]');
+    if (clear) clear.disabled = true;
+    var feedback = main.querySelector('[data-dual-feedback]');
+    if (feedback) feedback.textContent = '';
+  }
+
+  function confirmDualSplitBoundaries() {
+    if (!dualPrototypeState || dualPrototypeState.step !== 'read-syllables') return;
+    var word = currentDualPrototypeWord();
+    var boundaries = dualPrototypeState.task.splitBoundaries;
+    if (!word || !boundaries.length) return setDualTaskError('请至少点一处字母间隙。');
+    dualPrototypeState.task.syllables = dualSplitChunks(word.word, boundaries).join(' / ');
+    dualPrototypeState.task.error = '';
+    dualPrototypeState.step = 'read-record';
+    renderDualPrototype();
   }
 
   function renderDualReadRecord(prototype) {
@@ -4498,15 +5013,15 @@
       esc(word.word) +
       '</h1><p class="dual-pronunciation-line">' +
       esc(ipa) +
-      ' · ' +
-      esc(syllables.join(' · ')) +
       '</p><div class="dual-answer-compare" data-dual-read-answer-compare><p><span>你写的意思 / 词性</span><strong>' +
       esc(prototype.task.meaning + ' · ' + prototype.task.pos) +
       '</strong></p><p><span>参考</span><strong>' +
       esc(word.zh + ' · ' + word.pos) +
-      '</strong></p><p><span>你划分的音节</span><strong>' +
+      '</strong></p><p><span>你的声音分块</span><strong>' +
       esc(prototype.task.syllables) +
-      '</strong></p></div><div class="dual-compare-actions"><button class="secondary-button" type="button" data-action="play-recording" data-dual-own-audio data-audio-label="自己的朗读"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">听自己</span></button><button class="audio-button" type="button" data-action="dual-model-audio" data-dual-model-audio data-accent="' +
+      '</strong></p><p><span>本卡范音的分块</span><strong>' +
+      esc(syllables.join(' · ')) +
+      '</strong></p></div><p class="dual-split-note">这里只按当前范音对照；其他权威口音的分法不直接判错。</p><div class="dual-compare-actions"><button class="secondary-button" type="button" data-action="play-recording" data-dual-own-audio data-audio-label="自己的朗读"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">听自己</span></button><button class="audio-button" type="button" data-action="dual-model-audio" data-dual-model-audio data-accent="' +
       accent +
       '" data-audio-label="自然范音" data-status-target="dualModelStatus"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">听范音</span></button></div><p id="dualModelStatus" class="dual-status" aria-live="polite">交替听自己与范音。</p><div class="dual-footer-actions"><button class="quiet-button" type="button" data-action="dual-rerecord" data-dual-rerecord>重新录音</button><button class="primary-button" type="button" data-action="dual-finish-read" data-dual-finish-read>下一题</button></div></article>'
     );
@@ -8276,7 +8791,19 @@
     if (action === 'hard-word-next') return nextHardWordPractice();
     if (action === 'hard-word-exit') return navigate('hard-words');
     if (action === 'start-dual-prototype') return startDualPrototype();
+    if (action === 'open-syllable-tutorial') return startSyllableTutorial();
+    if (action === 'syllable-exit') return navigate('hard-words');
+    if (action === 'syllable-next') return advanceSyllableTutorial(1);
+    if (action === 'syllable-back') return advanceSyllableTutorial(-1);
+    if (action === 'syllable-audio') return playSyllableTutorialAudio(button);
+    if (action === 'syllable-answer') return answerSyllableQuiz(button);
+    if (action === 'syllable-quiz-next') return nextSyllableQuiz(false);
+    if (action === 'syllable-quiz-skip') return nextSyllableQuiz(true);
+    if (action === 'syllable-restart') return startSyllableTutorial({ historyReady: true });
     if (action === 'dual-exit') return navigate('hard-words');
+    if (action === 'dual-toggle-split') return toggleDualSplitBoundary(button);
+    if (action === 'dual-clear-splits') return clearDualSplitBoundaries();
+    if (action === 'dual-confirm-splits') return confirmDualSplitBoundaries();
     if (action === 'dual-record') return toggleRecording(button);
     if (action === 'dual-rerecord') {
       cleanupMedia();
@@ -8800,17 +9327,6 @@
       dualPrototypeState.task.pos = readPos;
       dualPrototypeState.task.error = '';
       dualPrototypeState.step = 'read-syllables';
-      renderDualPrototype();
-      return;
-    }
-    var dualReadSyllablesForm = event.target.closest('[data-dual-read-syllables-form]');
-    if (dualReadSyllablesForm) {
-      event.preventDefault();
-      var readSyllables = String(new FormData(dualReadSyllablesForm).get('syllables') || '').trim();
-      if (!readSyllables) return setDualTaskError('请先划分音节。');
-      dualPrototypeState.task.syllables = readSyllables;
-      dualPrototypeState.task.error = '';
-      dualPrototypeState.step = 'read-record';
       renderDualPrototype();
       return;
     }
@@ -11167,6 +11683,9 @@
       updatePlaybackMessage(button, 'error');
       if (adaptiveEvidence && adaptiveEvidence.rescueBlind) lockRescueAudioFailure();
       if (adaptiveEvidence && adaptiveEvidence.dualBlind) lockDualSpellAudioFailure();
+      if (adaptiveEvidence && adaptiveEvidence.syllableTutorial) {
+        lockSyllableTutorialAudioFailure();
+      }
       showToast('自然语音加载失败，请检查网络后重试。');
     };
 
@@ -11192,6 +11711,9 @@
       unlockSoundPrecheck(button);
       if (adaptiveEvidence && adaptiveEvidence.rescueBlind) unlockRescueAnswerControls(button);
       if (adaptiveEvidence && adaptiveEvidence.dualBlind) unlockDualSpellControls();
+      if (adaptiveEvidence && adaptiveEvidence.syllableTutorial) {
+        unlockSyllableTutorialAnswers(button);
+      }
     });
     audio.addEventListener('waiting', function () {
       if (!isCurrent() || playbackDesired !== 'playing') return;
@@ -11243,12 +11765,16 @@
     armPlaybackTimeout(token, audio, button, {
       rescueBlind: Boolean(button && button.matches('[data-rescue-play]')),
       dualBlind: Boolean(button && button.matches('[data-dual-spell-audio]')),
+      syllableTutorial: Boolean(button && button.matches('[data-syllable-quiz-audio]')),
     });
     audio.play().catch(function (error) {
       if (playbackToken !== token || currentAudio !== audio || playingButton !== button) return;
       if (error && error.name === 'AbortError') return;
       if (button && button.matches('[data-rescue-play]')) lockRescueAudioFailure();
       if (button && button.matches('[data-dual-spell-audio]')) lockDualSpellAudioFailure();
+      if (button && button.matches('[data-syllable-quiz-audio]')) {
+        lockSyllableTutorialAudioFailure();
+      }
       stopAudio();
       updatePlaybackMessage(button, 'error');
       showToast('自然语音无法继续播放，请重新点击播放。');
@@ -11270,6 +11796,9 @@
       }
       if (adaptiveEvidence && adaptiveEvidence.rescueBlind) lockRescueAudioFailure();
       if (adaptiveEvidence && adaptiveEvidence.dualBlind) lockDualSpellAudioFailure();
+      if (adaptiveEvidence && adaptiveEvidence.syllableTutorial) {
+        lockSyllableTutorialAudioFailure();
+      }
       stopAudio();
       updatePlaybackMessage(button, 'error');
       showToast('自然语音加载超时，请检查网络后重试。');
