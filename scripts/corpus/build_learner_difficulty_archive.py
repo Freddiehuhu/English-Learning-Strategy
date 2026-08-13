@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and validate the 2026-08-12 learner difficulty archive.
+"""Build and validate the learner difficulty archive through 2026-08-13.
 
 The learner's numeric marks describe learning gaps only. This script links an
 item to an existing lexical entry when possible, but deliberately does not copy
@@ -791,6 +791,321 @@ horrible2
 ample3
 panic3"""
 
+FOLLOWUP_BATCH_3 = """opposite2
+slim2
+forecast1
+shrink3
+tight2
+sponsor3
+diamond3
+revolution2
+twice1
+relate2
+channel3
+found2
+slide3
+crime3
+agent3
+salary3
+commit3
+laughter1
+mourn3
+heat2
+greeting3
+bitter3
+jewellery3
+appetite3
+painful1
+cottage3
+mail1
+remove2
+classify2
+borrow2
+revision3
+pole2
+willing3
+hide2
+framework3
+absent2
+marathon3
+abnormal1
+Pacific3
+qualification3
+depth3
+blow2
+obtain2
+edge1
+navy3
+collar3
+dawn3
+bunch3
+bacterium3
+chorus3
+abortion3
+awkward3
+invite2
+acute2
+fade2
+respond2
+anyhow2
+downtown2
+sense2
+yawn3
+wag3
+guess2
+caption2
+sour1
+voyage3
+tasteless3
+absence2
+deed2
+paddle2
+unable1
+outgoing2
+vague3
+wander2
+badminton2
+tablet3
+sort3
+racial2
+saucer3
+independent2
+content2
+permit3
+desperate3
+court2
+possession3
+sacred3
+risk2
+harvest3
+mental3
+obvious3
+relief2
+figure2
+nationwide1
+radioactive1
+clear1
+luggage3
+govern3
+maid2
+abundant3
+forgive2
+corporation2
+abuse2
+embassy3
+feast3
+glare3
+valley2
+select1
+basement3
+laundry2
+identity2
+hammer3
+negotiate3
+independence2
+embarrass2
+occupation3
+bite2
+mass2
+festival1
+expect2
+analysis3
+evident2
+destination3
+deaf2
+kindergarten3
+dial3
+repeat3
+plenty2
+bare2
+lantern3
+ballet1
+request2
+cause1
+destroy3
+forward3
+distinction2
+expand2
+custom2
+finance2
+barrier3
+digest3
+barbershop3
+rare3
+gentle1
+carrier3
+initial3
+deliberately3
+prejudice3
+pattern2
+geometry3
+league3
+federal3
+ceremony3
+herb3
+academy3
+civilian3
+prepare1
+headmistress3
+process2
+insure2
+achievement2
+host1
+awful3
+contribute3
+excite3
+recognise3
+loaf3
+clay3
+beneath3
+murder3
+clinic3
+acquire2
+error1
+dimension3
+bid3
+version2
+flash2
+parallel3
+altogether2
+literary1
+treasure3
+represent3
+queue3
+recite3
+disturb3
+razor3
+yell2
+suppose3
+warehouse2
+lack2
+race3
+adolescent3
+habit3
+significance3
+attention3
+salute3
+tease2
+being2
+steep2
+ambition3
+glance3
+pray3
+arrange3
+tournament3
+frighten3
+insist3
+visa3
+terrify3
+scene3
+modest3
+severe3
+conduct3
+schedule3
+progress2
+proper2
+dictation3
+phenomenon3
+participate3
+file2
+consultant3
+wound3
+thirst3
+apology3
+receptionist3
+frequent3
+cautious3
+brick3
+microscope3
+distribute3
+grocery3
+preparation2
+artificial2
+intend3
+regard3
+trial3
+attach3
+pale2
+rot3
+sow3
+sob2
+rhyme3
+otherwise3
+trolleybus3
+construction3
+preserve3
+soul1
+anxiety3
+evaluate2
+cheerful2
+indicate2
+support3
+impossible1
+dignity3
+escape3
+criterion3
+message3
+bureaucratic3
+prescription3
+rough3
+violent3
+sudden2
+autonomous3
+ignore2
+admission2
+fancy2
+aid3
+stubborn3
+substitute3
+submit3
+pleased2
+suck2
+department2
+pain2
+suffering2
+symphony2
+suite2
+rather2
+harmful3
+swap3
+worthwhile2
+sunburnt3
+astronomy2
+suspension2
+responsibility2
+quantity3
+supreme2
+expression2
+approach2
+perform2
+surplus2
+pump2
+republic2
+arch3
+multiply3
+tough3
+colleague3
+collision2
+precise2
+victim3
+postpone3
+blame2
+private2
+weigh1
+ripen3
+refer3
+drawer3
+sneaker2
+engine1
+tremble3
+behalf3
+narrow2
+semicircle3
+modem2
+exit1
+album2
+forbid2"""
+
 SOURCE_BATCHES = (
     {
         "batch_id": "student-hard-words-2026-08-12-initial",
@@ -806,6 +1121,11 @@ SOURCE_BATCHES = (
         "batch_id": "student-hard-words-2026-08-12-followup-2",
         "received_at": "2026-08-12",
         "raw_batch": FOLLOWUP_BATCH_2,
+    },
+    {
+        "batch_id": "student-hard-words-2026-08-13-followup-3",
+        "received_at": "2026-08-13",
+        "raw_batch": FOLLOWUP_BATCH_3,
     },
 )
 
@@ -849,17 +1169,17 @@ CONFIRMED_CORRECTIONS = {
 }
 
 EXPECTED_STATISTICS = {
-    "raw_nonempty_lines": 755,
-    "normalized_reports": 756,
-    "unique_headwords": 751,
-    "duplicate_report_count": 5,
-    "difficulty_counts": {"1": 215, "2": 223, "3": 313},
+    "raw_nonempty_lines": 1069,
+    "normalized_reports": 1070,
+    "unique_headwords": 1064,
+    "duplicate_report_count": 6,
+    "difficulty_counts": {"1": 241, "2": 336, "3": 487},
     "correction_event_count": 10,
     "corrected_output_count": 11,
     "corpus_match_counts": {
-        "active": 621,
-        "candidate_only": 54,
-        "unmatched": 76,
+        "active": 889,
+        "candidate_only": 75,
+        "unmatched": 100,
     },
 }
 
@@ -969,15 +1289,17 @@ def build_archive() -> dict:
             teacher_status = "needs_lexical_source"
 
         proper_status = "not_flagged"
-        if normalized in {"arctic", "antarctic"}:
+        if normalized in {"arctic", "antarctic", "pacific"}:
             proper_status = "mixed_or_context_dependent"
             teacher_status = "needs_proper_noun_and_sense_review"
+
+        display_word = "Pacific" if normalized == "pacific" else normalized
 
         items.append(
             {
                 "item_index": len(items) + 1,
                 "normalized_headword": normalized,
-                "display_word": normalized,
+                "display_word": display_word,
                 "difficulty_code": effective_code,
                 "needs_pronunciation": needs_pronunciation,
                 "needs_meaning": needs_meaning,
@@ -1024,9 +1346,11 @@ def build_archive() -> dict:
         )
 
     return {
-        "schema_version": 2,
-        "batch_id": "student-hard-words-2026-08-12",
-        "received_at": "2026-08-12",
+        "schema_version": 3,
+        "archive_id": "student-hard-words-through-2026-08-13",
+        "first_received_at": "2026-08-12",
+        "last_received_at": "2026-08-13",
+        "source_batch_count": len(SOURCE_BATCHES),
         "source_type": "learner-reported-vocabulary-review-difficulties",
         "provenance_note": (
             "Teacher-supplied learner report. Difficulty codes describe learner "
@@ -1050,8 +1374,15 @@ def build_archive() -> dict:
                 "confirmation before a sense-specific answer is authored."
             ),
             "proper_noun_rule": (
-                "Arctic and Antarctic remain mixed/context-dependent until their "
-                "source contexts confirm adjectival or proper-name use."
+                "Arctic, Antarctic and Pacific remain mixed/context-dependent until "
+                "their source contexts confirm adjectival, common-word or "
+                "proper-name use. Pacific retains the teacher-supplied display case."
+            ),
+            "homograph_rule": (
+                "A reported spelling may cover multiple senses, parts of speech, "
+                "stress patterns or pronunciations. Without source context it is "
+                "retained as one spelling-level learner report and remains pending "
+                "sense confirmation rather than receiving an inferred answer."
             ),
         },
         "items": items,
@@ -1091,7 +1422,7 @@ def build_public_catalog(archive: dict | None = None) -> dict:
     return {
         "schemaVersion": 1,
         "catalogId": "student-hard-words-2026-08-12",
-        "generatedAt": "2026-08-12",
+        "generatedAt": "2026-08-13",
         "privacy": {
             "containsLearnerIdentity": False,
             "omittedFields": [

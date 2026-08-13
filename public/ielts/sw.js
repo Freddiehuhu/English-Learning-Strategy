@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wordlab-v29-formal-hard-word-sound-form';
+const CACHE_NAME = 'wordlab-v30-hard-word-catalog-1064';
 const CORE_ASSETS = [
   './',
   './index.html',

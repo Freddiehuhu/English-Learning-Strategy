@@ -65,10 +65,6 @@ REVIEWED_WORD_PROFILE_ID = "edge-tts-word-2026-07-30.1"
 REVIEWED_WORD_PROFILE_SHA256 = (
     "07f4cd8abcdf6b72b0b8a75ee4c86ae572c6d0c7ba7acd6beec5e1a34fd4cda3"
 )
-EXPECTED_HEADWORD_COUNT = 751
-EXPECTED_SHARED_HEADWORD_COUNT = 23
-EXPECTED_GENERATED_HEADWORD_COUNT = 728
-EXPECTED_SOURCE_AUDITED_HEADWORD_COUNT = 12
 DURATION_DRIFT_TOLERANCE_SECONDS = 0.1
 REVIEW_STATUSES = {
     "needs_lexical_approval",
@@ -118,18 +114,61 @@ def load_catalog(catalog_file: Path = CATALOG_FILE) -> dict[str, Any]:
     except json.JSONDecodeError as error:
         raise HardWordAudioError(f"Invalid hard-word catalog JSON: {error}") from error
 
+    expected_catalog_keys = {
+        "catalogId",
+        "difficultyLegend",
+        "entries",
+        "generatedAt",
+        "privacy",
+        "schemaVersion",
+        "statistics",
+    }
     entries = catalog.get("entries")
     if (
-        not type_strict_equal(catalog.get("schemaVersion"), 1)
+        not isinstance(catalog, dict)
+        or set(catalog) != expected_catalog_keys
+        or not type_strict_equal(catalog.get("schemaVersion"), 1)
         or catalog.get("catalogId") != CATALOG_ID
         or not isinstance(entries, list)
-        or len(entries) != EXPECTED_HEADWORD_COUNT
+        or len(entries) < 10
     ):
         raise HardWordAudioError("Hard-word catalog identity or coverage changed")
 
+    privacy = catalog.get("privacy")
+    required_omissions = {
+        "batch_id",
+        "cefr",
+        "ipa",
+        "learner_name",
+        "lexical_definition",
+        "part_of_speech",
+        "raw_line_index",
+        "raw_token",
+        "received_at",
+    }
+    if (
+        not isinstance(catalog.get("generatedAt"), str)
+        or not catalog["generatedAt"]
+        or not isinstance(catalog.get("difficultyLegend"), dict)
+        or set(catalog["difficultyLegend"]) != {"1", "2", "3"}
+        or not all(
+            isinstance(value, str) and value
+            for value in catalog["difficultyLegend"].values()
+        )
+        or not isinstance(privacy, dict)
+        or set(privacy) != {"containsLearnerIdentity", "omittedFields"}
+        or privacy.get("containsLearnerIdentity") is not False
+        or not isinstance(privacy.get("omittedFields"), list)
+        or set(privacy["omittedFields"]) != required_omissions
+        or len(privacy["omittedFields"]) != len(required_omissions)
+    ):
+        raise HardWordAudioError("Hard-word catalog privacy or metadata changed")
+
     ids: set[str] = set()
     headwords: set[str] = set()
-    source_audited = 0
+    difficulty_counts = {"1": 0, "2": 0, "3": 0}
+    corpus_match_counts = {"active": 0, "candidate_only": 0, "unmatched": 0}
+    normalized_reports = 0
     for entry in entries:
         if not isinstance(entry, dict):
             raise HardWordAudioError("Hard-word catalog entry is not an object")
@@ -162,19 +201,95 @@ def load_catalog(catalog_file: Path = CATALOG_FILE) -> dict[str, Any]:
                 f"Hard-word catalog entry fields changed unexpectedly: {entry_id}"
             )
         review_status = str(entry.get("reviewStatus") or "")
-        if review_status not in REVIEW_STATUSES:
+        difficulty_code = str(entry.get("difficultyCode") or "")
+        expected_abilities = (
+            ["pronunciation"]
+            if difficulty_code == "1"
+            else ["meaning"]
+            if difficulty_code == "2"
+            else ["pronunciation", "meaning"]
+        )
+        route_is_valid = (
+            difficulty_code == "1"
+            and entry.get("needsPronunciation") is True
+            and entry.get("needsMeaning") is False
+        ) or (
+            difficulty_code == "2"
+            and entry.get("needsPronunciation") is False
+            and entry.get("needsMeaning") is True
+        ) or (
+            difficulty_code == "3"
+            and entry.get("needsPronunciation") is True
+            and entry.get("needsMeaning") is True
+        )
+        report_count = entry.get("reportCount")
+        corpus_status = str(entry.get("corpusMatchStatus") or "")
+        practice_status = str(entry.get("practiceStatus") or "")
+        if (
+            review_status not in REVIEW_STATUSES
+            or not route_is_valid
+            or entry.get("abilityTags") != expected_abilities
+            or type(report_count) is not int
+            or report_count < 1
+            or corpus_status not in corpus_match_counts
+            or practice_status
+            not in {"in_rescue_training", "awaiting_exercise_authoring"}
+            or (review_status == "source_audited_for_rescue")
+            != (practice_status == "in_rescue_training")
+        ):
             raise HardWordAudioError(
-                f"Hard-word entry has an unknown lexical review status: {entry_id}"
+                f"Hard-word entry has invalid learning metadata: {entry_id}"
             )
-        if review_status == "source_audited_for_rescue":
-            source_audited += 1
         ids.add(entry_id)
         headwords.add(normalized.casefold())
-    if source_audited != EXPECTED_SOURCE_AUDITED_HEADWORD_COUNT:
-        raise HardWordAudioError(
-            f"Expected {EXPECTED_SOURCE_AUDITED_HEADWORD_COUNT} source-audited "
-            f"headwords; found {source_audited}"
+        difficulty_counts[difficulty_code] += 1
+        corpus_match_counts[corpus_status] += 1
+        normalized_reports += report_count
+
+    statistics = catalog.get("statistics")
+    expected_statistics_keys = {
+        "corpus_match_counts",
+        "corrected_output_count",
+        "correction_event_count",
+        "difficulty_counts",
+        "duplicate_report_count",
+        "normalized_reports",
+        "raw_nonempty_lines",
+        "unique_headwords",
+    }
+    if not isinstance(statistics, dict) or set(statistics) != expected_statistics_keys:
+        raise HardWordAudioError("Hard-word catalog statistics fields changed")
+    exact_integer_fields = (
+        "corrected_output_count",
+        "correction_event_count",
+        "duplicate_report_count",
+        "normalized_reports",
+        "raw_nonempty_lines",
+        "unique_headwords",
+    )
+    if any(type(statistics.get(field)) is not int for field in exact_integer_fields):
+        raise HardWordAudioError("Hard-word catalog statistics are not exact integers")
+    if (
+        statistics["unique_headwords"] != len(entries)
+        or statistics["normalized_reports"] != normalized_reports
+        or statistics["duplicate_report_count"] != normalized_reports - len(entries)
+        or statistics["duplicate_report_count"] < 0
+        or statistics["raw_nonempty_lines"] < 1
+        or statistics["raw_nonempty_lines"] > normalized_reports
+        or statistics["correction_event_count"] < 0
+        or statistics["corrected_output_count"] < 0
+        or statistics["corrected_output_count"]
+        < statistics["correction_event_count"]
+        or normalized_reports
+        != statistics["raw_nonempty_lines"]
+        + statistics["corrected_output_count"]
+        - statistics["correction_event_count"]
+        or not type_strict_equal(statistics.get("difficulty_counts"), difficulty_counts)
+        or not type_strict_equal(
+            statistics.get("corpus_match_counts"), corpus_match_counts
         )
+    ):
+        raise HardWordAudioError("Hard-word catalog statistics do not match entries")
     return catalog
 
 
@@ -421,16 +536,10 @@ def build_manifest(
             **measurements,
         }
 
-    if len(shared_headwords) != EXPECTED_SHARED_HEADWORD_COUNT:
-        raise HardWordAudioError(
-            f"Expected {EXPECTED_SHARED_HEADWORD_COUNT} shared headwords; "
-            f"found {len(shared_headwords)}"
-        )
-    if len(generated_headwords) != EXPECTED_GENERATED_HEADWORD_COUNT:
-        raise HardWordAudioError(
-            f"Expected {EXPECTED_GENERATED_HEADWORD_COUNT} generated headwords; "
-            f"found {len(generated_headwords)}"
-        )
+    if shared_headwords & generated_headwords:
+        raise HardWordAudioError("A headword mixes shared and generated audio sources")
+    if len(shared_headwords | generated_headwords) != len(catalog["entries"]):
+        raise HardWordAudioError("Shared/generated headword coverage is incomplete")
 
     return {
         "catalog": {
@@ -517,7 +626,11 @@ def load_manifest(
         raise HardWordAudioError(f"Invalid hard-word audio manifest JSON: {error}") from error
 
 
-def validate_manifest_schema(manifest: dict[str, Any]) -> None:
+def validate_manifest_schema(
+    manifest: dict[str, Any],
+    catalog_file: Path = CATALOG_FILE,
+    reviewed_manifest_file: Path = REVIEWED_AUDIO_MANIFEST_FILE,
+) -> None:
     """Validate the public loader contract before comparing file evidence."""
 
     def exact_keys(value: Any, keys: set[str], label: str) -> None:
@@ -556,30 +669,56 @@ def validate_manifest_schema(manifest: dict[str, Any]) -> None:
         },
         "coverage",
     )
+    source_catalog = load_catalog(catalog_file)
+    source_entries = source_catalog["entries"]
+    expected_entry_count = len(source_entries)
+    expected_source_audited = sum(
+        1
+        for entry in source_entries
+        if entry["reviewStatus"] == "source_audited_for_rescue"
+    )
+    expected_links = expected_audio_links(catalog_file, reviewed_manifest_file)
+    expected_shared_ids = {
+        str(link["entry_id"])
+        for link in expected_links
+        if link["asset_source"] == "shared_reviewed_word"
+    }
+    expected_generated_ids = {
+        str(link["entry_id"])
+        for link in expected_links
+        if link["asset_source"] == "hard_word_generated"
+    }
+    if (
+        expected_shared_ids & expected_generated_ids
+        or len(expected_shared_ids | expected_generated_ids) != expected_entry_count
+    ):
+        raise HardWordAudioError("Expected audio source split is incomplete")
+    expected_shared_count = len(expected_shared_ids)
+    expected_generated_count = len(expected_generated_ids)
     catalog = manifest["catalog"]
     if (
         catalog["catalogId"] != CATALOG_ID
-        or not type_strict_equal(catalog["entryCount"], EXPECTED_HEADWORD_COUNT)
+        or not type_strict_equal(catalog["entryCount"], expected_entry_count)
         or catalog["path"] != "public/ielts/corpus/student-hard-words.json"
-        or not isinstance(catalog["sha256"], str)
-        or len(catalog["sha256"]) != 64
+        or catalog["sha256"] != catalog_sha256(catalog_file)
     ):
         raise HardWordAudioError("Invalid hard-word catalog binding")
     expected_coverage = {
         "accents": len(REVIEWED_VOICES),
-        "audioLinks": EXPECTED_HEADWORD_COUNT * len(REVIEWED_VOICES),
-        "generatedFiles": EXPECTED_GENERATED_HEADWORD_COUNT * len(REVIEWED_VOICES),
-        "generatedHeadwords": EXPECTED_GENERATED_HEADWORD_COUNT,
-        "headwords": EXPECTED_HEADWORD_COUNT,
-        "sharedAudioLinks": EXPECTED_SHARED_HEADWORD_COUNT * len(REVIEWED_VOICES),
-        "sharedHeadwords": EXPECTED_SHARED_HEADWORD_COUNT,
-        "sourceAuditedHeadwords": EXPECTED_SOURCE_AUDITED_HEADWORD_COUNT,
+        "audioLinks": expected_entry_count * len(REVIEWED_VOICES),
+        "generatedFiles": expected_generated_count * len(REVIEWED_VOICES),
+        "generatedHeadwords": expected_generated_count,
+        "headwords": expected_entry_count,
+        "sharedAudioLinks": expected_shared_count * len(REVIEWED_VOICES),
+        "sharedHeadwords": expected_shared_count,
+        "sourceAuditedHeadwords": expected_source_audited,
     }
     if not type_strict_equal(manifest["coverage"], expected_coverage):
         raise HardWordAudioError("Invalid hard-word audio manifest coverage")
     entries = manifest["entries"]
-    if not isinstance(entries, list) or len(entries) != EXPECTED_HEADWORD_COUNT:
+    if not isinstance(entries, list) or len(entries) != expected_entry_count:
         raise HardWordAudioError("Invalid hard-word audio entry count")
+    source_by_id = {str(entry["id"]): entry for entry in source_entries}
     entry_ids: set[str] = set()
     headwords: set[str] = set()
     audited = 0
@@ -607,6 +746,7 @@ def validate_manifest_schema(manifest: dict[str, Any]) -> None:
         exact_keys(entry, {"audio", "entryId", "headword", "lexicalReview"}, "entry")
         entry_id = entry["entryId"]
         headword = entry["headword"]
+        source_entry = source_by_id.get(str(entry_id))
         if (
             not isinstance(entry_id, str)
             or not entry_id
@@ -614,6 +754,8 @@ def validate_manifest_schema(manifest: dict[str, Any]) -> None:
             or not isinstance(headword, str)
             or not headword
             or headword.casefold() in headwords
+            or not source_entry
+            or headword != source_entry["displayWord"]
         ):
             raise HardWordAudioError("Duplicate or invalid manifest entry identity")
         entry_ids.add(entry_id)
@@ -626,7 +768,7 @@ def validate_manifest_schema(manifest: dict[str, Any]) -> None:
             raise HardWordAudioError("Invalid lexical review metadata")
         if review["sourceAudited"] != (
             review["status"] == "source_audited_for_rescue"
-        ):
+        ) or review["status"] != source_entry["reviewStatus"]:
             raise HardWordAudioError("Lexical audit flag and status disagree")
         audited += int(review["sourceAudited"])
         exact_keys(entry["audio"], set(REVIEWED_VOICES), "audio accents")
@@ -653,7 +795,8 @@ def validate_manifest_schema(manifest: dict[str, Any]) -> None:
             if audio["assetSource"] == "shared_reviewed_word":
                 shared_links += 1
                 if (
-                    audio["voice"] != REVIEWED_VOICES[accent]
+                    entry_id not in expected_shared_ids
+                    or audio["voice"] != REVIEWED_VOICES[accent]
                     or not path.startswith(f"{accent}/")
                     or audio["generationProfile"] != REVIEWED_WORD_PROFILE_ID
                     or audio["generationProfileSha256"]
@@ -663,18 +806,21 @@ def validate_manifest_schema(manifest: dict[str, Any]) -> None:
             else:
                 generated_links += 1
                 if (
-                    audio["voice"] != GENERATED_VOICES[accent]
+                    entry_id not in expected_generated_ids
+                    or audio["voice"] != GENERATED_VOICES[accent]
                     or audio["generationProfile"] != PROFILE_ID
                     or audio["generationProfileSha256"]
                     != sha256_text(canonical_json(generation_profile()))
                     or path != f"hard-words/{accent}/{entry_id}.mp3"
                 ):
                     raise HardWordAudioError("Generated audio path is not catalog-bound")
-    if audited != EXPECTED_SOURCE_AUDITED_HEADWORD_COUNT:
+    if entry_ids != set(source_by_id):
+        raise HardWordAudioError("Manifest entries do not exactly cover the catalog")
+    if audited != expected_source_audited:
         raise HardWordAudioError("Invalid source-audited entry count")
     if (
-        shared_links != EXPECTED_SHARED_HEADWORD_COUNT * len(REVIEWED_VOICES)
-        or generated_links != EXPECTED_GENERATED_HEADWORD_COUNT * len(REVIEWED_VOICES)
+        shared_links != expected_shared_count * len(REVIEWED_VOICES)
+        or generated_links != expected_generated_count * len(REVIEWED_VOICES)
     ):
         raise HardWordAudioError("Invalid shared/generated audio split")
     exact_keys(
@@ -830,11 +976,11 @@ def compare_manifest(
 ) -> list[str]:
     try:
         committed = load_manifest(manifest_file)
-        validate_manifest_schema(committed)
+        validate_manifest_schema(committed, catalog_file, reviewed_manifest_file)
         current = build_manifest(
             catalog_file, hard_word_audio_root, reviewed_manifest_file
         )
-    except (HardWordAudioError, RuntimeError) as error:
+    except (HardWordAudioError, RuntimeError, TypeError, ValueError) as error:
         return [str(error)]
     return manifest_drift_messages(committed, current)
 
@@ -897,10 +1043,12 @@ def main() -> None:
             for message in messages:
                 print(f"ERROR: {message}")
             raise SystemExit(1)
+        catalog = load_catalog()
+        entry_count = len(catalog["entries"])
         print(
             "Hard-word audio manifest is current: "
-            f"{EXPECTED_HEADWORD_COUNT}/{EXPECTED_HEADWORD_COUNT} headwords, "
-            f"{EXPECTED_HEADWORD_COUNT * len(REVIEWED_VOICES)} audio links verified"
+            f"{entry_count}/{entry_count} headwords, "
+            f"{entry_count * len(REVIEWED_VOICES)} audio links verified"
         )
     except (HardWordAudioError, RuntimeError) as error:
         print(f"ERROR: {error}")

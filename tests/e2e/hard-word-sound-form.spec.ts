@@ -5,7 +5,6 @@ import {
   assertBlindRootHasNoAnswer,
   AudioHarness,
   catalog,
-  clearActiveForNextBatch,
   entryFor,
   hardWordAudioManifestFixture,
   installHardWordAudioRoute,
@@ -25,13 +24,16 @@ test.use({ serviceWorkers: 'block' });
 
 const root = (page: Page) => page.locator('[data-hard-word-sound-form]');
 
-test('browser fixture mirrors the final 23 shared and 728 local-generation voice contract', () => {
+test('browser fixture mirrors the published mixed shared/local voice contract', () => {
   const manifest = hardWordAudioManifestFixture();
   const allAudio = manifest.entries.flatMap((entry) => Object.values(entry.audio));
   const shared = allAudio.filter((audio) => audio.assetSource === 'shared_reviewed_word');
   const generated = allAudio.filter((audio) => audio.assetSource === 'hard_word_generated');
-  expect(shared).toHaveLength(46);
-  expect(generated).toHaveLength(1456);
+  expect(allAudio).toHaveLength(catalog.entries.length * 2);
+  expect(shared).toHaveLength(manifest.coverage.sharedAudioLinks);
+  expect(generated).toHaveLength(manifest.coverage.generatedFiles);
+  expect(manifest.coverage.headwords).toBe(catalog.entries.length);
+  expect(manifest.coverage.audioLinks).toBe(catalog.entries.length * 2);
   expect(new Set(shared.map((audio) => audio.voice))).toEqual(
     new Set(['en-GB-SoniaNeural', 'en-US-AvaNeural']),
   );
@@ -54,11 +56,12 @@ test('published manifest launches the formal route without a browser fixture', a
   expect(response.ok()).toBe(true);
   const manifest = (await response.json()) as ReturnType<typeof hardWordAudioManifestFixture>;
   expect(manifest.coverage).toMatchObject({
-    headwords: 751,
-    audioLinks: 1502,
-    generatedFiles: 1456,
-    sharedAudioLinks: 46,
+    headwords: catalog.entries.length,
+    audioLinks: catalog.entries.length * 2,
   });
+  expect(manifest.coverage.generatedFiles + manifest.coverage.sharedAudioLinks).toBe(
+    catalog.entries.length * 2,
+  );
   expect(manifest.generationProfile.id).toBe('macos-say-hard-word-2026-08-13.2');
   await expect(root(page)).toBeVisible();
 });
@@ -131,10 +134,11 @@ async function importPayload(page: Page, payload: unknown) {
   });
 }
 
-test('all 751 rows launch sound-form and a formal batch is 10 unique words with paired tasks 10 positions apart', async ({
+test('every catalog row launches sound-form and a formal batch is 10 unique words with paired tasks 10 positions apart', async ({
   page,
 }) => {
-  expect(catalog.entries).toHaveLength(751);
+  const catalogSize = catalog.entries.length;
+  expect(catalogSize).toBeGreaterThanOrEqual(10);
   await installHardWordAudioRoute(page);
   await openHardWords(page);
   while (await page.locator('[data-action="hard-words-more"]').count()) {
@@ -148,7 +152,7 @@ test('all 751 rows launch sound-form and a formal batch is 10 unique words with 
         .length,
     })),
   );
-  expect(rows).toHaveLength(751);
+  expect(rows).toHaveLength(catalogSize);
   expect(rows.every((item) => item.soundForm === 1)).toBe(true);
   expect(new Set(rows.map((item) => item.word))).toEqual(
     new Set(catalog.entries.map((entry) => entry.normalizedHeadword)),
@@ -169,32 +173,59 @@ test('all 751 rows launch sound-form and a formal batch is 10 unique words with 
   }
 });
 
-test('canonical rotation covers all 751 words within 76 batches without starvation', async ({
+test('canonical rotation covers the dynamic catalog within ceil(total / 10) batches without starvation', async ({
   page,
 }) => {
   await startBatch(page);
-  const seen = new Set<string>();
-  const batches: string[][] = [];
+  const ids = catalog.entries.map((entry) => entry.id);
+  const batchSize = 10;
+  const batchCount = Math.ceil(ids.length / batchSize);
+  const expectedBatches = Array.from({ length: batchCount }, (_, batchIndex) =>
+    Array.from(
+      { length: batchSize },
+      (__, offset) => ids[(batchIndex * batchSize + offset) % ids.length],
+    ),
+  );
+  const seen = new Set(expectedBatches.flat());
+  expect(seen).toEqual(new Set(ids));
+  expect(expectedBatches).toHaveLength(Math.ceil(ids.length / batchSize));
+  expect(new Set(expectedBatches.slice(0, -1).flat()).size).toBe(
+    Math.min(ids.length, (batchCount - 1) * batchSize),
+  );
 
-  for (let batchIndex = 0; batchIndex < 76; batchIndex += 1) {
-    const state = await soundFormState(page);
-    const selected = state.active!.queue.slice(0, 10).map((item) => item.wordId);
-    expect(new Set(selected).size).toBe(10);
-    batches.push(selected);
-    selected.forEach((id) => seen.add(id));
-    if (batchIndex === 75) break;
-    await clearActiveForNextBatch(page);
-    await page.reload();
-    await expect(page.getByRole('heading', { name: '学生难词总表' })).toBeVisible();
-    await page.locator('[data-action="start-sound-form-practice"]:not([data-word-id])').click();
-    await expect(root(page)).toBeVisible();
+  const initial = await soundFormState(page);
+  expect(initial.active!.queue.slice(0, batchSize).map((item) => item.wordId)).toEqual(
+    expectedBatches[0],
+  );
+
+  const finalCursor = ((batchCount - 1) * batchSize) % ids.length;
+  await page.evaluate(
+    ({ key, cursor }) => {
+      const saved = JSON.parse(localStorage.getItem(key) || 'null');
+      saved.cursor = cursor;
+      saved.active = null;
+      localStorage.setItem(key, JSON.stringify(saved));
+    },
+    { key: SOUND_FORM_KEY, cursor: finalCursor },
+  );
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '学生难词总表' })).toBeVisible();
+  await page.locator('[data-action="start-sound-form-practice"]:not([data-word-id])').click();
+  await expect(root(page)).toBeVisible();
+
+  const finalState = await soundFormState(page);
+  expect(finalState.active!.queue.slice(0, batchSize).map((item) => item.wordId)).toEqual(
+    expectedBatches.at(-1),
+  );
+  expect(finalState.cursor).toBe((finalCursor + batchSize) % ids.length);
+
+  const remainder = ids.length % batchSize;
+  if (remainder) {
+    expect(expectedBatches.at(-1)!.slice(0, remainder)).toEqual(ids.slice(-remainder));
+    expect(expectedBatches.at(-1)!.slice(remainder)).toEqual(ids.slice(0, batchSize - remainder));
+  } else {
+    expect(new Set(expectedBatches.at(-1))).toHaveSize(batchSize);
   }
-
-  expect(seen.size).toBe(751);
-  expect(batches.slice(0, 75).flat()).toHaveLength(750);
-  expect(new Set(batches.slice(0, 75).flat()).size).toBe(750);
-  expect(batches[75][0]).toBe(catalog.entries[750].id);
-  expect(batches[75].slice(1)).toEqual(catalog.entries.slice(0, 9).map((entry) => entry.id));
 });
 
 test('row launch pins its word at read 1 and spell 11 without advancing the global cursor', async ({
@@ -410,6 +441,110 @@ test('refresh restores every text stage, forces audio replay, and read compariso
   await expect(page.locator('[data-dual-spell-word-input]')).toHaveValue('draft');
   await expect(page.locator('[data-dual-spell-meaning-input]')).toHaveValue('my meaning');
   await expect(page.locator('[data-dual-spell-word-input]')).toBeDisabled();
+});
+
+test('a pre-expansion 751-word session keeps its valid evidence and resumes against the expanded catalog', async ({
+  page,
+}) => {
+  const legacyCatalogSize = 751;
+  expect(catalog.entries.length).toBeGreaterThan(legacyCatalogSize);
+  const firstTen = catalog.entries.slice(0, 10).map((entry) => entry.id);
+  const firstPass = firstTen.map((wordId, index) => ({
+    wordId,
+    type: (index % 2 === 0 ? 'read' : 'spell') as 'read' | 'spell',
+  }));
+  const queue = firstPass.concat(
+    firstPass.map((item) => ({
+      wordId: item.wordId,
+      type: (item.type === 'read' ? 'spell' : 'read') as 'read' | 'spell',
+    })),
+  );
+  const oldState: SoundFormState = {
+    version: 1,
+    catalogId: catalog.catalogId,
+    cursor: 750,
+    entries: {
+      [queue[0].wordId]: {
+        read: {
+          attempts: 1,
+          recordings: 0,
+          skips: 1,
+          lastAt: 1_000,
+          status: 'skipped',
+        },
+        spell: {
+          attempts: 0,
+          independentPasses: 0,
+          repairNeeded: 0,
+          skips: 0,
+          lastAt: 0,
+          status: '',
+        },
+      },
+    },
+    journal: [{ ...queue[0], status: 'skipped', at: 1_000 }],
+    active: {
+      runId: 'pre-expansion-751-session',
+      queue,
+      index: 1,
+      step: 'spell-count',
+      results: [{ ...queue[0], status: 'skipped' }],
+      task: {
+        meaning: '',
+        pos: '',
+        syllableCount: '',
+        syllables: '',
+        splitBoundaries: [],
+        spelling: '',
+        audioReady: false,
+        audioFailed: false,
+        technicalFailure: false,
+        error: '',
+      },
+    },
+  };
+  await installHardWordAudioRoute(page);
+  await page.goto('/ielts/index.html');
+  await page.evaluate(({ key, state }) => localStorage.setItem(key, JSON.stringify(state)), {
+    key: SOUND_FORM_KEY,
+    state: oldState,
+  });
+  await page.reload();
+
+  await expect(root(page)).toHaveAttribute('data-task-position', '2');
+  await expect(root(page)).toHaveAttribute('data-task-type', 'spell');
+  const restored = await soundFormState(page);
+  expect(restored.cursor).toBe(750);
+  expect(restored.entries).toEqual(oldState.entries);
+  expect(restored.journal).toEqual(oldState.journal);
+  expect(restored.active).toMatchObject({
+    runId: oldState.active!.runId,
+    index: 1,
+    step: 'spell-count',
+    queue,
+    results: oldState.active!.results,
+  });
+
+  await page.locator('[data-dual-exit]').click();
+  await expect(page.getByRole('heading', { name: '学生难词总表' })).toBeVisible();
+  expect((await soundFormState(page)).cursor).toBe(750);
+  await page.evaluate((key) => {
+    const saved = JSON.parse(localStorage.getItem(key) || 'null');
+    saved.active = null;
+    localStorage.setItem(key, JSON.stringify(saved));
+  }, SOUND_FORM_KEY);
+  await page.reload();
+  await page.locator('[data-view-link="hard-words"]:visible').click();
+  await expect(page.getByRole('heading', { name: '学生难词总表' })).toBeVisible();
+  await page.locator('[data-action="start-sound-form-practice"]:not([data-word-id])').click();
+  await expect(root(page)).toHaveAttribute('data-task-position', '1');
+  const next = await soundFormState(page);
+  expect(next.active!.queue.slice(0, 10).map((item) => item.wordId)).toEqual(
+    catalog.entries.slice(750, 760).map((entry) => entry.id),
+  );
+  expect(next.cursor).toBe(760);
+  expect(next.entries).toEqual(oldState.entries);
+  expect(next.journal).toEqual(oldState.journal);
 });
 
 test('recording completion is pending human review and never machine-marked correct', async ({
@@ -751,7 +886,12 @@ test('mobile 320/375 layout has no overflow, uses 44px controls, and exposes key
         .every((item) => item.width >= 44 && item.height >= 44),
     ).toBe(true);
 
-    await reachDirectSpell(page, 'pronunciation');
+    for (let index = 0; index < 10; index += 1) {
+      await skipCurrent(page);
+      await waitForTransitionLock(page);
+    }
+    await expect(root(page)).toHaveAttribute('data-task-position', '11');
+    await expect(root(page)).toHaveAttribute('data-task-type', 'spell');
     await page.locator('[data-dual-spell-audio]').click();
     await AudioHarness.dispatch(page, 'playing');
     await expect(page.locator('[data-dual-spell-count-input]')).toHaveAttribute(
@@ -763,7 +903,9 @@ test('mobile 320/375 layout has no overflow, uses 44px controls, and exposes key
 
 test('service worker caches the manifest and full audio on demand while bypassing Range requests', async () => {
   const sw = readFileSync(join(process.cwd(), 'public/ielts/sw.js'), 'utf8');
-  expect(sw).toContain("const CACHE_NAME = 'wordlab-v29-formal-hard-word-sound-form'");
+  expect(sw).toContain(
+    `const CACHE_NAME = 'wordlab-v30-hard-word-catalog-${catalog.entries.length}'`,
+  );
   expect(sw).toContain("url.pathname.endsWith('/ielts/audio/hard-words/manifest.json')");
   expect(sw).toContain("url.pathname.includes('/ielts/audio/')");
   expect(sw).toMatch(/request\.headers\.has\(['"]range['"]\)\) return/);

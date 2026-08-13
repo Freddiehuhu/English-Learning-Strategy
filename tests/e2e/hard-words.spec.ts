@@ -7,6 +7,15 @@ test.use({ serviceWorkers: 'block' });
 const publishedCatalog = JSON.parse(
   readFileSync(join(process.cwd(), 'public/ielts/corpus/student-hard-words.json'), 'utf8'),
 );
+const catalogSize = publishedCatalog.entries.length;
+const formattedCatalogSize = catalogSize.toLocaleString('en-US');
+const difficultyCounts = publishedCatalog.entries.reduce(
+  (counts: Record<string, number>, entry: { difficultyCode: number }) => {
+    counts[String(entry.difficultyCode)] = (counts[String(entry.difficultyCode)] || 0) + 1;
+    return counts;
+  },
+  {},
+);
 
 async function openHardWords(page: import('@playwright/test').Page) {
   await page.goto('/ielts/index.html');
@@ -15,7 +24,7 @@ async function openHardWords(page: import('@playwright/test').Page) {
   await expect(page.locator('[data-hard-words-results]')).toBeVisible();
 }
 
-test('loads the 751-word learner catalog only on demand and exposes it from Today and Practice', async ({
+test('loads the complete learner catalog only on demand and exposes it from Today and Practice', async ({
   page,
 }) => {
   let catalogRequests = 0;
@@ -28,10 +37,16 @@ test('loads the 751-word learner catalog only on demand and exposes it from Toda
   await expect(page.getByRole('button', { name: '查看全部学生难词' })).toBeVisible();
   await page.getByRole('button', { name: '查看全部学生难词' }).click();
   await expect(page.getByRole('heading', { name: '学生难词总表' })).toBeVisible();
-  await expect(page.locator('.hard-words-stat').nth(0)).toContainText('751');
-  await expect(page.locator('.hard-words-stat[data-difficulty="1"]')).toContainText('215');
-  await expect(page.locator('.hard-words-stat[data-difficulty="2"]')).toContainText('223');
-  await expect(page.locator('.hard-words-stat[data-difficulty="3"]')).toContainText('313');
+  await expect(page.locator('.hard-words-stat').nth(0)).toContainText(formattedCatalogSize);
+  await expect(page.locator('.hard-words-stat[data-difficulty="1"]')).toContainText(
+    String(difficultyCounts['1']),
+  );
+  await expect(page.locator('.hard-words-stat[data-difficulty="2"]')).toContainText(
+    String(difficultyCounts['2']),
+  );
+  await expect(page.locator('.hard-words-stat[data-difficulty="3"]')).toContainText(
+    String(difficultyCounts['3']),
+  );
   expect(catalogRequests).toBe(1);
 
   await page.locator('[data-view-link="practice"]:visible').click();
@@ -49,8 +64,12 @@ test('searches, filters and progressively reveals the real learner catalog witho
   await page.getByRole('button', { name: /再显示 60 个/ }).click();
   await expect(page.locator('.hard-word-row')).toHaveCount(120);
 
-  await page.getByRole('button', { name: /313 两项都不会/ }).click();
-  await expect(page.locator('[data-hard-words-match-count]')).toHaveText('313');
+  await page
+    .getByRole('button', { name: new RegExp(`${difficultyCounts['3']} 两项都不会`) })
+    .click();
+  await expect(page.locator('[data-hard-words-match-count]')).toHaveText(
+    String(difficultyCounts['3']),
+  );
   await expect(page.locator('.hard-word-row')).toHaveCount(60);
   await expect(page.locator('.hard-word-row[data-difficulty="1"]')).toHaveCount(0);
   await expect(page.locator('.hard-word-row[data-difficulty="2"]')).toHaveCount(0);
@@ -72,7 +91,7 @@ test('searches, filters and progressively reveals the real learner catalog witho
   await expect(page.locator('[data-hard-words-match-count]')).toHaveText('4');
   await expect(page.locator('.hard-word-start')).toHaveCount(4);
 
-  await page.getByRole('button', { name: /751 全部难词/ }).click();
+  await page.getByRole('button', { name: new RegExp(`${formattedCatalogSize} 全部难词`) }).click();
   await expect(page.locator('[data-hard-words-match-count]')).toHaveText('12');
   await expect(page.locator('[data-action="start-rescue-word"]')).toHaveCount(12);
   await expect(
@@ -119,7 +138,7 @@ test('shows a recoverable load error and can use a cached catalog while offline'
   await page.locator('[data-view-link="hard-words"]:visible').click();
   await expect(page.getByRole('alert')).toContainText('难词表暂时没有载入');
   await page.getByRole('button', { name: '重新载入' }).click();
-  await expect(page.locator('.hard-words-stat').nth(0)).toContainText('751');
+  await expect(page.locator('.hard-words-stat').nth(0)).toContainText(formattedCatalogSize);
   expect(attempts).toBe(2);
 
   await page.unroute('**/ielts/corpus/student-hard-words.json');
@@ -136,7 +155,7 @@ test('shows a recoverable load error and can use a cached catalog while offline'
   );
   await page.reload();
   await page.locator('[data-view-link="hard-words"]:visible').click();
-  await expect(page.locator('.hard-words-stat').nth(0)).toContainText('751');
+  await expect(page.locator('.hard-words-stat').nth(0)).toContainText(formattedCatalogSize);
   await expect(page.locator('[data-hard-word="loss"]')).toBeVisible();
 });
 

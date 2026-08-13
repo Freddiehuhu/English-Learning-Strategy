@@ -25,24 +25,39 @@ class HardWordAudioManifestTests(unittest.TestCase):
         cls.catalog = hard_audio.load_catalog()
         cls.manifest = hard_audio.load_manifest()
 
-    def test_all_751_headwords_have_loader_friendly_uk_and_us_audio(self) -> None:
+    def test_every_catalog_headword_has_loader_friendly_uk_and_us_audio(self) -> None:
+        catalog_count = len(self.catalog["entries"])
+        shared_headwords = sum(
+            1
+            for entry in self.manifest["entries"]
+            if all(
+                audio["assetSource"] == "shared_reviewed_word"
+                for audio in entry["audio"].values()
+            )
+        )
+        generated_headwords = catalog_count - shared_headwords
         self.assertEqual(self.manifest["schemaVersion"], 1)
         self.assertEqual(
             self.manifest["coverage"],
             {
-                "accents": 2,
-                "audioLinks": 1502,
-                "generatedFiles": 1456,
-                "generatedHeadwords": 728,
-                "headwords": 751,
-                "sharedAudioLinks": 46,
-                "sharedHeadwords": 23,
-                "sourceAuditedHeadwords": 12,
+                "accents": len(hard_audio.REVIEWED_VOICES),
+                "audioLinks": catalog_count * len(hard_audio.REVIEWED_VOICES),
+                "generatedFiles": generated_headwords
+                * len(hard_audio.REVIEWED_VOICES),
+                "generatedHeadwords": generated_headwords,
+                "headwords": catalog_count,
+                "sharedAudioLinks": shared_headwords
+                * len(hard_audio.REVIEWED_VOICES),
+                "sharedHeadwords": shared_headwords,
+                "sourceAuditedHeadwords": sum(
+                    entry["reviewStatus"] == "source_audited_for_rescue"
+                    for entry in self.catalog["entries"]
+                ),
             },
         )
-        self.assertEqual(len(self.manifest["entries"]), 751)
+        self.assertEqual(len(self.manifest["entries"]), catalog_count)
         by_id = {entry["entryId"]: entry for entry in self.manifest["entries"]}
-        self.assertEqual(len(by_id), 751)
+        self.assertEqual(len(by_id), catalog_count)
         for catalog_entry in self.catalog["entries"]:
             entry = by_id[catalog_entry["id"]]
             self.assertEqual(entry["headword"], catalog_entry["displayWord"])
@@ -114,7 +129,18 @@ class HardWordAudioManifestTests(unittest.TestCase):
                 self.assertTrue(forbidden.isdisjoint(audio))
                 self.assertEqual(audio["kind"], "word")
 
-    def test_exactly_23_headwords_share_reviewed_audio_and_728_are_generated(self) -> None:
+    def test_source_split_is_derived_from_exact_reviewed_headword_matches(self) -> None:
+        expected_links = hard_audio.expected_audio_links()
+        expected_shared = {
+            link["entry_id"]
+            for link in expected_links
+            if link["asset_source"] == "shared_reviewed_word"
+        }
+        expected_generated = {
+            link["entry_id"]
+            for link in expected_links
+            if link["asset_source"] == "hard_word_generated"
+        }
         patterns = Counter(
             tuple(sorted(audio["assetSource"] for audio in entry["audio"].values()))
             for entry in self.manifest["entries"]
@@ -123,11 +149,20 @@ class HardWordAudioManifestTests(unittest.TestCase):
             patterns,
             Counter(
                 {
-                    ("hard_word_generated", "hard_word_generated"): 728,
-                    ("shared_reviewed_word", "shared_reviewed_word"): 23,
+                    ("hard_word_generated", "hard_word_generated"): len(
+                        expected_generated
+                    ),
+                    ("shared_reviewed_word", "shared_reviewed_word"): len(
+                        expected_shared
+                    ),
                 }
             ),
         )
+        self.assertEqual(
+            expected_shared | expected_generated,
+            {entry["id"] for entry in self.catalog["entries"]},
+        )
+        self.assertFalse(expected_shared & expected_generated)
 
         for entry in self.manifest["entries"]:
             for accent, audio in entry["audio"].items():
@@ -163,7 +198,7 @@ class HardWordAudioManifestTests(unittest.TestCase):
         actual = hard_audio.repository_generated_paths()
         expected = hard_audio.expected_generated_paths()
         self.assertEqual(actual, expected)
-        self.assertEqual(len(actual), 1456)
+        self.assertEqual(len(actual), len(hard_audio.generated_specs()))
         self.assertFalse(any(path.endswith("_sentence.mp3") for path in actual))
         hard_audio.require_exact_generated_coverage()
 
@@ -281,9 +316,56 @@ class HardWordAudioManifestTests(unittest.TestCase):
         with self.assertRaises(hard_audio.HardWordAudioError):
             hard_audio.validate_manifest_schema(mutated)
         mutated = copy.deepcopy(self.manifest)
-        mutated["coverage"]["headwords"] = 750
+        mutated["coverage"]["headwords"] -= 1
         with self.assertRaises(hard_audio.HardWordAudioError):
             hard_audio.validate_manifest_schema(mutated)
+
+    def test_catalog_scale_and_statistics_are_derived_but_fail_closed(self) -> None:
+        self.assertEqual(
+            self.catalog["statistics"]["unique_headwords"],
+            len(self.catalog["entries"]),
+        )
+        mutations = []
+        changed_unique = copy.deepcopy(self.catalog)
+        changed_unique["statistics"]["unique_headwords"] += 1
+        mutations.append(changed_unique)
+        changed_difficulty = copy.deepcopy(self.catalog)
+        changed_difficulty["statistics"]["difficulty_counts"]["1"] += 1
+        mutations.append(changed_difficulty)
+        changed_reports = copy.deepcopy(self.catalog)
+        changed_reports["statistics"]["normalized_reports"] += 1
+        mutations.append(changed_reports)
+        injected = copy.deepcopy(self.catalog)
+        injected["statistics"]["unexpected"] = 1
+        mutations.append(injected)
+
+        with tempfile.TemporaryDirectory() as directory:
+            catalog_file = Path(directory) / "catalog.json"
+            for mutated in mutations:
+                catalog_file.write_text(json.dumps(mutated), encoding="utf-8")
+                with self.assertRaises(hard_audio.HardWordAudioError):
+                    hard_audio.load_catalog(catalog_file)
+
+    def test_previous_manifest_can_supply_only_hash_verified_reuse_candidates(self) -> None:
+        current_specs = hard_audio.generated_specs()
+        previous_index = hard_audio.flattened_manifest_audio_index(self.manifest)
+        reusable = [
+            spec
+            for spec in current_specs
+            if hard_audio.reusable_generated_asset(
+                spec,
+                previous_index.get((str(spec["entry_id"]), str(spec["accent"]))),
+            )
+        ]
+        self.assertGreater(len(reusable), 0)
+        candidate = reusable[0]
+        key = (str(candidate["entry_id"]), str(candidate["accent"]))
+        forged = copy.deepcopy(previous_index[key])
+        forged["audioSha256"] = "0" * 64
+        self.assertFalse(hard_audio.reusable_generated_asset(candidate, forged))
+        forged = copy.deepcopy(previous_index[key])
+        forged["bindingSha256"] = "0" * 64
+        self.assertFalse(hard_audio.reusable_generated_asset(candidate, forged))
 
     def test_loader_schema_rejects_answer_and_identity_injection(self) -> None:
         for key, value in (("meaning", "答案"), ("learner", "private")):

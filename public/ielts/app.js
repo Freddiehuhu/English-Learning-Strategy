@@ -15,7 +15,7 @@
   var HARD_WORD_SOUND_FORM_STORAGE_KEY = 'els-ielts-hard-word-sound-form-v1';
   var HARD_WORD_AUDIO_MANIFEST_URL = './audio/hard-words/manifest.json';
   var HARD_WORD_AUDIO_CATALOG_ID = 'student-hard-words-2026-08-12';
-  var HARD_WORD_CATALOG_SHA256 = '0db08fa501961bc0ccdc1a044be8d86793858761cc43e4db9f68087a05560a95';
+  var HARD_WORD_CATALOG_SHA256 = 'a61b3b2fc7c5ab4a91f624645a25d4ecea26149ce0a6921e7edde861b68637cf';
   var HARD_WORD_SOUND_FORM_BATCH_SIZE = 10;
   var AUDIO_ASSET_VERSION = 'mixed-local-20260813.2-hard-words';
   var STATE_VERSION = 5;
@@ -3435,11 +3435,20 @@
   }
 
   function setActiveNav(view) {
+    syncAppChrome();
     var normalised =
       SKILLS.indexOf(view) >= 0 || view === 'learn' || view === 'visual' ? 'practice' : view;
     document.querySelectorAll('[data-view-link]').forEach(function (button) {
       button.classList.toggle('is-active', button.dataset.viewLink === normalised);
     });
+  }
+
+  function syncAppChrome() {
+    var soundFormImmersive =
+      currentView === 'dual-prototype-loading' || currentView === 'dual-prototype';
+    document.body.classList.toggle('is-sound-form-immersive', soundFormImmersive);
+    var bottomNav = document.querySelector('.bottom-nav');
+    if (bottomNav) bottomNav.hidden = soundFormImmersive;
   }
 
   function currentLearningGoal() {
@@ -3831,13 +3840,19 @@
       'schemaVersion',
     ];
     var coverage = payload && payload.coverage;
+    var catalogSize = hardWordCatalogSize();
+    var expectedAuditedHeadwords = hardWordsCatalog
+      ? hardWordsCatalog.entries.filter(function (entry) {
+          return entry.reviewStatus === 'source_audited_for_rescue';
+        }).length
+      : 0;
     if (
       !payload ||
       !hasExactObjectKeys(payload, manifestKeys) ||
       payload.schemaVersion !== 1 ||
       !hasExactObjectKeys(payload.catalog, ['catalogId', 'entryCount', 'path', 'sha256']) ||
       payload.catalog.catalogId !== HARD_WORD_AUDIO_CATALOG_ID ||
-      payload.catalog.entryCount !== 751 ||
+      payload.catalog.entryCount !== catalogSize ||
       payload.catalog.path !== 'public/ielts/corpus/student-hard-words.json' ||
       payload.catalog.sha256 !== HARD_WORD_CATALOG_SHA256 ||
       !hasExactObjectKeys(coverage, [
@@ -3850,14 +3865,17 @@
         'sharedHeadwords',
         'sourceAuditedHeadwords',
       ]) ||
-      coverage.headwords !== 751 ||
-      coverage.audioLinks !== 1502 ||
+      coverage.headwords !== catalogSize ||
+      coverage.audioLinks !== catalogSize * 2 ||
       coverage.accents !== 2 ||
-      coverage.generatedFiles !== 1456 ||
-      coverage.generatedHeadwords !== 728 ||
-      coverage.sharedAudioLinks !== 46 ||
-      coverage.sharedHeadwords !== 23 ||
-      coverage.sourceAuditedHeadwords !== 12 ||
+      !Number.isInteger(coverage.generatedHeadwords) ||
+      !Number.isInteger(coverage.sharedHeadwords) ||
+      coverage.generatedHeadwords < 0 ||
+      coverage.sharedHeadwords < 0 ||
+      coverage.generatedHeadwords + coverage.sharedHeadwords !== catalogSize ||
+      coverage.generatedFiles !== coverage.generatedHeadwords * 2 ||
+      coverage.sharedAudioLinks !== coverage.sharedHeadwords * 2 ||
+      coverage.sourceAuditedHeadwords !== expectedAuditedHeadwords ||
       !hasExactObjectKeys(payload.privacy, [
         'containsLearnerIdentity',
         'generatedTextSentToExternalService',
@@ -3918,11 +3936,11 @@
       payload.generationProfile.parameters.source_sample_rate_hz !== 22050 ||
       payload.generationProfile.parameters.speech_rate_wpm !== 175 ||
       !Array.isArray(payload.entries) ||
-      payload.entries.length !== 751
+      payload.entries.length !== catalogSize
     ) {
       throw new Error('难词自然语音清单结构或覆盖不完整');
     }
-    if (!hardWordsCatalog || hardWordsCatalog.entries.length !== 751) {
+    if (!catalogSize) {
       throw new Error('难词表尚未准备好');
     }
     var catalogById = new Map(
@@ -4021,7 +4039,11 @@
         if (isShared) sharedAudioLinks += 1;
       });
     });
-    if (ids.size !== 751 || generatedAudioLinks !== 1456 || sharedAudioLinks !== 46) {
+    if (
+      ids.size !== catalogSize ||
+      generatedAudioLinks !== coverage.generatedFiles ||
+      sharedAudioLinks !== coverage.sharedAudioLinks
+    ) {
       throw new Error('难词自然语音清单覆盖或来源数量无效');
     }
   }
@@ -4126,6 +4148,7 @@
     var requiredOmissions = [
       'learner_name',
       'raw_token',
+      'raw_line_index',
       'received_at',
       'batch_id',
       'lexical_definition',
@@ -4137,17 +4160,36 @@
       !payload ||
       typeof payload !== 'object' ||
       Array.isArray(payload) ||
-      Number(payload.schemaVersion) !== 1 ||
+      !hasExactObjectKeys(payload, [
+        'catalogId',
+        'difficultyLegend',
+        'entries',
+        'generatedAt',
+        'privacy',
+        'schemaVersion',
+        'statistics',
+      ]) ||
+      payload.schemaVersion !== 1 ||
       payload.catalogId !== 'student-hard-words-2026-08-12' ||
-      !payload.statistics ||
-      typeof payload.statistics !== 'object' ||
-      !payload.difficultyLegend ||
-      typeof payload.difficultyLegend !== 'object' ||
+      typeof payload.generatedAt !== 'string' ||
+      !payload.generatedAt ||
+      !hasExactObjectKeys(payload.statistics, [
+        'corpus_match_counts',
+        'corrected_output_count',
+        'correction_event_count',
+        'difficulty_counts',
+        'duplicate_report_count',
+        'normalized_reports',
+        'raw_nonempty_lines',
+        'unique_headwords',
+      ]) ||
+      !hasExactObjectKeys(payload.difficultyLegend, ['1', '2', '3']) ||
       !Array.isArray(payload.entries) ||
-      !payload.privacy ||
-      typeof payload.privacy !== 'object' ||
+      payload.entries.length < HARD_WORD_SOUND_FORM_BATCH_SIZE ||
+      !hasExactObjectKeys(payload.privacy, ['containsLearnerIdentity', 'omittedFields']) ||
       payload.privacy.containsLearnerIdentity !== false ||
       !Array.isArray(payload.privacy.omittedFields) ||
+      payload.privacy.omittedFields.length !== requiredOmissions.length ||
       !requiredOmissions.every(function (field) {
         return payload.privacy.omittedFields.indexOf(field) >= 0;
       })
@@ -4174,9 +4216,7 @@
         (code === '3' && entry.needsPronunciation === true && entry.needsMeaning === true);
       var reportCount = Number(entry.reportCount);
       var reportCountValid = Number.isInteger(reportCount) && reportCount >= 1;
-      var unexpectedEntryField = Object.keys(entry).some(function (field) {
-        return allowedEntryFields.indexOf(field) < 0;
-      });
+      var entryFieldsValid = hasExactObjectKeys(entry, allowedEntryFields);
       var expectedAbilityTags =
         code === '1'
           ? ['pronunciation']
@@ -4202,7 +4242,7 @@
         !routeValid ||
         !abilityTagsValid ||
         !reportCountValid ||
-        unexpectedEntryField ||
+        !entryFieldsValid ||
         ['active', 'candidate_only', 'unmatched'].indexOf(entry.corpusMatchStatus) < 0 ||
         allowedReviewStatuses.indexOf(entry.reviewStatus) < 0 ||
         allowedPracticeStatuses.indexOf(entry.practiceStatus) < 0 ||
@@ -4218,6 +4258,11 @@
     });
 
     var reportedCounts = payload.statistics.difficulty_counts || {};
+    var reportedCorpusCounts = payload.statistics.corpus_match_counts || {};
+    var corpusCounts = { active: 0, candidate_only: 0, unmatched: 0 };
+    payload.entries.forEach(function (entry) {
+      corpusCounts[entry.corpusMatchStatus] += 1;
+    });
     var publishedRescueHeadwords = new Set(
       RESCUE_WORDS.map(function (word) {
         return normaliseAnswer(word.word);
@@ -4229,18 +4274,33 @@
         return publishedRescueHeadwords.has(headword);
       });
     if (
-      payload.entries.length !== 751 ||
-      Number(payload.statistics.unique_headwords) !== 751 ||
-      normalizedReportCount !== 756 ||
-      Number(reportedCounts[1]) !== 215 ||
-      Number(reportedCounts[2]) !== 223 ||
-      Number(reportedCounts[3]) !== 313 ||
-      Number(payload.statistics.normalized_reports) !== normalizedReportCount ||
-      Number(payload.statistics.duplicate_report_count) !==
+      !Number.isInteger(payload.statistics.raw_nonempty_lines) ||
+      !Number.isInteger(payload.statistics.normalized_reports) ||
+      !Number.isInteger(payload.statistics.unique_headwords) ||
+      !Number.isInteger(payload.statistics.duplicate_report_count) ||
+      !Number.isInteger(payload.statistics.correction_event_count) ||
+      !Number.isInteger(payload.statistics.corrected_output_count) ||
+      payload.statistics.unique_headwords !== payload.entries.length ||
+      payload.statistics.normalized_reports !== normalizedReportCount ||
+      payload.statistics.duplicate_report_count !==
         normalizedReportCount - payload.entries.length ||
-      counts[1] !== 215 ||
-      counts[2] !== 223 ||
-      counts[3] !== 313 ||
+      payload.statistics.duplicate_report_count < 0 ||
+      payload.statistics.raw_nonempty_lines < 1 ||
+      payload.statistics.raw_nonempty_lines > normalizedReportCount ||
+      payload.statistics.correction_event_count < 0 ||
+      payload.statistics.corrected_output_count < payload.statistics.correction_event_count ||
+      normalizedReportCount !==
+        payload.statistics.raw_nonempty_lines +
+          payload.statistics.corrected_output_count -
+          payload.statistics.correction_event_count ||
+      !hasExactObjectKeys(reportedCounts, ['1', '2', '3']) ||
+      reportedCounts[1] !== counts[1] ||
+      reportedCounts[2] !== counts[2] ||
+      reportedCounts[3] !== counts[3] ||
+      !hasExactObjectKeys(reportedCorpusCounts, ['active', 'candidate_only', 'unmatched']) ||
+      reportedCorpusCounts.active !== corpusCounts.active ||
+      reportedCorpusCounts.candidate_only !== corpusCounts.candidate_only ||
+      reportedCorpusCounts.unmatched !== corpusCounts.unmatched ||
       !trainingMatchesPublished
     ) {
       throw new Error('学生难词统计或练习清单与条目不一致');
@@ -4421,6 +4481,25 @@
     };
   }
 
+  function hardWordCatalogSize(catalogOverride) {
+    var catalog = catalogOverride || hardWordsCatalog;
+    return catalog && Array.isArray(catalog.entries) ? catalog.entries.length : 0;
+  }
+
+  function hardWordCursorModulus(catalogOverride) {
+    return hardWordCatalogSize(catalogOverride);
+  }
+
+  function normaliseHardWordSoundFormCursor(value, catalogOverride) {
+    var numeric = Number(value);
+    var cursor =
+      Number.isFinite(numeric) && numeric >= 0
+        ? Math.min(Number.MAX_SAFE_INTEGER, Math.floor(numeric))
+        : 0;
+    var modulus = hardWordCursorModulus(catalogOverride);
+    return modulus >= HARD_WORD_SOUND_FORM_BATCH_SIZE ? cursor % modulus : cursor;
+  }
+
   function normaliseSoundFormStatus(value, allowed) {
     var status = String(value || '');
     return allowed.indexOf(status) >= 0 ? status : '';
@@ -4429,38 +4508,36 @@
   function normaliseHardWordSoundFormEntries(savedEntries) {
     if (!savedEntries || typeof savedEntries !== 'object' || Array.isArray(savedEntries)) return {};
     var entries = {};
-    Object.keys(savedEntries)
-      .slice(0, 1000)
-      .forEach(function (wordId) {
-        var source = savedEntries[wordId];
-        if (!source || typeof source !== 'object' || Array.isArray(source)) return;
-        var read = source.read && typeof source.read === 'object' ? source.read : {};
-        var spell = source.spell && typeof source.spell === 'object' ? source.spell : {};
-        entries[String(wordId)] = {
-          read: {
-            attempts: normaliseHardWordCounter(read.attempts, 10000),
-            recordings: normaliseHardWordCounter(read.recordings, 10000),
-            skips: normaliseHardWordCounter(read.skips, 10000),
-            lastAt: normaliseHardWordCounter(read.lastAt, Number.MAX_SAFE_INTEGER),
-            status: normaliseSoundFormStatus(read.status, [
-              'recorded_pending_human_review',
-              'skipped',
-            ]),
-          },
-          spell: {
-            attempts: normaliseHardWordCounter(spell.attempts, 10000),
-            independentPasses: normaliseHardWordCounter(spell.independentPasses, 10000),
-            repairNeeded: normaliseHardWordCounter(spell.repairNeeded, 10000),
-            skips: normaliseHardWordCounter(spell.skips, 10000),
-            lastAt: normaliseHardWordCounter(spell.lastAt, Number.MAX_SAFE_INTEGER),
-            status: normaliseSoundFormStatus(spell.status, [
-              'independent_correct',
-              'needs_repair',
-              'skipped',
-            ]),
-          },
-        };
-      });
+    Object.keys(savedEntries).forEach(function (wordId) {
+      var source = savedEntries[wordId];
+      if (!source || typeof source !== 'object' || Array.isArray(source)) return;
+      var read = source.read && typeof source.read === 'object' ? source.read : {};
+      var spell = source.spell && typeof source.spell === 'object' ? source.spell : {};
+      entries[String(wordId)] = {
+        read: {
+          attempts: normaliseHardWordCounter(read.attempts, 10000),
+          recordings: normaliseHardWordCounter(read.recordings, 10000),
+          skips: normaliseHardWordCounter(read.skips, 10000),
+          lastAt: normaliseHardWordCounter(read.lastAt, Number.MAX_SAFE_INTEGER),
+          status: normaliseSoundFormStatus(read.status, [
+            'recorded_pending_human_review',
+            'skipped',
+          ]),
+        },
+        spell: {
+          attempts: normaliseHardWordCounter(spell.attempts, 10000),
+          independentPasses: normaliseHardWordCounter(spell.independentPasses, 10000),
+          repairNeeded: normaliseHardWordCounter(spell.repairNeeded, 10000),
+          skips: normaliseHardWordCounter(spell.skips, 10000),
+          lastAt: normaliseHardWordCounter(spell.lastAt, Number.MAX_SAFE_INTEGER),
+          status: normaliseSoundFormStatus(spell.status, [
+            'independent_correct',
+            'needs_repair',
+            'skipped',
+          ]),
+        },
+      };
+    });
     return entries;
   }
 
@@ -4625,7 +4702,7 @@
       return {
         version: 1,
         catalogId: HARD_WORD_AUDIO_CATALOG_ID,
-        cursor: Math.max(0, Math.floor(Number(saved.cursor) || 0)) % 751,
+        cursor: normaliseHardWordSoundFormCursor(saved.cursor, catalogOverride),
         entries: normaliseHardWordSoundFormEntries(saved.entries),
         journal: Array.isArray(saved.journal)
           ? saved.journal
@@ -4679,7 +4756,7 @@
     if (
       !catalogOverride ||
       !Array.isArray(catalogOverride.entries) ||
-      catalogOverride.entries.length !== 751 ||
+      catalogOverride.entries.length < HARD_WORD_SOUND_FORM_BATCH_SIZE ||
       !hasExactObjectKeys(raw, [
         'active',
         'catalogId',
@@ -4692,11 +4769,11 @@
       raw.catalogId !== HARD_WORD_AUDIO_CATALOG_ID ||
       !Number.isInteger(raw.cursor) ||
       raw.cursor < 0 ||
-      raw.cursor >= 751 ||
+      raw.cursor >= hardWordCatalogSize(catalogOverride) ||
       !raw.entries ||
       typeof raw.entries !== 'object' ||
       Array.isArray(raw.entries) ||
-      Object.keys(raw.entries).length > 751 ||
+      Object.keys(raw.entries).length > hardWordCatalogSize(catalogOverride) ||
       !Array.isArray(raw.journal) ||
       raw.journal.length > 500 ||
       (raw.active !== null &&
@@ -5536,7 +5613,7 @@
   }
 
   function chooseHardWordSoundFormBatch(targetWordId) {
-    if (!hardWordsCatalog || hardWordsCatalog.entries.length !== 751) return [];
+    if (hardWordCatalogSize() < HARD_WORD_SOUND_FORM_BATCH_SIZE) return [];
     var all = hardWordsCatalog.entries;
     var cursor = hardWordSoundFormState.cursor % all.length;
     var selected = [];
@@ -5630,6 +5707,7 @@
     cleanupMedia();
     session = null;
     currentView = 'dual-prototype-loading';
+    setActiveNav('hard-words');
     main.innerHTML =
       '<section class="dual-prototype-shell" data-hard-word-sound-form-loading><div class="panel hard-words-loading" role="status" aria-live="polite"><span class="loading-dot" aria-hidden="true"></span><p>正在准备正式声形练习……</p></div></section>';
     ensureHardWordAudioManifest()
@@ -13333,7 +13411,7 @@
       var importedHardWordsCatalog = hardWordsCatalog;
       if (
         payload.hardWordSoundFormState &&
-        (!importedHardWordsCatalog || importedHardWordsCatalog.entries.length !== 751)
+        hardWordCatalogSize(importedHardWordsCatalog) < HARD_WORD_SOUND_FORM_BATCH_SIZE
       ) {
         importedHardWordsCatalog = await fetchHardWordsCatalog('no-cache');
         validateHardWordsCatalog(importedHardWordsCatalog);
@@ -13347,7 +13425,7 @@
       if (payload.hardWordSoundFormState) {
         if (
           !importedHardWordsCatalog ||
-          importedHardWordsCatalog.entries.length !== 751 ||
+          hardWordCatalogSize(importedHardWordsCatalog) < HARD_WORD_SOUND_FORM_BATCH_SIZE ||
           (importedSoundFormState.active === null && payload.hardWordSoundFormState.active)
         ) {
           throw new Error('Invalid hard-word sound-form state');

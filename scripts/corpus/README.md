@@ -56,19 +56,29 @@ the minimum lexical metadata needed by the learning app.
 - `build_master_corpus.py`: quality gate, normalization, deduplication,
   target-promotion gate, four-skill labels, supplementary review queues, image
   queue and public catalog.
-- `build_learner_difficulty_archive.py`: rebuilds the 2026-08-12
-  learner-difficulty archive and anonymous public catalog from the preserved
-  three report batches (442 initial, 22 first-follow-up and 291 second-follow-up
-  non-empty inputs), applies only the explicitly confirmed corrections
+- `build_learner_difficulty_archive.py`: rebuilds the learner-difficulty archive
+  through 2026-08-13 and its anonymous public catalog from the preserved four
+  report batches (442 initial, 22 first-follow-up, 291 second-follow-up and 314
+  third-follow-up non-empty inputs), applies only the explicitly confirmed corrections
   (including `pluse3` to `pulse`, `consritution3` to `constitution`, and
-  `bridgeroom3` to `bridegroom`), retains all five repeated reports, unions
+  `bridgeroom3` to `bridegroom`), retains all six repeated reports, unions
   pronunciation and meaning gaps
   without weakening either signal, and leaves lexical and sense-specific
-  fields fail-closed. The website loads the generated 751-entry
+  fields fail-closed. The third follow-up has no confirmed correction: valid
+  British forms such as `jewellery`, `recognise` and `sunburnt` are retained;
+  `Pacific` preserves the teacher-supplied display case and remains pending
+  proper-name/sense review; homographs and multi-POS forms remain context-pending.
+  The website loads the generated 1,064-entry
   `public/ielts/corpus/student-hard-words.json` only when the learner opens the
   dedicated searchable and filterable list. The generated practice status
-  distinguishes the 12 source-audited rescue words from the 739 entries still
-  awaiting exercise authoring. Raw report tokens, dates and batch IDs remain
+  distinguishes the 12 source-audited rescue words from the 1,052 entries still
+  awaiting lexical exercise authoring; all 1,064 still participate in formal
+  pronunciation and spelling practice. The completed audio manifest contains
+  2,128 UK/US links: 27 exact-match headwords reuse Sonia/Ava assets, and the
+  other 1,037 headwords use 2,074 locally generated Daniel/Samantha MP3s.
+  Ten words produce 20 mixed tasks per batch, so 107 consecutive batches cover
+  the catalog. Audio is loaded on demand, and iPhone/Safari offline playback is
+  not promised. Raw report tokens, dates and batch IDs remain
   in the repository audit source and archive and are omitted from the learner
   catalog; only the aggregate report count is published.
 

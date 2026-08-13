@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import {
   AudioHarness,
   assertBlindRootHasNoAnswer,
+  catalog,
   entryFor,
   skipCurrent,
   soundFormState,
@@ -45,7 +46,7 @@ test('every formal task remains skippable through summary, then next batch advan
     'data-task-position',
     '1',
   );
-  expect((await soundFormState(page)).cursor).toBe((first.cursor + 10) % 751);
+  expect((await soundFormState(page)).cursor).toBe((first.cursor + 10) % catalog.entries.length);
 });
 
 test('blind spelling remains answer-free at every pre-result stage', async ({ page }) => {

@@ -24,6 +24,7 @@ from hard_word_audio_manifest import (
     expected_audio_links,
     flattened_manifest_audio_index,
     generated_specs,
+    load_catalog,
     load_manifest,
     reusable_generated_asset,
     sha256_file,
@@ -195,8 +196,19 @@ async def run(overwrite: bool, concurrency: int) -> None:
     specs = generated_specs()
     if HARD_WORD_AUDIO_MANIFEST_FILE.is_file():
         loaded_manifest = load_manifest()
-        validate_manifest_schema(loaded_manifest)
-        existing = flattened_manifest_audio_index(loaded_manifest)
+        # A catalog expansion deliberately makes the previous manifest invalid as
+        # a final public contract. It is still safe as an untrusted reuse index:
+        # reusable_generated_asset rechecks every candidate against the new spec,
+        # current file size, and current file hash before skipping synthesis.
+        try:
+            validate_manifest_schema(loaded_manifest)
+        except (RuntimeError, TypeError, ValueError):
+            pass
+        existing = (
+            flattened_manifest_audio_index(loaded_manifest)
+            if isinstance(loaded_manifest, dict)
+            else {}
+        )
     else:
         existing = load_checkpoint()
     if overwrite:
@@ -261,7 +273,11 @@ def check() -> None:
         for message in messages:
             print(f"ERROR: {message}")
         raise SystemExit(1)
-    print("Hard-word audio manifest and all 751 UK/US links are current")
+    entry_count = len(load_catalog()["entries"])
+    print(
+        "Hard-word audio manifest and all "
+        f"{entry_count} headwords / {entry_count * 2} UK/US links are current"
+    )
 
 
 def main() -> None:

@@ -97,36 +97,54 @@ not fetched or rendered by the learner page.
 ## Learner difficulty archive
 
 `learner-difficulty/student-hard-words-2026-08-12.json` is a separate,
-learner-specific evidence archive. Across the initial report and two follow-up
-reports it contains 755 non-empty input lines, 756 normalized reports after one
-confirmed joined-token split, and 751 unique normalized headwords. The five
-repeated headwords retain every report; their effective gaps are the union of
-all reports. `mature`, `satisfaction` and `previous` require both pronunciation
-and meaning work, while the repeated `scare` and `hesitate` reports reinforce
-their existing routes. The resulting routing groups contain 215
-pronunciation-only, 223 meaning-only and 313 both-gap entries. These labels are
-routing evidence only; they are not lexical or mastery evidence. The first and
-second follow-up batches contribute 22 and 291 non-empty input lines,
-respectively.
+learner-specific evidence archive whose stable path now covers reports through
+2026-08-13. Across the initial report and three follow-ups it contains 1,069
+non-empty input lines, 1,070 normalized reports after one confirmed joined-token
+split, and 1,064 unique normalized headwords. All six repeated reports are
+retained; their effective gaps are the union of all reports. `mature`,
+`satisfaction` and `previous` require both pronunciation and meaning work,
+while the repeated `scare` and `hesitate` reports reinforce their existing
+routes. The newly repeated `expect2` is retained alongside `expect3`, so
+`expect` remains in the combined pronunciation-and-meaning route. The resulting
+routing groups contain 241 pronunciation-only, 336 meaning-only and 487
+both-gap entries. These labels are routing evidence only; they are not lexical
+or mastery evidence. The three follow-up batches contribute 22, 291 and 314
+non-empty input lines, respectively.
 
 The archive preserves every raw token alongside confirmed corrections. For
 example, the reported `pluse3` remains available as raw evidence while its
 normalized headword is recorded as `pulse` with a user-confirmation source.
-The latest report likewise retains `consritution3` and `bridgeroom3` as raw
+An earlier report likewise retains `consritution3` and `bridgeroom3` as raw
 evidence while publishing the user-confirmed normalized forms `constitution`
-and `bridegroom`. It withholds definitions, POS, CEFR and IPA, and every sense
-remains context-pending until a source sentence or other sufficient evidence
-is available.
+and `bridegroom`. The newest batch has no confirmed spelling correction:
+`jewellery`, `recognise`, `sunburnt` and `trolleybus` are valid British forms.
+`Pacific3` remains exact raw evidence while the public display form is
+`Pacific`; it is flagged for proper-name and sense review. Forms with multiple
+senses, parts of speech, stress patterns or pronunciations—including `content`,
+`permit`, `conduct`, `progress`, `digest`, `abuse`, `forecast`, `found`, `wound`,
+`sow`, `herb` and `schedule`—are retained rather than rejected, but no single
+lexical answer is inferred without context. The archive withholds definitions,
+POS, CEFR and IPA, and every sense remains context-pending until a source
+sentence or other sufficient evidence is available.
 
-The public UI exposes all 751 unique headwords as a searchable list with
+The public UI exposes all 1,064 unique headwords as a searchable list with
 difficulty, review-status and content-status filters. Every entry supports a
-meaning-independent orthographic recall task and a free sentence draft that is
-always queued for human review. Only 12 separately source-audited words are
-available in the initial two-round sound-form rescue lesson; the other 739
-entries remain `awaiting_exercise_authoring` for pronunciation, meaning, IPA,
-model-sentence and grammar content.
+formal two-way sound-form task, a meaning-independent orthographic recall task
+and a free sentence draft that is always queued for human review. Each formal
+batch uses 10 words and 20 mixed reading/spelling tasks; 107 consecutive batches
+cover the catalog. All 1,064 headwords bind UK and US word-level audio, for 2,128
+links total. The 27 exact text/voice matches reuse Sonia/Ava assets, while 2,074
+MP3s for the remaining 1,037 headwords were generated locally with
+Daniel/Samantha. Only 12 separately source-audited words expose reviewed
+pronunciation/meaning support; the other 1,052 entries remain
+`awaiting_exercise_authoring` for meaning, IPA, model-sentence and grammar
+content, even though their pronunciation and spelling practice is available.
 `instant` still lacks its original listening sentence, so its meaning prompt is
 unscored and cannot supply a mastery claim.
+
+Hard-word audio is fetched on demand rather than precached with the application
+shell. The current iPhone/Safari range-request path requires network access, so
+offline playback is not promised for the 1,064-word formal exercise.
 
 ## Editorial safeguards
 

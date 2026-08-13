@@ -46,20 +46,24 @@ class LearnerDifficultyArchiveTests(unittest.TestCase):
         archive = self.load_archive()
         items = archive["items"]
 
+        self.assertEqual(archive["schema_version"], 3)
+        self.assertEqual(archive["source_batch_count"], 4)
+        self.assertEqual(archive["first_received_at"], "2026-08-12")
+        self.assertEqual(archive["last_received_at"], "2026-08-13")
         self.assertEqual(archive["statistics"], archive_builder.EXPECTED_STATISTICS)
-        self.assertEqual(len(items), 751)
+        self.assertEqual(len(items), 1064)
         self.assertEqual(
             Counter(item["difficulty_code"] for item in items),
-            Counter({1: 215, 2: 223, 3: 313}),
+            Counter({1: 241, 2: 336, 3: 487}),
         )
         self.assertEqual(
             Counter(item["corpus_match_status"] for item in items),
-            Counter({"active": 621, "candidate_only": 54, "unmatched": 76}),
+            Counter({"active": 889, "candidate_only": 75, "unmatched": 100}),
         )
-        self.assertEqual(len({item["normalized_headword"] for item in items}), 751)
+        self.assertEqual(len({item["normalized_headword"] for item in items}), 1064)
         self.assertEqual(
             [item["item_index"] for item in items],
-            list(range(1, 752)),
+            list(range(1, 1065)),
         )
         for item in items:
             self.assertEqual(
@@ -179,19 +183,90 @@ class LearnerDifficultyArchiveTests(unittest.TestCase):
         self.assertEqual(by_word["scare"]["report_count"], 2)
         self.assertEqual(by_word["hesitate"]["report_count"], 2)
 
+    def test_third_followup_batch_is_complete_and_preserves_ambiguity(self):
+        archive = self.load_archive()
+        items = {item["normalized_headword"]: item for item in archive["items"]}
+        raw_batch = [
+            line.strip()
+            for line in archive_builder.FOLLOWUP_BATCH_3.splitlines()
+            if line.strip()
+        ]
+        latest_reports = [
+            report
+            for item in archive["items"]
+            for report in item["reports"]
+            if report["batch_id"] == "student-hard-words-2026-08-13-followup-3"
+        ]
+
+        self.assertEqual(len(raw_batch), 314)
+        self.assertEqual(len(set(raw_batch)), 314)
+        self.assertTrue(all(raw[-1] in "123" for raw in raw_batch))
+        self.assertEqual(
+            Counter(int(raw[-1]) for raw in raw_batch),
+            Counter({1: 26, 2: 114, 3: 174}),
+        )
+        self.assertEqual(
+            Counter(report["raw_token"] for report in latest_reports),
+            Counter(raw_batch),
+        )
+        self.assertTrue(
+            all(report["correction_status"] == "not_needed" for report in latest_reports)
+        )
+
+        self.assertEqual(items["expect"]["report_count"], 2)
+        self.assertEqual(
+            [
+                (report["raw_token"], report["reported_difficulty_code"])
+                for report in items["expect"]["reports"]
+            ],
+            [("expect3", 3), ("expect2", 2)],
+        )
+        self.assertEqual(items["expect"]["difficulty_code"], 3)
+
+        pacific = items["pacific"]
+        self.assertEqual(pacific["display_word"], "Pacific")
+        self.assertEqual(pacific["reports"][0]["raw_token"], "Pacific3")
+        self.assertEqual(pacific["proper_noun_status"], "mixed_or_context_dependent")
+        self.assertEqual(
+            pacific["teacher_review_status"],
+            "needs_proper_noun_and_sense_review",
+        )
+
+        ambiguous_headwords = {
+            "abuse",
+            "conduct",
+            "content",
+            "digest",
+            "forecast",
+            "found",
+            "herb",
+            "permit",
+            "progress",
+            "schedule",
+            "sow",
+            "wound",
+        }
+        self.assertTrue(ambiguous_headwords.issubset(items))
+        self.assertTrue(
+            all(items[word]["sense_status"] == "needs_context_confirmation" for word in ambiguous_headwords)
+        )
+        self.assertTrue(
+            all(items[word]["source_sentence"] is None for word in ambiguous_headwords)
+        )
+
     def test_public_catalog_is_anonymous_minimal_and_complete(self):
         catalog = self.load_public_catalog()
         entries = catalog["entries"]
         self.assertEqual(catalog["schemaVersion"], 1)
         self.assertFalse(catalog["privacy"]["containsLearnerIdentity"])
-        self.assertEqual(len(entries), 751)
+        self.assertEqual(len(entries), 1064)
         self.assertEqual(
             Counter(entry["difficultyCode"] for entry in entries),
-            Counter({1: 215, 2: 223, 3: 313}),
+            Counter({1: 241, 2: 336, 3: 487}),
         )
         self.assertEqual(
             Counter(entry["practiceStatus"] for entry in entries),
-            Counter({"awaiting_exercise_authoring": 739, "in_rescue_training": 12}),
+            Counter({"awaiting_exercise_authoring": 1052, "in_rescue_training": 12}),
         )
         exact_public_fields = {
             "id",
@@ -232,8 +307,8 @@ class LearnerDifficultyArchiveTests(unittest.TestCase):
             )
             self.assertGreaterEqual(entry["reportCount"], 1)
             ids.add(entry["id"])
-        self.assertEqual(len(ids), 751)
-        self.assertEqual(sum(entry["reportCount"] for entry in entries), 756)
+        self.assertEqual(len(ids), 1064)
+        self.assertEqual(sum(entry["reportCount"] for entry in entries), 1070)
 
         serialized = json.dumps(catalog, ensure_ascii=False)
         self.assertNotIn("pluse3", serialized)
@@ -241,6 +316,8 @@ class LearnerDifficultyArchiveTests(unittest.TestCase):
         self.assertNotIn("consritution3", serialized)
         self.assertNotIn("bridgeroom3", serialized)
         self.assertNotIn("student-hard-words-2026-08-12-followup-2", serialized)
+        self.assertNotIn("Pacific3", serialized)
+        self.assertNotIn("student-hard-words-2026-08-13-followup-3", serialized)
 
     def test_archive_contains_no_unapproved_lexical_answers(self):
         archive = self.load_archive()
@@ -252,18 +329,18 @@ class LearnerDifficultyArchiveTests(unittest.TestCase):
             if item["corpus_match_status"] != "active":
                 self.assertIsNone(item["lexical_entry_id"])
 
-        polar = {
+        geography = {
             item["normalized_headword"]: item
             for item in archive["items"]
-            if item["normalized_headword"] in {"arctic", "antarctic"}
+            if item["normalized_headword"] in {"arctic", "antarctic", "pacific"}
         }
-        self.assertEqual(set(polar), {"arctic", "antarctic"})
+        self.assertEqual(set(geography), {"arctic", "antarctic", "pacific"})
         self.assertTrue(
             all(
                 item["proper_noun_status"] == "mixed_or_context_dependent"
                 and item["teacher_review_status"]
                 == "needs_proper_noun_and_sense_review"
-                for item in polar.values()
+                for item in geography.values()
             )
         )
 

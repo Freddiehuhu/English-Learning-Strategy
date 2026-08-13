@@ -93,12 +93,11 @@ function entryId(word: string) {
   return entry!.id;
 }
 
-test('every one of the 751 public learner words has spelling and sentence entry points', async ({
-  page,
-}) => {
-  expect(catalog.entries).toHaveLength(751);
-  expect(new Set(catalog.entries.map((entry) => entry.id)).size).toBe(751);
-  expect(new Set(catalog.entries.map((entry) => entry.normalizedHeadword)).size).toBe(751);
+test('every public learner word has spelling and sentence entry points', async ({ page }) => {
+  const catalogSize = catalog.entries.length;
+  expect(catalogSize).toBeGreaterThan(0);
+  expect(new Set(catalog.entries.map((entry) => entry.id)).size).toBe(catalogSize);
+  expect(new Set(catalog.entries.map((entry) => entry.normalizedHeadword)).size).toBe(catalogSize);
 
   await openHardWords(page);
   while (await page.locator('[data-action="hard-words-more"]').count()) {
@@ -112,8 +111,8 @@ test('every one of the 751 public learner words has spelling and sentence entry 
       sentence: row.querySelectorAll('[data-action="hard-word-sentence"]').length,
     })),
   );
-  expect(rendered).toHaveLength(751);
-  expect(new Set(rendered.map((row) => row.word)).size).toBe(751);
+  expect(rendered).toHaveLength(catalogSize);
+  expect(new Set(rendered.map((row) => row.word)).size).toBe(catalogSize);
   expect(rendered.every((row) => row.spelling === 1 && row.sentence === 1)).toBe(true);
   expect(new Set(rendered.map((row) => row.word))).toEqual(
     new Set(catalog.entries.map((entry) => entry.normalizedHeadword)),

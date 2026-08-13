@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -124,35 +124,51 @@ function fixtureAudio(entry: CatalogEntry, accent: 'uk' | 'us') {
 }
 
 export function hardWordAudioManifestFixture() {
+  const entries = catalog.entries.map((entry) => ({
+    audio: {
+      uk: fixtureAudio(entry, 'uk'),
+      us: fixtureAudio(entry, 'us'),
+    },
+    entryId: entry.id,
+    headword: entry.displayWord,
+    lexicalReview: {
+      sourceAudited: entry.reviewStatus === 'source_audited_for_rescue',
+      status: entry.reviewStatus,
+    },
+  }));
+  const audioLinks = entries.flatMap((entry) => Object.values(entry.audio));
+  const sharedAudioLinks = audioLinks.filter(
+    (audio) => audio.assetSource === 'shared_reviewed_word',
+  );
+  const generatedAudioLinks = audioLinks.filter(
+    (audio) => audio.assetSource === 'hard_word_generated',
+  );
+  const sharedHeadwords = entries.filter((entry) =>
+    Object.values(entry.audio).some((audio) => audio.assetSource === 'shared_reviewed_word'),
+  );
+  const generatedHeadwords = entries.filter((entry) =>
+    Object.values(entry.audio).some((audio) => audio.assetSource === 'hard_word_generated'),
+  );
   return {
     catalog: {
       catalogId: catalog.catalogId,
-      entryCount: 751,
+      entryCount: catalog.entries.length,
       path: 'public/ielts/corpus/student-hard-words.json',
       sha256: catalogSha256,
     },
     coverage: {
       accents: 2,
-      audioLinks: 1502,
-      generatedFiles: 1456,
-      generatedHeadwords: 728,
-      headwords: 751,
-      sharedAudioLinks: 46,
-      sharedHeadwords: 23,
-      sourceAuditedHeadwords: 12,
+      audioLinks: audioLinks.length,
+      generatedFiles: generatedAudioLinks.length,
+      generatedHeadwords: generatedHeadwords.length,
+      headwords: catalog.entries.length,
+      sharedAudioLinks: sharedAudioLinks.length,
+      sharedHeadwords: sharedHeadwords.length,
+      sourceAuditedHeadwords: catalog.entries.filter(
+        (entry) => entry.reviewStatus === 'source_audited_for_rescue',
+      ).length,
     },
-    entries: catalog.entries.map((entry) => ({
-      audio: {
-        uk: fixtureAudio(entry, 'uk'),
-        us: fixtureAudio(entry, 'us'),
-      },
-      entryId: entry.id,
-      headword: entry.displayWord,
-      lexicalReview: {
-        sourceAudited: entry.reviewStatus === 'source_audited_for_rescue',
-        status: entry.reviewStatus,
-      },
-    })),
+    entries,
     generationProfile: {
       appliesToAssetSource: 'hard_word_generated',
       id: 'macos-say-hard-word-2026-08-13.2',
@@ -233,7 +249,29 @@ export async function soundFormState(page: Page): Promise<SoundFormState> {
 }
 
 export async function skipCurrent(page: Page) {
-  await page.locator('[data-action="dual-skip-task"]').click();
+  const skip = page.locator('[data-hard-word-sound-form] [data-action="dual-skip-task"]');
+  await expect(skip).toBeVisible();
+  await centreAboveFixedNavigation(skip);
+  await skip.click();
+}
+
+async function centreAboveFixedNavigation(control: Locator) {
+  await control.evaluate((element) => {
+    element.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+  });
+  await expect
+    .poll(
+      () =>
+        control.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          const centreX = bounds.left + bounds.width / 2;
+          const centreY = bounds.top + bounds.height / 2;
+          const hit = document.elementFromPoint(centreX, centreY);
+          return Boolean(hit && (hit === element || element.contains(hit)));
+        }),
+      { message: 'skip control should be clear of fixed navigation', timeout: 3_000 },
+    )
+    .toBe(true);
 }
 
 export async function waitForTransitionLock(page: Page) {

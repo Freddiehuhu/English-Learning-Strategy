@@ -6133,6 +6133,10 @@ button.visual-token:hover {
     padding-bottom: calc(70px + env(safe-area-inset-bottom));
   }
 
+  body.is-sound-form-immersive {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
   .app-shell {
     display: block;
   }
