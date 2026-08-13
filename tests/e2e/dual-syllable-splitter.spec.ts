@@ -1,115 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
+import {
+  AudioHarness,
+  installRecorderHarness,
+  openReadSplitter,
+  startDirectWord,
+} from './helpers/hard-word-sound-form';
 
 test.use({ serviceWorkers: 'block' });
-
-class AudioHarness {
-  static async install(page: Page) {
-    await page.addInitScript(() => {
-      class ControllableAudio extends EventTarget {
-        static instances: ControllableAudio[] = [];
-        src: string;
-        currentTime = 0;
-        playbackRate = 1;
-        preload = '';
-        paused = true;
-        ended = false;
-
-        constructor(src: string) {
-          super();
-          this.src = src;
-          ControllableAudio.instances.push(this);
-        }
-
-        play() {
-          this.paused = false;
-          return Promise.resolve();
-        }
-
-        pause() {
-          this.paused = true;
-          queueMicrotask(() => this.dispatchEvent(new Event('pause')));
-        }
-      }
-
-      Object.defineProperty(window, 'Audio', {
-        configurable: true,
-        value: ControllableAudio,
-      });
-      Object.defineProperty(window, '__splitAudioInstances', {
-        configurable: true,
-        value: ControllableAudio.instances,
-      });
-    });
-  }
-
-  static async dispatch(page: Page, eventName: string) {
-    await page.evaluate((name) => {
-      const items = (
-        window as unknown as {
-          __splitAudioInstances: Array<{ dispatchEvent: (event: Event) => void }>;
-        }
-      ).__splitAudioInstances;
-      items.at(-1)?.dispatchEvent(new Event(name));
-    }, eventName);
-  }
-}
-
-async function openPrototype(page: Page) {
-  await page.goto('/ielts/index.html');
-  await page.locator('[data-view-link="hard-words"]:visible').click();
-  await expect(page.getByRole('heading', { name: '学生难词总表' })).toBeVisible();
-  await page.getByRole('button', { name: '混合声形样板 · 3 词 6 题' }).click();
-  await expect(page.locator('[data-dual-mixed-prototype]')).toBeVisible();
-}
-
-async function openReadSplitter(page: Page) {
-  await openPrototype(page);
-  await page.locator('[data-dual-read-meaning]').fill('发音');
-  await page.locator('[data-dual-read-pos]').fill('n.');
-  await page
-    .locator('[data-dual-read-info-form]')
-    .evaluate((form: HTMLFormElement) => form.requestSubmit());
-  await expect(page.locator('[data-dual-mixed-prototype]')).toHaveAttribute(
-    'data-dual-step',
-    'read-syllables',
-  );
-  await expect(page.locator('[data-dual-read-syllables]')).toBeVisible();
-}
 
 async function toggleBoundaries(page: Page, boundaries: number[]) {
   for (const boundary of boundaries) {
     await page.locator(`[data-action="dual-toggle-split"][data-boundary="${boundary}"]`).click();
   }
-}
-
-async function installRecorderHarness(page: Page) {
-  await page.addInitScript(() => {
-    const stream = { getTracks: () => [{ stop: () => undefined }] };
-    Object.defineProperty(navigator, 'mediaDevices', {
-      configurable: true,
-      value: { getUserMedia: () => Promise.resolve(stream) },
-    });
-    class FakeMediaRecorder extends EventTarget {
-      state = 'inactive';
-      mimeType = 'audio/webm';
-      start() {
-        this.state = 'recording';
-      }
-      stop() {
-        this.state = 'inactive';
-        this.dispatchEvent(
-          new MessageEvent('dataavailable', {
-            data: new Blob(['x'.repeat(256)], { type: this.mimeType }),
-          }),
-        );
-        this.dispatchEvent(new Event('stop'));
-      }
-    }
-    Object.defineProperty(window, 'MediaRecorder', {
-      configurable: true,
-      value: FakeMediaRecorder,
-    });
-  });
 }
 
 test('cuts directly at letter seams without opening a keyboard or text field', async ({ page }) => {
@@ -121,7 +23,7 @@ test('cuts directly at letter seams without opening a keyboard or text field', a
   await expect(page.locator('[data-dual-read-syllables] input')).toHaveCount(0);
   await expect(page.locator('[data-dual-read-syllables] textarea')).toHaveCount(0);
   await expect(page.locator('[data-dual-read-syllables] form')).toHaveCount(0);
-  await expect(page.locator('[data-dual-split-preview]')).toHaveText('还没有切分');
+  await expect(page.locator('[data-dual-split-preview]')).toHaveText('保持完整 · 按 1 拍读');
 
   await editor.evaluate((element) => {
     (window as unknown as { __splitterIdentity?: Element }).__splitterIdentity = element;
@@ -142,7 +44,7 @@ test('cuts directly at letter seams without opening a keyboard or text field', a
   }
 });
 
-test('a seam is reversible, clear resets all seams, and this multisyllable sample requires a boundary', async ({
+test('a seam is reversible, clear resets all seams, and zero cuts remain valid', async ({
   page,
 }) => {
   await openReadSplitter(page);
@@ -157,14 +59,13 @@ test('a seam is reversible, clear resets all seams, and this multisyllable sampl
   await expect(gap(6)).toHaveAttribute('aria-pressed', 'false');
 
   await page.locator('[data-action="dual-clear-splits"]').click();
-  await expect(page.locator('[data-dual-split-preview]')).toHaveText('还没有切分');
+  await expect(page.locator('[data-dual-split-preview]')).toHaveText('保持完整 · 按 1 拍读');
   await expect(page.locator('[data-action="dual-clear-splits"]')).toBeDisabled();
   await page.locator('[data-action="dual-confirm-splits"]').click();
   await expect(page.locator('[data-dual-mixed-prototype]')).toHaveAttribute(
     'data-dual-step',
-    'read-syllables',
+    'read-record',
   );
-  await expect(page.locator('[data-dual-feedback]')).toContainText('至少点一处');
 });
 
 test('rerender, rapid double activation, and browser refresh do not duplicate stale seams', async ({
@@ -183,14 +84,11 @@ test('rerender, rapid double activation, and browser refresh do not duplicate st
   ).toHaveAttribute('aria-pressed', 'true');
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: '学生难词总表' })).toBeVisible();
-  await page.getByRole('button', { name: '混合声形样板 · 3 词 6 题' }).click();
-  await page.locator('[data-dual-read-meaning]').fill('发音');
-  await page.locator('[data-dual-read-pos]').fill('n.');
-  await page
-    .locator('[data-dual-read-info-form]')
-    .evaluate((form: HTMLFormElement) => form.requestSubmit());
-  await expect(page.locator('[data-dual-split-preview]')).toHaveText('还没有切分');
+  await expect(page.locator('[data-hard-word-sound-form]')).toHaveAttribute(
+    'data-step',
+    'read-syllables',
+  );
+  await expect(page.locator('[data-dual-split-preview]')).toHaveText('pro · nunciation');
 });
 
 test('confirmed touch cuts keep the legacy slash value used by recording comparison', async ({
@@ -215,9 +113,12 @@ test('confirmed touch cuts keep the legacy slash value used by recording compari
 test('the unrelated blind-listening sequence remains answer-free and audio-gated', async ({
   page,
 }) => {
-  await AudioHarness.install(page);
-  await openPrototype(page);
-  await page.locator('[data-dual-skip]').click();
+  await AudioHarness.install(page, false);
+  await startDirectWord(page, 'certificate');
+  for (let index = 0; index < 10; index += 1) {
+    await page.locator('[data-dual-skip]').click();
+    await page.waitForTimeout(700);
+  }
 
   const root = page.locator('[data-dual-mixed-prototype]');
   await expect(root).toHaveAttribute('data-dual-step', 'spell-count');

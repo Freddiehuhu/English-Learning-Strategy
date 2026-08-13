@@ -225,9 +225,18 @@ def expected_asset_paths(
 
 
 def repository_audio_paths(audio_root: Path = AUDIO_ROOT) -> set[str]:
+    """Return only assets owned by the reviewed WordLab audio manifest.
+
+    The reviewed library owns the direct ``uk/*.mp3`` and ``us/*.mp3``
+    namespaces.  Additional independently manifested libraries may live below
+    ``audio/`` (for example ``audio/hard-words``), so recursing from the common
+    root would make the two integrity contracts incorrectly reject each other.
+    """
+
     return {
         path.relative_to(audio_root).as_posix()
-        for path in audio_root.rglob("*.mp3")
+        for accent in VOICES
+        for path in (audio_root / accent).glob("*.mp3")
         if path.is_file()
     }
 

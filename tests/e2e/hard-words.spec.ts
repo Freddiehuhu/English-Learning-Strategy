@@ -75,27 +75,29 @@ test('searches, filters and progressively reveals the real learner catalog witho
   await page.getByRole('button', { name: /751 全部难词/ }).click();
   await expect(page.locator('[data-hard-words-match-count]')).toHaveText('12');
   await expect(page.locator('[data-action="start-rescue-word"]')).toHaveCount(12);
-  await expect(page.locator('[data-hard-word] [data-action="start-dual-prototype"]')).toHaveCount(
-    0,
-  );
-  await expect(page.getByRole('button', { name: '混合声形样板 · 3 词 6 题' })).toBeVisible();
+  await expect(
+    page.locator('[data-hard-word] [data-action="start-sound-form-practice"]'),
+  ).toHaveCount(12);
+  await expect(
+    page.locator('[data-action="start-sound-form-practice"]:not([data-word-id])'),
+  ).toContainText('正式声形练习 · 10 词 20 题');
 });
 
-test('keeps basic practice on every row and limits the sound-form rescue route to audited words', async ({
-  page,
-}) => {
+test('keeps basic practice and formal sound-form practice on every row', async ({ page }) => {
   await openHardWords(page);
   const search = page.getByLabel('搜索单词或短语');
   await search.fill('maturity');
   const unaudited = page.locator('[data-hard-word="maturity"]');
   await expect(unaudited.locator('[data-action="hard-word-spell"]')).toBeVisible();
   await expect(unaudited.locator('[data-action="hard-word-sentence"]')).toBeVisible();
+  await expect(unaudited.locator('[data-action="start-sound-form-practice"]')).toBeVisible();
   await expect(unaudited.locator('[data-action="start-rescue-word"]')).toHaveCount(0);
 
   await search.fill('controversial');
   const audited = page.locator('[data-hard-word="controversial"]');
   await expect(audited).toContainText('已进入练习');
   await expect(audited).toContainText('声形急救可用');
+  await expect(audited.locator('[data-action="start-sound-form-practice"]')).toBeVisible();
   await audited.getByRole('button', { name: '声形急救' }).click();
   await expect(page.locator('[data-rescue-task][data-gate="readDecode"]')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'controversial' })).toBeVisible();
