@@ -939,6 +939,338 @@
   color: var(--ink-soft);
 }
 
+/* Formal sound-form practice grows one stable card in place. Completed work
+   becomes a compact learner-owned trace; only the current block opens. */
+.sound-form-growth-card {
+  position: relative;
+  overflow: clip;
+  text-align: left;
+  background:
+    radial-gradient(
+      circle at 92% 0%,
+      color-mix(in srgb, var(--teal) 10%, transparent),
+      transparent 34%
+    ),
+    var(--paper);
+}
+
+.sound-form-growth-intro {
+  text-align: center;
+}
+
+.sound-form-growth-intro > p:last-child {
+  max-width: 44ch;
+  margin: 8px auto 0;
+  color: var(--ink-soft);
+  line-height: 1.65;
+}
+
+.sound-form-growth-meter {
+  width: min(190px, 70%);
+  margin: 15px auto 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 7px;
+}
+
+.sound-form-growth-meter i {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.sound-form-growth-meter i.is-complete {
+  background: color-mix(in srgb, var(--teal) 58%, var(--line));
+}
+
+.sound-form-growth-meter i.is-active {
+  background: var(--coral);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--coral) 10%, transparent);
+}
+
+.sound-form-growth-steps {
+  position: relative;
+  width: min(600px, 100%);
+  margin: 28px auto 0;
+  display: grid;
+  gap: 10px;
+}
+
+.sound-form-growth-steps::before {
+  position: absolute;
+  top: 22px;
+  bottom: 22px;
+  left: 19px;
+  width: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--teal) 22%, var(--line));
+  content: '';
+}
+
+.sound-form-growth-step {
+  position: relative;
+  z-index: 1;
+  border: 1px solid transparent;
+  border-radius: 18px;
+}
+
+.sound-form-growth-step.is-active {
+  padding: clamp(18px, 4vw, 28px);
+  border-color: color-mix(in srgb, var(--teal) 30%, var(--line));
+  background: color-mix(in srgb, var(--teal-soft) 54%, var(--paper));
+  box-shadow: 0 16px 38px color-mix(in srgb, var(--navy) 8%, transparent);
+  animation: sound-form-grow-in 220ms ease-out both;
+}
+
+.sound-form-step-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sound-form-step-head span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: var(--teal);
+  background: var(--paper);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.sound-form-step-head strong {
+  color: var(--navy);
+  font-size: 1.02rem;
+}
+
+.sound-form-step-summary {
+  min-height: 52px;
+  padding: 10px 14px 10px 10px;
+  display: grid;
+  grid-template-columns: minmax(150px, 0.85fr) minmax(0, 1.4fr);
+  align-items: center;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--teal) 20%, var(--line));
+  border-radius: 14px;
+  color: var(--ink-soft);
+  background: color-mix(in srgb, var(--teal-soft) 28%, var(--paper));
+}
+
+.sound-form-step-summary span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.sound-form-step-summary i {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  flex: 0 0 28px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--teal);
+  font-style: normal;
+}
+
+.sound-form-step-summary strong {
+  min-width: 0;
+  color: var(--navy);
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.sound-form-growth-step.is-pending {
+  min-height: 46px;
+  padding: 8px 12px;
+  color: var(--ink-soft);
+}
+
+.sound-form-growth-step.is-pending p {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.sound-form-growth-step.is-pending span {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  flex: 0 0 28px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--paper);
+}
+
+.sound-form-growth-step .dual-source-note,
+.sound-form-growth-step .dual-split-instruction {
+  margin: 14px 0 0;
+  color: var(--ink-soft);
+  text-align: left;
+}
+
+.sound-form-growth-step form {
+  margin-top: 18px;
+}
+
+.sound-form-growth-step [data-growth-primary] {
+  min-height: 50px;
+}
+
+.sound-form-blind-audio {
+  width: min(600px, 100%);
+  margin: 22px auto 0;
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: minmax(160px, 0.7fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  border: 1px solid color-mix(in srgb, var(--coral) 22%, var(--line));
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--amber-soft) 42%, var(--paper));
+}
+
+.sound-form-blind-audio .dual-listen-orb {
+  width: 100%;
+  min-height: 50px;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border-radius: 14px;
+}
+
+.sound-form-blind-audio .dual-status {
+  min-height: 0;
+  margin: 0;
+  text-align: left;
+}
+
+.sound-form-count-form fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.sound-form-count-form legend {
+  margin-bottom: 10px;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.sound-form-count-chips {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(44px, 1fr));
+  gap: 7px;
+}
+
+.sound-form-count-chip {
+  min-width: 44px;
+  min-height: 46px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--teal) 24%, var(--line));
+  border-radius: 999px;
+  color: var(--navy);
+  background: var(--paper);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.sound-form-count-chip:hover:not(:disabled),
+.sound-form-count-chip.is-selected {
+  border-color: var(--teal);
+  color: #fff;
+  background: var(--teal);
+}
+
+.sound-form-count-more {
+  position: relative;
+  min-width: 56px;
+}
+
+.sound-form-count-more span {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  font-weight: 850;
+  pointer-events: none;
+}
+
+.sound-form-count-more input {
+  min-width: 0;
+  min-height: 46px;
+  padding: 0 4px;
+  border-radius: 999px;
+  color: transparent;
+  text-align: center;
+}
+
+.sound-form-count-more input:focus,
+.sound-form-count-more input:not(:placeholder-shown) {
+  position: relative;
+  z-index: 2;
+  color: var(--navy);
+  background: var(--paper);
+}
+
+.sound-form-syllable-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 10px;
+}
+
+.sound-form-syllable-slots label {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid color-mix(in srgb, var(--teal) 20%, var(--line));
+  border-radius: 14px;
+  background: var(--paper);
+}
+
+.sound-form-syllable-slots input {
+  min-width: 0;
+  padding-inline: 10px;
+  text-align: center;
+}
+
+.sound-form-growth-card > .dual-skip-button {
+  position: sticky;
+  z-index: 3;
+  bottom: 14px;
+  margin: 16px 0 0 auto;
+  display: block;
+  border: 1px solid color-mix(in srgb, var(--ink-soft) 20%, transparent);
+  border-radius: 999px;
+  opacity: 0.76;
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+@keyframes sound-form-grow-in {
+  from {
+    opacity: 0.4;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .dual-direction-grid {
   margin-top: 24px;
   display: grid;
@@ -1400,8 +1732,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dual-split-mark {
+  .dual-split-mark,
+  .sound-form-growth-step.is-active {
     transition: none;
+    animation: none;
   }
 }
 
@@ -1567,8 +1901,43 @@
 }
 
 @media (max-width: 700px) {
-  .dual-prototype-card[data-dual-read-syllables] {
+  .dual-prototype-card[data-dual-read-syllables],
+  .dual-prototype-card.is-read-syllables {
     padding-inline: 18px;
+  }
+
+  .sound-form-growth-card {
+    padding: 22px 16px 28px;
+  }
+
+  .sound-form-growth-steps {
+    margin-top: 22px;
+  }
+
+  .sound-form-step-summary {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .sound-form-step-summary strong {
+    padding-left: 36px;
+  }
+
+  .sound-form-blind-audio {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .sound-form-blind-audio .dual-status {
+    text-align: center;
+  }
+
+  .sound-form-count-chips {
+    grid-template-columns: repeat(4, minmax(44px, 1fr));
+  }
+
+  .sound-form-syllable-slots {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .dual-word-splitter {

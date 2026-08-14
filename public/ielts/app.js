@@ -793,6 +793,7 @@
     main.addEventListener('submit', handleMainSubmit);
     main.addEventListener('change', handleMainChange);
     main.addEventListener('input', handleMainInput);
+    main.addEventListener('keydown', handleMainKeydown);
     main.addEventListener('error', handleVisualImageError, true);
     main.addEventListener('load', handleVisualImageLoad, true);
     document.addEventListener('visibilitychange', syncTaskActivityVisibility);
@@ -5760,75 +5761,255 @@
     var item = currentDualPrototypeItem();
     var queueLength = prototype.queue.length;
     var isBlind = Boolean(item && item.type === 'spell' && prototype.step !== 'spell-result');
-    var taskAttributes = item
-      ? ' data-dual-task-type="' +
-        esc(item.type) +
-        '"' +
-        (isBlind ? ' data-dual-blind="true"' : ' data-dual-word-id="' + esc(item.wordId) + '"')
-      : '';
-    var answerHiddenAttribute = isBlind ? ' data-answer-hidden="true"' : '';
-    main.innerHTML =
-      '<section class="dual-prototype-shell" data-dual-prototype data-dual-mixed-prototype data-hard-word-sound-form data-dual-step="' +
-      esc(prototype.step) +
-      '" data-step="' +
-      esc(prototype.step) +
-      '" data-dual-queue-position="' +
-      Math.min(prototype.index + 1, queueLength) +
-      '" data-task-position="' +
-      Math.min(prototype.index + 1, queueLength) +
-      '" data-task-type="' +
-      esc(item ? item.type : 'summary') +
-      '"' +
-      answerHiddenAttribute +
-      taskAttributes +
-      '"><header class="dual-prototype-head"><button class="text-button" type="button" data-action="dual-exit" data-dual-exit>← 难词表</button><p>' +
-      Math.min(prototype.index + 1, queueLength) +
-      ' / ' +
-      queueLength +
-      '</p></header><div class="hard-word-practice-track" aria-hidden="true"><i style="width:' +
-      (prototype.index / queueLength) * 100 +
-      '%"></i></div>' +
-      renderDualPrototypeStep(prototype) +
-      '</section>';
-    var field = main.querySelector('input:not(:disabled)');
-    if (field) field.focus({ preventScroll: true });
+    var taskKey = prototype.runId + ':' + prototype.index;
+    var root = main.querySelector('[data-hard-word-sound-form]');
+    var sameTask = Boolean(root && root.dataset.soundFormTaskKey === taskKey);
+    var previousStep = sameTask ? root.dataset.step : '';
+    if (!sameTask) {
+      main.innerHTML =
+        '<section class="dual-prototype-shell" data-dual-prototype data-dual-mixed-prototype data-hard-word-sound-form>' +
+        '<header class="dual-prototype-head"><button class="text-button" type="button" data-action="dual-exit" data-dual-exit>← 难词表</button><p data-sound-form-position></p></header>' +
+        '<div class="hard-word-practice-track" aria-hidden="true"><i></i></div>' +
+        '<article class="panel dual-prototype-card sound-form-growth-card" data-dual-task-card data-dual-growth-card data-sound-form-growth-card></article>' +
+        '</section>';
+      root = main.querySelector('[data-hard-word-sound-form]');
+    }
+    if (!root) return;
+    root.dataset.soundFormTaskKey = taskKey;
+    root.dataset.dualStep = prototype.step;
+    root.dataset.step = prototype.step;
+    root.dataset.dualQueuePosition = String(Math.min(prototype.index + 1, queueLength));
+    root.dataset.taskPosition = String(Math.min(prototype.index + 1, queueLength));
+    root.dataset.taskType = item ? item.type : 'summary';
+    ['data-answer-hidden', 'data-dual-blind', 'data-dual-word-id', 'data-dual-task-type'].forEach(
+      function (attribute) {
+        root.removeAttribute(attribute);
+      },
+    );
+    if (item) {
+      root.dataset.dualTaskType = item.type;
+      if (isBlind) {
+        root.dataset.answerHidden = 'true';
+        root.dataset.dualBlind = 'true';
+      } else {
+        root.dataset.dualWordId = item.wordId;
+      }
+    }
+    var position = root.querySelector('[data-sound-form-position]');
+    if (position) {
+      position.textContent = Math.min(prototype.index + 1, queueLength) + ' / ' + queueLength;
+    }
+    var progress = root.querySelector('.hard-word-practice-track i');
+    if (progress) progress.style.width = (prototype.index / queueLength) * 100 + '%';
+    var card = root.querySelector('[data-dual-growth-card]');
+    if (!card) return;
+    card.className =
+      'panel dual-prototype-card sound-form-growth-card is-' + String(prototype.step || 'summary');
+    card.toggleAttribute('data-dual-summary', prototype.step === 'summary');
+    card.toggleAttribute('data-sound-form-summary', prototype.step === 'summary');
+    card.innerHTML = renderDualPrototypeStep(prototype);
+    if (sameTask && previousStep !== prototype.step) settleDualGrowthStep(card);
   }
 
   function renderDualPrototypeStep(state) {
-    if (state.step === 'read-info') return renderDualReadInfo(state);
-    if (state.step === 'read-syllables') return renderDualReadSyllables(state);
-    if (state.step === 'read-record') return renderDualReadRecord(state);
-    if (state.step === 'read-compare') return renderDualReadCompare(state);
-    if (state.step === 'spell-count') return renderDualSpellCount(state);
-    if (state.step === 'spell-syllables') return renderDualSpellSyllables(state);
-    if (state.step === 'spell-final') return renderDualSpellFinal(state);
-    if (state.step === 'spell-result') return renderDualSpellResult(state);
     if (state.step === 'summary') return renderDualSummary(state);
-    return '';
+    var item = currentDualPrototypeItem();
+    if (!item) return '';
+    return item.type === 'read'
+      ? renderDualReadGrowthCard(state)
+      : renderDualSpellGrowthCard(state);
   }
 
-  function dualTaskHeading(label) {
+  function settleDualGrowthStep(card) {
+    requestAnimationFrame(function () {
+      var active = card.querySelector('[data-growth-block][data-growth-state="active"]');
+      if (!active || !window.matchMedia('(min-width: 760px) and (pointer: fine)').matches) return;
+      active.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      var field = active.querySelector('input:not(:disabled)');
+      if (field) field.focus({ preventScroll: true });
+    });
+  }
+
+  function dualGrowthStep(name, label, order, currentStep, summary, activeHtml, legacyAttribute) {
+    var sequence =
+      name.indexOf('read-') === 0
+        ? ['read-info', 'read-syllables', 'read-record', 'read-compare']
+        : ['spell-count', 'spell-syllables', 'spell-final', 'spell-result'];
+    var currentIndex = sequence.indexOf(currentStep);
+    var stepIndex = sequence.indexOf(name);
+    var status =
+      stepIndex < currentIndex ? 'complete' : stepIndex === currentIndex ? 'active' : 'pending';
+    var legacy = legacyAttribute ? ' ' + legacyAttribute : '';
+    var common =
+      ' data-growth-block data-growth-state="' +
+      status +
+      '" data-sound-form-growth-step data-step-name="' +
+      esc(name) +
+      '" data-step-state="' +
+      status +
+      '"' +
+      legacy;
+    if (status === 'complete') {
+      return (
+        '<section class="sound-form-growth-step is-complete"' +
+        common +
+        '><div class="sound-form-step-summary dual-growth-summary" data-sound-form-step-summary data-growth-summary><span><i aria-hidden="true">✓</i>' +
+        esc(order + ' · ' + label) +
+        '</span><strong>' +
+        esc(summary) +
+        '</strong></div></section>'
+      );
+    }
+    if (status === 'pending') {
+      return '';
+    }
     return (
-      '<p class="eyebrow">' + esc(label) + '</p><p class="dual-task-kicker">这题只做当前一步</p>'
+      '<section class="sound-form-growth-step is-active"' +
+      common +
+      '><header class="sound-form-step-head"><span>STEP ' +
+      esc(String(order)) +
+      '</span><strong>' +
+      esc(label) +
+      '</strong></header>' +
+      activeHtml +
+      '</section>'
+    );
+  }
+
+  function renderDualGrowthMeter(currentStep, type) {
+    var sequence =
+      type === 'read'
+        ? ['read-info', 'read-syllables', 'read-record', 'read-compare']
+        : ['spell-count', 'spell-syllables', 'spell-final', 'spell-result'];
+    var currentIndex = sequence.indexOf(currentStep);
+    return (
+      '<div class="sound-form-growth-meter" aria-label="四步生长进度">' +
+      sequence
+        .map(function (_, index) {
+          var status =
+            index < currentIndex ? 'complete' : index === currentIndex ? 'active' : 'pending';
+          return '<i class="is-' + status + '" aria-hidden="true"></i>';
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
+  function renderDualReadGrowthCard(prototype) {
+    var word = currentDualPrototypeWord();
+    var steps =
+      dualGrowthStep(
+        'read-info',
+        '先定意思与词性',
+        1,
+        prototype.step,
+        '意思：' + prototype.task.meaning + ' · 词性：' + prototype.task.pos,
+        renderDualReadInfo(prototype),
+        'data-dual-read-info',
+      ) +
+      dualGrowthStep(
+        'read-syllables',
+        '切出声音节拍',
+        2,
+        prototype.step,
+        '我的分拍：' + prototype.task.syllables.replace(/\s*\/\s*/g, ' · '),
+        renderDualReadSyllables(prototype),
+        'data-dual-read-syllables',
+      ) +
+      dualGrowthStep(
+        'read-record',
+        '不听范音，先录自己',
+        3,
+        prototype.step,
+        '冷录音已完成',
+        renderDualReadRecord(prototype),
+        'data-dual-read-record',
+      ) +
+      dualGrowthStep(
+        'read-compare',
+        '我的录音与范音对照',
+        4,
+        prototype.step,
+        '已完成声音对照',
+        renderDualReadCompare(prototype),
+        'data-dual-read-compare',
+      );
+    return (
+      '<div class="sound-form-growth-intro"><p class="eyebrow">看词读音 · 生长卡</p><h1 data-dual-visible-word>' +
+      esc(word.word) +
+      '</h1>' +
+      renderDualGrowthMeter(prototype.step, 'read') +
+      '<p>先想清楚，再切分、冷录，最后才听范音。</p></div><div class="sound-form-growth-steps">' +
+      steps +
+      '</div>' +
+      (prototype.step === 'read-compare' ? '' : dualSkipButton()) +
+      dualFeedback(prototype)
+    );
+  }
+
+  function renderDualSpellGrowthCard(prototype) {
+    var isResult = prototype.step === 'spell-result';
+    var steps =
+      dualGrowthStep(
+        'spell-count',
+        '判断有几拍',
+        1,
+        prototype.step,
+        '我听到：' + prototype.task.syllableCount + ' 拍',
+        renderDualSpellCount(prototype),
+        'data-dual-spell-count',
+      ) +
+      dualGrowthStep(
+        'spell-syllables',
+        '逐拍写声音',
+        2,
+        prototype.step,
+        '我的声音块：' + prototype.task.syllables.replace(/\s*\/\s*/g, ' · '),
+        renderDualSpellSyllables(prototype),
+        'data-dual-spell-syllables',
+      ) +
+      dualGrowthStep(
+        'spell-final',
+        '合成完整信息',
+        3,
+        prototype.step,
+        '完整单词、意思和词性已提交',
+        renderDualSpellFinal(prototype),
+        'data-dual-spell-final',
+      ) +
+      dualGrowthStep(
+        'spell-result',
+        '统一对照结果',
+        4,
+        prototype.step,
+        '已完成核对',
+        renderDualSpellResult(prototype),
+        'data-dual-spell-result',
+      );
+    return (
+      '<div class="sound-form-growth-intro"><p class="eyebrow">听音拼写 · 生长卡</p><h1>' +
+      (isResult ? '现在统一核对' : '只听声音，不看单词') +
+      '</h1>' +
+      renderDualGrowthMeter(prototype.step, 'spell') +
+      '<p>' +
+      (isResult ? '完整提交后，答案和审校边界一次显示。' : '先数拍，再逐拍写，最后合成完整单词。') +
+      '</p></div>' +
+      (isResult ? '' : renderDualBlindAudio(prototype)) +
+      '<div class="sound-form-growth-steps">' +
+      steps +
+      '</div>' +
+      (isResult ? '' : dualSkipButton()) +
+      dualFeedback(prototype)
     );
   }
 
   function renderDualReadInfo(prototype) {
-    var word = currentDualPrototypeWord();
     return (
-      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-read-info>' +
-      dualTaskHeading('看词读音 · 1/3') +
-      '<h1 data-dual-visible-word>' +
-      esc(word.word) +
-      '</h1><p class="dual-source-note">先写你记得的内容；未经审校的答案会留给老师核对。</p><form class="dual-stacked-form" data-dual-read-info-form><label>写出中文意思<input name="meaning" data-dual-read-meaning autocomplete="off" value="' +
+      '<p class="dual-source-note">先写你记得的内容；未经审校的答案会留给老师核对。</p><form class="dual-stacked-form" data-dual-read-info-form><label>写出中文意思<input name="meaning" data-dual-read-meaning autocomplete="off" value="' +
       esc(prototype.task.meaning) +
       '"></label><label>写出词性<input name="pos" data-dual-read-pos autocomplete="off" autocapitalize="none" placeholder="例如 n." value="' +
       esc(prototype.task.pos) +
-      '"></label><button class="primary-button" type="submit">下一步</button></form>' +
-      dualSkipButton() +
-      '<p class="feedback" data-dual-feedback role="status" aria-live="polite">' +
-      esc(prototype.task.error) +
-      '</p></article>'
+      '"></label><button class="primary-button" data-growth-primary type="submit">保存并长出下一步</button></form>'
     );
   }
 
@@ -5838,9 +6019,7 @@
       ? prototype.task.splitBoundaries
       : [];
     return (
-      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-read-syllables>' +
-      '<p class="eyebrow">看词读音 · 2/3</p>' +
-      '<h1>你会怎么分拍？</h1><p class="dual-split-instruction">轻点字母缝隙，按你准备朗读的节奏分组。</p>' +
+      '<p class="dual-split-instruction">轻点字母缝隙，按你准备朗读的节奏分组。</p>' +
       renderDualWordSplitter(word.word, boundaries) +
       '<p class="dual-split-preview' +
       (boundaries.length ? ' is-ready' : '') +
@@ -5848,11 +6027,7 @@
       esc(dualSplitPreview(word.word, boundaries)) +
       '</p><div class="dual-split-actions"><button class="quiet-button" type="button" data-action="dual-clear-splits"' +
       (boundaries.length ? '' : ' disabled') +
-      '>重新切</button><button class="primary-button" type="button" data-action="dual-confirm-splits">切好了，继续</button></div><p class="dual-split-note">这是声音和字母的对应；不同口音，分法可以不同。</p>' +
-      dualSkipButton() +
-      '<p class="feedback" data-dual-feedback role="status" aria-live="polite">' +
-      esc(prototype.task.error) +
-      '</p></article>'
+      '>重新切</button><button class="primary-button" data-growth-primary type="button" data-action="dual-confirm-splits">保存分拍，开始冷录</button></div><p class="dual-split-note">这是声音和字母的对应；不同口音，分法可以不同。</p>'
     );
   }
 
@@ -6011,17 +6186,10 @@
   }
 
   function renderDualReadRecord(prototype) {
-    var word = currentDualPrototypeWord();
     return (
-      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-read-record>' +
-      dualTaskHeading('看词读音 · 3/3') +
-      '<h1 data-dual-visible-word>' +
-      esc(word.word) +
-      '</h1><p>现在读一遍，完成后才显示范音。</p><div class="dual-record-actions"><button class="primary-button" type="button" data-action="dual-record" data-dual-record>● 开始录音</button>' +
-      dualSkipButton() +
-      '</div><p id="recordStatus" class="dual-status" data-dual-record-status role="status" aria-live="polite">' +
+      '<p>现在直接读一遍。录完以前，这张卡不会出现范音或标准分块。</p><div class="dual-record-actions"><button class="primary-button" data-growth-primary type="button" data-action="dual-record" data-dual-record>● 开始冷录音</button></div><p id="recordStatus" class="dual-status" data-dual-record-status role="status" aria-live="polite">' +
       esc(prototype.task.error || '录音只保留在当前页面。') +
-      '</p></article>'
+      '</p>'
     );
   }
 
@@ -6054,9 +6222,7 @@
       : '<p data-sound-form-pending-review><span>声音—拼写分块</span><strong>你的分法已保存，待教师核对</strong></p>';
     var modelAudioLabel = hasPronunciationReference ? '审校范音' : '本次合成范音';
     return (
-      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-read-compare><p class="eyebrow">录音对照 · 待人工核对</p><h1>' +
-      esc(word.word) +
-      '</h1>' +
+      '<p class="dual-source-note">录音对照 · 待人工核对</p>' +
       pronunciationHtml +
       '<div class="dual-answer-compare" data-dual-read-answer-compare><p><span>你写的意思 / 词性</span><strong>' +
       esc(prototype.task.meaning + ' · ' + prototype.task.pos) +
@@ -6076,20 +6242,27 @@
       esc(modelAudioLabel) +
       '" data-status-target="dualModelStatus"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">' +
       esc(modelAudioLabel) +
-      '</span></button></div><p id="dualModelStatus" class="dual-status" aria-live="polite">交替听自己与范音。</p><div class="dual-footer-actions"><button class="quiet-button" type="button" data-action="dual-rerecord" data-dual-rerecord>重新录音</button><button class="primary-button" type="button" data-action="dual-finish-read" data-dual-finish-read>下一题</button></div></article>'
+      '</span></button></div><p id="dualModelStatus" class="dual-status" aria-live="polite">交替听自己与范音。</p><div class="dual-footer-actions"><button class="quiet-button" type="button" data-action="dual-rerecord" data-dual-rerecord>重新录音</button><button class="primary-button" data-growth-primary type="button" data-action="dual-finish-read" data-dual-finish-read>完成这张卡</button></div>'
     );
   }
 
   function renderDualBlindAudio(prototype) {
     var disabled = prototype.task.audioReady && !prototype.task.audioFailed ? '' : ' disabled';
+    var audioReady = prototype.task.audioReady && !prototype.task.audioFailed;
     return (
-      '<button class="listen-orb dual-listen-orb" type="button" data-action="dual-spell-audio" data-dual-spell-audio data-accent="' +
+      '<div class="sound-form-blind-audio" data-sound-form-blind-audio><button class="' +
+      (audioReady ? 'quiet-button' : 'primary-button') +
+      ' dual-listen-orb" ' +
+      (audioReady ? '' : 'data-growth-primary ') +
+      'type="button" data-action="dual-spell-audio" data-dual-spell-audio data-accent="' +
       (state.settings.accent === 'us' ? 'us' : 'uk') +
-      '" data-audio-label="盲听音频" data-status-target="dualSpellAudioStatus" aria-label="播放盲听音频"><span class="audio-control-icon" aria-hidden="true">▶</span></button><p id="dualSpellAudioStatus" class="dual-status" aria-live="polite">' +
+      '" data-audio-label="盲听音频" data-status-target="dualSpellAudioStatus" aria-label="播放盲听音频"><span class="audio-control-icon" aria-hidden="true">▶</span><span class="audio-control-label">' +
+      (audioReady ? '再听一次' : '先播放声音') +
+      '</span></button><p id="dualSpellAudioStatus" class="dual-status" aria-live="polite">' +
       (prototype.task.audioReady ? '可以作答，也可再听。' : '先播放，再作答。') +
       '</p><input type="hidden" data-dual-input-lock' +
       disabled +
-      '>'
+      '></div>'
     );
   }
 
@@ -6098,51 +6271,83 @@
   }
 
   function renderDualSpellCount(prototype) {
+    var audioDisabled = dualBlindDisabled(prototype);
+    var count = Number(prototype.task.syllableCount) || 0;
     return (
-      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-spell-count>' +
-      dualTaskHeading('听写 · 1/3') +
-      '<h1>听音，写音节数</h1>' +
-      renderDualBlindAudio(prototype) +
-      '<form class="dual-stacked-form" data-dual-spell-count-form><label>几个音节？<input type="number" min="1" max="12" inputmode="numeric" name="count" data-dual-spell-count-input aria-label="输入音节数"' +
-      ' value="' +
-      esc(prototype.task.syllableCount) +
+      '<p class="dual-split-instruction">听完整个词，再选择你听到的拍数。</p><form class="dual-stacked-form sound-form-count-form" data-dual-spell-count-form novalidate><fieldset><legend>选择音节数</legend><div class="sound-form-count-chips">' +
+      [1, 2, 3, 4, 5, 6]
+        .map(function (number) {
+          return (
+            '<button class="sound-form-count-chip' +
+            (count === number ? ' is-selected' : '') +
+            '" type="button" data-action="dual-select-syllable-count" data-count="' +
+            number +
+            '" aria-pressed="' +
+            String(count === number) +
+            '"' +
+            audioDisabled +
+            '>' +
+            number +
+            '</button>'
+          );
+        })
+        .join('') +
+      '<input type="hidden" name="count" data-dual-selected-syllable-count value="' +
+      esc(count >= 1 && count <= 6 ? String(count) : '') +
+      '"><label class="sound-form-count-more"><span>7+ 拍</span><input type="number" min="7" max="12" inputmode="numeric" name="countMore" data-dual-spell-count-input aria-label="输入七拍或更多" placeholder="7+" value="' +
+      esc(count > 6 ? prototype.task.syllableCount : '') +
       '"' +
-      dualBlindDisabled(prototype) +
-      '></label><button class="primary-button" type="submit"' +
-      dualBlindDisabled(prototype) +
-      '>下一步</button></form>' +
-      dualSkipButton() +
-      dualFeedback(prototype) +
-      '</article>'
+      audioDisabled +
+      '></label></div></fieldset><button class="primary-button" ' +
+      (prototype.task.audioReady ? 'data-growth-primary ' : '') +
+      'type="submit"' +
+      audioDisabled +
+      ' data-dual-confirm-count>选好后，长出音节槽</button></form>'
     );
   }
 
+  function dualSyllableSlotValues(prototype, count) {
+    var values = String(prototype.task.syllables || '').split(/\s*\/\s*/);
+    return Array.from({ length: count }, function (_, index) {
+      return values[index] || '';
+    });
+  }
+
   function renderDualSpellSyllables(prototype) {
+    var count = Math.min(12, Math.max(1, Number(prototype.task.syllableCount) || 1));
+    var values = dualSyllableSlotValues(prototype, count);
+    var audioDisabled = dualBlindDisabled(prototype);
     return (
-      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-spell-syllables>' +
-      dualTaskHeading('听写 · 2/3') +
-      '<h1>把听到的音节写出来</h1>' +
-      renderDualBlindAudio(prototype) +
-      '<form class="dual-stacked-form" data-dual-spell-syllables-form><label>音节<input name="syllables" data-dual-spell-syllables-input autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="用 / 分开"' +
-      ' value="' +
-      esc(prototype.task.syllables) +
-      '"' +
-      dualBlindDisabled(prototype) +
-      '></label><button class="primary-button" type="submit"' +
-      dualBlindDisabled(prototype) +
-      '>下一步</button></form>' +
-      dualSkipButton() +
-      dualFeedback(prototype) +
-      '</article>'
+      '<p class="dual-split-instruction">一拍一格。按 Enter 会跳到下一格。</p><form class="dual-stacked-form" data-dual-spell-syllables-form><div class="sound-form-syllable-slots" data-sound-form-syllable-slots>' +
+      values
+        .map(function (value, index) {
+          return (
+            '<label><span>第 ' +
+            (index + 1) +
+            ' 拍</span><input name="' +
+            (index === 0 ? 'syllables' : 'syllable-' + (index + 1)) +
+            '" data-dual-syllable-slot data-slot-index="' +
+            index +
+            '" ' +
+            (index === 0 ? 'data-dual-spell-syllables-input ' : '') +
+            'autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="听到什么就写什么" value="' +
+            esc(value) +
+            '"' +
+            audioDisabled +
+            '></label>'
+          );
+        })
+        .join('') +
+      '</div><button class="primary-button" ' +
+      (prototype.task.audioReady ? 'data-growth-primary ' : '') +
+      'type="submit"' +
+      audioDisabled +
+      '>合拢这些声音块</button></form>'
     );
   }
 
   function renderDualSpellFinal(prototype) {
     return (
-      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-spell-final>' +
-      dualTaskHeading('听写 · 3/3') +
-      '<h1>最后写完整信息</h1>' +
-      renderDualBlindAudio(prototype) +
       '<p class="dual-own-work" data-dual-own-syllables>你刚写的音节：' +
       esc(prototype.task.syllables) +
       '</p>' +
@@ -6161,12 +6366,11 @@
       esc(prototype.task.pos) +
       '"' +
       dualBlindDisabled(prototype) +
-      '></label><button class="primary-button" type="submit"' +
+      '></label><button class="primary-button" ' +
+      (prototype.task.audioReady ? 'data-growth-primary ' : '') +
+      'type="submit"' +
       dualBlindDisabled(prototype) +
-      '>提交后对照</button></form>' +
-      dualSkipButton() +
-      dualFeedback(prototype) +
-      '</article>'
+      '>提交后统一对照</button></form>'
     );
   }
 
@@ -6198,9 +6402,9 @@
       ? ''
       : '<p class="dual-source-note" data-sound-form-synthetic-audio-note>本题按当前合成范音练习；这个词的具体词义和读法尚未锁定，待教师结合原句核对。</p>';
     return (
-      '<article class="panel dual-prototype-card" data-dual-task-card data-dual-spell-result data-dual-word-id="' +
+      '<p class="eyebrow">完整提交后对照</p><h1 data-dual-word-id="' +
       esc(word.id) +
-      '"><p class="eyebrow">完整提交后对照</p><h1>' +
+      '">' +
       esc(word.word) +
       '</h1><p class="dual-spell-verdict ' +
       (spellingCorrect ? 'is-correct' : 'is-wrong') +
@@ -6214,7 +6418,7 @@
       lexicalHtml +
       '</div>' +
       pronunciationBoundaryHtml +
-      '<p class="dual-summary-note">完整拼写按词形判定；意思、词性和分块只在有审校资料时提供参考。</p><div class="dual-footer-actions"><button class="primary-button" type="button" data-action="dual-finish-spell" data-dual-finish-spell>下一题</button></div></article>'
+      '<p class="dual-summary-note">完整拼写按词形判定；意思、词性和分块只在有审校资料时提供参考。</p><div class="dual-footer-actions"><button class="primary-button" data-growth-primary type="button" data-action="dual-finish-spell" data-dual-finish-spell>完成这张卡</button></div>'
     );
   }
 
@@ -6243,7 +6447,7 @@
       return result.type === 'spell' && result.status === 'independent_correct';
     }).length;
     return (
-      '<article class="panel dual-prototype-card dual-summary" data-dual-summary data-sound-form-summary><p class="eyebrow">本组完成</p><h1>10 个词 · 20 道声形题</h1><p>已录朗读 <strong>' +
+      '<div class="dual-summary"><p class="eyebrow">本组完成</p><h1>10 个词 · 20 道声形题</h1><p>已录朗读 <strong>' +
       readDone +
       '</strong> / 10 · 独立拼对 <strong>' +
       spellCorrect +
@@ -6263,7 +6467,7 @@
           );
         })
         .join('') +
-      '</div><p class="dual-summary-note">朗读仍需人工核对；同一个词的第二种题型已用 9 道其他题隔开。</p><div class="dual-footer-actions"><button class="secondary-button" type="button" data-action="sound-form-exit">返回难词表</button><button class="primary-button" type="button" data-action="sound-form-next-batch">继续下一组</button></div></article>'
+      '</div><p class="dual-summary-note">朗读仍需人工核对；同一个词的第二种题型已用 9 道其他题隔开。</p><div class="dual-footer-actions"><button class="secondary-button" type="button" data-action="sound-form-exit">返回难词表</button><button class="primary-button" data-growth-primary type="button" data-action="sound-form-next-batch">继续下一组</button></div></div>'
     );
   }
 
@@ -6371,8 +6575,27 @@
       .forEach(function (control) {
         control.disabled = false;
       });
-    var input = main.querySelector('[data-dual-task-card] input:not([type="hidden"])');
-    if (input) input.focus({ preventScroll: true });
+    var audioButton = main.querySelector('[data-dual-spell-audio]');
+    if (audioButton) {
+      audioButton.classList.remove('primary-button');
+      audioButton.classList.add('quiet-button');
+      audioButton.removeAttribute('data-growth-primary');
+      var audioLabel = audioButton.querySelector('.audio-control-label');
+      if (audioLabel) audioLabel.textContent = '再听一次';
+    }
+    var activePrimary = main.querySelector(
+      '[data-growth-block][data-growth-state="active"] form .primary-button',
+    );
+    if (activePrimary) activePrimary.setAttribute('data-growth-primary', '');
+    if (
+      dualPrototypeState.step !== 'spell-count' &&
+      window.matchMedia('(min-width: 760px) and (pointer: fine)').matches
+    ) {
+      var input = main.querySelector(
+        '[data-growth-block][data-growth-state="active"] input:not([type="hidden"])',
+      );
+      if (input) input.focus({ preventScroll: true });
+    }
   }
 
   function lockDualSpellAudioFailure() {
@@ -6385,6 +6608,19 @@
       .querySelectorAll('[data-dual-task-card] input, [data-dual-task-card] form button')
       .forEach(function (control) {
         control.disabled = true;
+      });
+    var audioButton = main.querySelector('[data-dual-spell-audio]');
+    if (audioButton) {
+      audioButton.classList.remove('quiet-button');
+      audioButton.classList.add('primary-button');
+      audioButton.setAttribute('data-growth-primary', '');
+      var audioLabel = audioButton.querySelector('.audio-control-label');
+      if (audioLabel) audioLabel.textContent = '重试播放';
+    }
+    main
+      .querySelectorAll('[data-growth-block] form [data-growth-primary]')
+      .forEach(function (control) {
+        control.removeAttribute('data-growth-primary');
       });
     var feedback = main.querySelector('[data-dual-feedback]');
     if (feedback) {
@@ -10007,6 +10243,7 @@
     }
     if (action === 'dual-model-audio') return playDualModelAudio(button, false);
     if (action === 'dual-spell-audio') return playDualModelAudio(button, true);
+    if (action === 'dual-select-syllable-count') return chooseDualSyllableCount(button);
     if (action === 'dual-finish-spell') {
       var finishedWord = currentDualPrototypeWord();
       var spellingCorrect =
@@ -10551,8 +10788,17 @@
     if (dualSpellCountForm) {
       event.preventDefault();
       if (!dualPrototypeState.task.audioReady) return setDualTaskError('先播放音频。');
-      var syllableCount = String(new FormData(dualSpellCountForm).get('count') || '').trim();
+      var countFormData = new FormData(dualSpellCountForm);
+      var syllableCount = String(
+        countFormData.get('countMore') ||
+          countFormData.get('count') ||
+          dualPrototypeState.task.syllableCount ||
+          '',
+      ).trim();
       if (!syllableCount) return setDualTaskError('请先写出音节数。');
+      if (!/^\d+$/.test(syllableCount) || Number(syllableCount) < 1 || Number(syllableCount) > 12) {
+        return setDualTaskError('音节数请填写 1 到 12。');
+      }
       dualPrototypeState.task.syllableCount = syllableCount;
       persistDualPrototypeProgress();
       return changeDualSpellStep('spell-syllables');
@@ -10561,11 +10807,33 @@
     if (dualSpellSyllablesForm) {
       event.preventDefault();
       if (!dualPrototypeState.task.audioReady) return setDualTaskError('先播放音频。');
-      var heardSyllables = String(
-        new FormData(dualSpellSyllablesForm).get('syllables') || '',
-      ).trim();
-      if (!heardSyllables) return setDualTaskError('请先写出听到的音节。');
-      dualPrototypeState.task.syllables = heardSyllables;
+      var slotValues = Array.from(
+        dualSpellSyllablesForm.querySelectorAll('[data-dual-syllable-slot]'),
+      ).map(function (input) {
+        return String(input.value || '').trim();
+      });
+      if (
+        slotValues[0] &&
+        slotValues[0].indexOf('/') >= 0 &&
+        slotValues.slice(1).every(Boolean) === false
+      ) {
+        var legacyValues = slotValues[0]
+          .split(/\s*\/\s*/)
+          .map(function (value) {
+            return value.trim();
+          })
+          .filter(Boolean);
+        if (legacyValues.length === slotValues.length) slotValues = legacyValues;
+      }
+      if (
+        !slotValues.length ||
+        slotValues.some(function (value) {
+          return !value;
+        })
+      ) {
+        return setDualTaskError('请把每一拍都写出来。');
+      }
+      dualPrototypeState.task.syllables = slotValues.join(' / ');
       persistDualPrototypeProgress();
       return changeDualSpellStep('spell-final');
     }
@@ -10634,6 +10902,38 @@
     }
   }
 
+  function chooseDualSyllableCount(button) {
+    if (
+      !dualPrototypeState ||
+      dualPrototypeState.step !== 'spell-count' ||
+      !dualPrototypeState.task.audioReady
+    ) {
+      return setDualTaskError('先播放音频。');
+    }
+    var count = Number(button.dataset.count);
+    if (!Number.isInteger(count) || count < 1 || count > 6) return;
+    dualPrototypeState.task.syllableCount = String(count);
+    dualPrototypeState.task.syllables = '';
+    dualPrototypeState.task.error = '';
+    persistDualPrototypeProgress();
+    main.querySelectorAll('[data-action="dual-select-syllable-count"]').forEach(function (choice) {
+      var selected = Number(choice.dataset.count) === count;
+      choice.classList.toggle('is-selected', selected);
+      choice.setAttribute('aria-pressed', String(selected));
+    });
+    var fallback = main.querySelector('[data-dual-spell-count-input]');
+    if (fallback) fallback.value = '';
+    var mirror = main.querySelector('[data-dual-selected-syllable-count]');
+    if (mirror) mirror.value = String(count);
+    var primary = main.querySelector('[data-dual-confirm-count]');
+    if (primary) primary.textContent = '长出 ' + count + ' 个音节槽';
+    var feedback = main.querySelector('[data-dual-feedback]');
+    if (feedback) {
+      feedback.className = 'feedback';
+      feedback.textContent = '';
+    }
+  }
+
   function changeDualSpellStep(step) {
     stopAudio();
     dualPrototypeState.step = step;
@@ -10643,6 +10943,21 @@
     dualPrototypeState.task.error = '';
     persistDualPrototypeProgress();
     renderDualPrototype();
+  }
+
+  function handleMainKeydown(event) {
+    var slot = event.target.closest('[data-dual-syllable-slot]');
+    if (!slot || event.key !== 'Enter' || event.isComposing) return;
+    event.preventDefault();
+    var form = slot.closest('[data-dual-spell-syllables-form]');
+    if (!form) return;
+    var slots = Array.from(form.querySelectorAll('[data-dual-syllable-slot]'));
+    var index = slots.indexOf(slot);
+    if (index >= 0 && slots[index + 1]) {
+      slots[index + 1].focus();
+      return;
+    }
+    form.requestSubmit();
   }
 
   function handleMainChange(event) {
@@ -10668,10 +10983,42 @@
 
   function handleMainInput(event) {
     if (dualPrototypeState && event.target.closest('[data-hard-word-sound-form]')) {
+      if (event.target.matches('[data-dual-syllable-slot]')) {
+        dualPrototypeState.task.syllables = Array.from(
+          event.target
+            .closest('[data-dual-spell-syllables-form]')
+            .querySelectorAll('[data-dual-syllable-slot]'),
+        )
+          .map(function (input) {
+            return input.value;
+          })
+          .join(' / ');
+        persistDualPrototypeProgress();
+        return;
+      }
       var name = String(event.target.name || '');
-      if (['meaning', 'pos', 'count', 'syllables', 'spelling'].indexOf(name) >= 0) {
-        if (name === 'count') dualPrototypeState.task.syllableCount = event.target.value;
-        else if (name === 'spelling') dualPrototypeState.task.spelling = event.target.value;
+      if (['meaning', 'pos', 'count', 'countMore', 'syllables', 'spelling'].indexOf(name) >= 0) {
+        if (name === 'count' || name === 'countMore') {
+          dualPrototypeState.task.syllableCount = event.target.value;
+          if (name === 'countMore') {
+            main
+              .querySelectorAll('[data-action="dual-select-syllable-count"]')
+              .forEach(function (choice) {
+                choice.classList.remove('is-selected');
+                choice.setAttribute('aria-pressed', 'false');
+              });
+            var mirror = main.querySelector('[data-dual-selected-syllable-count]');
+            if (mirror) mirror.value = '';
+            var confirmCount = main.querySelector('[data-dual-confirm-count]');
+            var typedCount = Number(event.target.value);
+            if (confirmCount) {
+              confirmCount.textContent =
+                Number.isInteger(typedCount) && typedCount >= 7 && typedCount <= 12
+                  ? '长出 ' + typedCount + ' 个音节槽'
+                  : '选好后，长出音节槽';
+            }
+          }
+        } else if (name === 'spelling') dualPrototypeState.task.spelling = event.target.value;
         else dualPrototypeState.task[name] = event.target.value;
         persistDualPrototypeProgress();
       }

@@ -903,9 +903,7 @@ test('mobile 320/375 layout has no overflow, uses 44px controls, and exposes key
 
 test('service worker caches the manifest and full audio on demand while bypassing Range requests', async () => {
   const sw = readFileSync(join(process.cwd(), 'public/ielts/sw.js'), 'utf8');
-  expect(sw).toContain(
-    `const CACHE_NAME = 'wordlab-v30-hard-word-catalog-${catalog.entries.length}'`,
-  );
+  expect(sw).toContain("const CACHE_NAME = 'wordlab-v31-sound-form-growth-card'");
   expect(sw).toContain("url.pathname.endsWith('/ielts/audio/hard-words/manifest.json')");
   expect(sw).toContain("url.pathname.includes('/ielts/audio/')");
   expect(sw).toMatch(/request\.headers\.has\(['"]range['"]\)\) return/);

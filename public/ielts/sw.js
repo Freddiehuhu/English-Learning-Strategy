@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wordlab-v30-hard-word-catalog-1064';
+const CACHE_NAME = 'wordlab-v31-sound-form-growth-card';
 const CORE_ASSETS = [
   './',
   './index.html',
